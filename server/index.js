@@ -7,9 +7,13 @@ require('dotenv').config();
 
 const app    = express();
 const server = http.createServer(app);
-const io     = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://prisepulse-gamma.vercel.app', 'http://localhost:3000']
+}));
 app.use(express.json());
 
 mongoose.connect(process.env.MONGO_URI)
