@@ -6,6 +6,8 @@ import Portfolio  from './pages/Portfolio';
 import News       from './pages/News';
 import Login      from './pages/Login';
 import Watchlist  from './pages/Watchlist';
+import Crypto      from './pages/Crypto';
+import MutualFunds from './pages/MutualFunds';
 
 function App() {
   return (
@@ -19,6 +21,8 @@ function App() {
               <Route path="/"           element={<Markets />}   />
               <Route path="/portfolio"  element={<Portfolio />} />
               <Route path="/news"       element={<News />}      />
+              <Route path="/crypto" element={<Crypto />} />
+              <Route path="/mf"     element={<MutualFunds />} />
               <Route path="/watchlist"  element={<Watchlist />} />
             </Routes>
           </div>
