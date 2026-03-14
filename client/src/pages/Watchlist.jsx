@@ -22,15 +22,24 @@ function Watchlist() {
   const token = localStorage.getItem('token');
 
   // Load watchlist from DB
-  useEffect(() => {
-    if (!token) return;
-    axios.get(`${BASE}/watchlist`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(({ data }) => {
-      setWatchlist(data);
-      if (data.length > 0) fetchPrices(data);
-    });
-  }, []);
+        useEffect(() => {
+        if (!token) return;
+
+        const loadWatchlist = async () => {
+            try {
+            const { data } = await axios.get(`${BASE}/watchlist`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            setWatchlist(data);
+            if (data.length > 0) fetchPrices(data);
+            } catch (err) {
+            console.log("Watchlist fetch error:", err);
+            }
+        };
+
+        loadWatchlist();
+        }, [token]);
 
   // Fetch real prices
   const fetchPrices = async (symbols) => {
