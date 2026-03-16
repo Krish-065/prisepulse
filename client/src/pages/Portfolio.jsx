@@ -1,8 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-
-const BASE = `${process.env.REACT_APP_API_URL}/api`;
-const STOCK_OPTIONS = [
+const BASE = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api`;const STOCK_OPTIONS = [
   { sym: 'RELIANCE',   name: 'Reliance Industries' },
   { sym: 'TCS',        name: 'Tata Consultancy'    },
   { sym: 'HDFCBANK',   name: 'HDFC Bank'           },

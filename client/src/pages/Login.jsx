@@ -1,44 +1,69 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-function Login() {
-  const [isSignup, setIsSignup] = useState(false);
-  const [form, setForm]         = useState({ name: '', email: '', password: '' });
-  const [error, setError]       = useState('');
-  const [loading, setLoading]   = useState(false);
-  const navigate                = useNavigate();
+var API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-    const handleSubmit = async () => {
+function Login() {
+  var [isSignup, setIsSignup] = useState(false);
+  var [form, setForm]         = useState({ name: '', email: '', password: '' });
+  var [error, setError]       = useState('');
+  var [loading, setLoading]   = useState(false);
+  var navigate                = useNavigate();
+
+  useEffect(function() {
+    var token = localStorage.getItem('token');
+    if (token) navigate('/');
+  }, [navigate]);
+
+  var handleSubmit = async function() {
+    if (!form.email || !form.password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    if (isSignup && !form.name) {
+      setError('Please enter your name');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-        const url = isSignup
-        ? `${process.env.REACT_APP_API_URL}/api/auth/signup`
-        : `${process.env.REACT_APP_API_URL}/api/auth/login`;
-        const body = isSignup
+      var url  = isSignup
+        ? API + '/api/auth/signup'
+        : API + '/api/auth/login';
+      var body = isSignup
         ? { name: form.name, email: form.email, password: form.password }
         : { email: form.email, password: form.password };
 
-        console.log('Sending to:', url, body);
-        const { data } = await axios.post(url, body);
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user',  JSON.stringify(data.user));
-        navigate('/');
+      var res = await axios.post(url, body);
+      localStorage.setItem('token', res.data.token);
+      localStorage.setItem('user',  JSON.stringify(res.data.user));
+      navigate('/');
     } catch (err) {
-        console.log('Full error:', err);
-        setError(err.response?.data?.error || err.message || 'Something went wrong');
+      setError(
+        err.response && err.response.data && err.response.data.error
+          ? err.response.data.error
+          : err.message || 'Something went wrong'
+      );
     }
     setLoading(false);
-    };
+  };
+
+  var handleKey = function(e) {
+    if (e.key === 'Enter') handleSubmit();
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 w-full max-w-md">
 
         <div className="text-center mb-8">
-          <div className="text-green-400 font-bold text-2xl mb-1">● Prise<span className="text-white">Pulse</span></div>
-          <p className="text-gray-400 text-sm">{isSignup ? 'Create your account' : 'Welcome back'}</p>
+          <div className="text-green-400 font-bold text-3xl mb-2 tracking-tight">
+            PrisePulse
+          </div>
+          <p className="text-gray-400 text-sm">
+            {isSignup ? 'Create your account' : 'Welcome back'}
+          </p>
         </div>
 
         {error && (
@@ -49,28 +74,43 @@ function Login() {
 
         <div className="flex flex-col gap-3">
           {isSignup && (
-            <input
-              type="text"
-              placeholder="Full Name"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-green-400 transition-colors"
-            />
+            <div>
+              <label className="text-gray-400 text-xs font-mono block mb-1">FULL NAME</label>
+              <input
+                type="text"
+                placeholder="Your name"
+                value={form.name}
+                onChange={function(e) { setForm({ ...form, name: e.target.value }); }}
+                onKeyDown={handleKey}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm w-full outline-none focus:border-green-400 transition-colors"
+              />
+            </div>
           )}
-          <input
-            type="email"
-            placeholder="Email"
-            value={form.email}
-            onChange={e => setForm({ ...form, email: e.target.value })}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-green-400 transition-colors"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={form.password}
-            onChange={e => setForm({ ...form, password: e.target.value })}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm outline-none focus:border-green-400 transition-colors"
-          />
+
+          <div>
+            <label className="text-gray-400 text-xs font-mono block mb-1">EMAIL</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={form.email}
+              onChange={function(e) { setForm({ ...form, email: e.target.value }); }}
+              onKeyDown={handleKey}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm w-full outline-none focus:border-green-400 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="text-gray-400 text-xs font-mono block mb-1">PASSWORD</label>
+            <input
+              type="password"
+              placeholder="Min 6 characters"
+              value={form.password}
+              onChange={function(e) { setForm({ ...form, password: e.target.value }); }}
+              onKeyDown={handleKey}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm w-full outline-none focus:border-green-400 transition-colors"
+            />
+          </div>
+
           <button
             onClick={handleSubmit}
             disabled={loading}
@@ -81,14 +121,23 @@ function Login() {
         </div>
 
         <p className="text-center text-gray-500 text-sm mt-6">
-          {isSignup ? 'Already have an account?' : "Don't have an account?"}
+          {isSignup ? 'Already have an account?' : 'New to PrisePulse?'}
           <button
-            onClick={() => setIsSignup(!isSignup)}
-            className="text-green-400 ml-1 hover:underline"
+            onClick={function() { setIsSignup(!isSignup); setError(''); }}
+            className="text-green-400 ml-1 hover:underline font-medium"
           >
-            {isSignup ? 'Login' : 'Sign Up'}
+            {isSignup ? 'Login' : 'Create Account'}
           </button>
         </p>
+
+        {!isSignup && (
+          <div className="mt-6 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+            <p className="text-gray-500 text-xs text-center font-mono">
+              Markets, News, Crypto and Tools are available without login.
+              Login required for Portfolio and Watchlist.
+            </p>
+          </div>
+        )}
 
       </div>
     </div>
