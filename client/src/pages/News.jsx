@@ -13,7 +13,6 @@ function timeAgo(iso) {
 export default function News() {
   const [news,    setNews]    = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('all');
 
   useEffect(() => {
     axios.get(`${API}/api/market/news`)
