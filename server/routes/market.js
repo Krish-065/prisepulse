@@ -2,9 +2,8 @@ const express = require('express');
 const axios   = require('axios');
 const router  = express.Router();
 
-// Cache helper
 const cache = {};
-const getCached = async (key, fn, ttl) => {
+const getCached = async function(key, fn, ttl) {
   const now = Date.now();
   if (cache[key] && now - cache[key].time < ttl * 1000) return cache[key].data;
   const data = await fn();
@@ -12,11 +11,10 @@ const getCached = async (key, fn, ttl) => {
   return data;
 };
 
-// NSE Cookie session
 let nseCookie = '';
 let cookieTime = 0;
 
-const getNSECookie = async () => {
+const getNSECookie = async function() {
   if (nseCookie && Date.now() - cookieTime < 25 * 60 * 1000) return nseCookie;
   try {
     const res = await axios.get('https://www.nseindia.com', {
@@ -28,16 +26,16 @@ const getNSECookie = async () => {
     });
     const cookies = res.headers['set-cookie'];
     if (cookies) {
-      nseCookie  = cookies.map(c => c.split(';')[0]).join('; ');
+      nseCookie  = cookies.map(function(c) { return c.split(';')[0]; }).join('; ');
       cookieTime = Date.now();
     }
   } catch (e) {
-    console.log('NSE cookie fetch failed:', e.message);
+    console.log('NSE cookie error:', e.message);
   }
   return nseCookie;
 };
 
-const nseGet = async (url) => {
+const nseGet = async function(url) {
   const cookie = await getNSECookie();
   return axios.get(url, {
     headers: {
@@ -51,75 +49,82 @@ const nseGet = async (url) => {
   });
 };
 
-// ── INDICES ───────────────────────────────────────────────────────
-router.get('/indices', async (req, res) => {
+const normalizeStock = function(s) {
+  return {
+    symbol:         s.symbol || '',
+    ltp:            s.ltp || 0,
+    netPrice:       s.perChange || s.net_price || s.netPrice || 0,
+    tradedQuantity: s.trade_quantity || s.tradedQuantity || 0,
+  };
+};
+
+router.get('/indices', async function(req, res) {
   try {
-    const data = await getCached('indices', async () => {
-      const { data } = await nseGet('https://www.nseindia.com/api/allIndices');
+    const data = await getCached('indices', async function() {
+      const result = await nseGet('https://www.nseindia.com/api/allIndices');
       const wanted = ['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 100'];
-      return data.data.filter(i => wanted.includes(i.index));
+      return result.data.data.filter(function(i) { return wanted.includes(i.index); });
     }, 30);
     res.json(data);
   } catch (err) {
-    console.log('Indices fallback used');
+    console.log('Indices fallback');
     res.json([
-      { index: 'NIFTY 50',         last: 23151.10, change: 173.45,  pChange: 0.76  },
-      { index: 'NIFTY BANK',       last: 47312.55, change: 211.10,  pChange: 0.45  },
-      { index: 'NIFTY IT',         last: 34201.15, change: -75.40,  pChange: -0.22 },
-      { index: 'NIFTY MIDCAP 100', last: 51240.30, change: 320.15,  pChange: 0.63  },
+      { index: 'NIFTY 50',         last: 23464.35, change: 178.45, pChange: 0.77  },
+      { index: 'NIFTY BANK',       last: 54430.80, change: 321.10, pChange: 0.59  },
+      { index: 'NIFTY IT',         last: 28826.30, change: -95.40, pChange: -0.33 },
+      { index: 'NIFTY MIDCAP 100', last: 52140.30, change: 420.15, pChange: 0.81  },
     ]);
   }
 });
 
-// ── TOP GAINERS ───────────────────────────────────────────────────
-router.get('/gainers', async (req, res) => {
+router.get('/gainers', async function(req, res) {
   try {
-    const data = await getCached('gainers', async () => {
-      const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
-      const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
+    const data = await getCached('gainers', async function() {
+      const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
+      const list = result.data.NIFTY && result.data.NIFTY.data
+        ? result.data.NIFTY.data.slice(0, 10)
+        : null;
       if (!list || list.length === 0) return getFallbackGainers();
-      return list.map(s => ({
-        symbol:         s.symbol,
-        ltp:            s.ltp || s.lastPrice || s.last || 0,
-        netPrice:       s.netPrice || s.pChange || s.percentChange || s.per || 0,
-        tradedQuantity: s.tradedQuantity || s.totalTradedVolume || s.volume || 0,
-      }));
+      return list.map(normalizeStock);
     }, 60);
     res.json(data);
   } catch (err) {
-    console.log('Gainers fallback used');
+    console.log('Gainers fallback');
     res.json(getFallbackGainers());
   }
 });
 
-// ── TOP LOSERS ────────────────────────────────────────────────────
-router.get('/losers', async (req, res) => {
+router.get('/losers', async function(req, res) {
   try {
-    const data = await getCached('losers', async () => {
-      const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=loosers');
-      const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
+    const data = await getCached('losers', async function() {
+      const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=loosers');
+      const list = result.data.NIFTY && result.data.NIFTY.data
+        ? result.data.NIFTY.data.slice(0, 10)
+        : null;
       if (!list || list.length === 0) return getFallbackLosers();
-      return list.map(s => ({
-        symbol:         s.symbol,
-        ltp:            s.ltp || s.lastPrice || s.last || 0,
-        netPrice:       s.netPrice || s.pChange || s.percentChange || s.per || 0,
-        tradedQuantity: s.tradedQuantity || s.totalTradedVolume || s.volume || 0,
-      }));
+      return list.map(normalizeStock);
     }, 60);
     res.json(data);
   } catch (err) {
-    console.log('Losers fallback used');
+    console.log('Losers fallback');
     res.json(getFallbackLosers());
   }
 });
 
-// ── SINGLE STOCK QUOTE ────────────────────────────────────────────
-router.get('/quote/:symbol', async (req, res) => {
+router.get('/debug-gainers', async function(req, res) {
   try {
-    const { data } = await nseGet(
-      'https://www.nseindia.com/api/quote-equity?symbol=' + req.params.symbol
-    );
-    const p = data.priceInfo;
+    const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
+    const first = result.data.NIFTY && result.data.NIFTY.data ? result.data.NIFTY.data[0] : {};
+    res.json({ keys: Object.keys(first), sample: first });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+
+router.get('/quote/:symbol', async function(req, res) {
+  try {
+    const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + req.params.symbol);
+    const p = result.data.priceInfo;
     res.json({
       symbol:    req.params.symbol,
       price:     p.lastPrice,
@@ -135,25 +140,22 @@ router.get('/quote/:symbol', async (req, res) => {
   }
 });
 
-// ── MULTIPLE QUOTES (for Watchlist and Portfolio) ─────────────────
-router.post('/quotes', async (req, res) => {
+router.post('/quotes', async function(req, res) {
   try {
-    const { symbols } = req.body;
+    const symbols = req.body.symbols;
     const results = await Promise.all(
-      symbols.map(async (symbol) => {
+      symbols.map(async function(symbol) {
         try {
-          const { data } = await nseGet(
-            'https://www.nseindia.com/api/quote-equity?symbol=' + symbol
-          );
-          const p = data.priceInfo;
+          const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + symbol);
+          const p = result.data.priceInfo;
           return {
-            symbol,
+            symbol:    symbol,
             price:     p.lastPrice.toFixed(2),
             change:    p.change.toFixed(2),
             changePct: p.pChange.toFixed(2) + '%',
           };
-        } catch {
-          return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+        } catch (e) {
+          return { symbol: symbol, error: true, price: '0', change: '0', changePct: '0%' };
         }
       })
     );
@@ -163,17 +165,14 @@ router.post('/quotes', async (req, res) => {
   }
 });
 
-// ── INTRADAY CHART ────────────────────────────────────────────────
-router.get('/chart/:symbol', async (req, res) => {
+router.get('/chart/:symbol', async function(req, res) {
   try {
-    const { data } = await nseGet(
-      'https://www.nseindia.com/api/chart-databyindex?index=' + req.params.symbol + 'EQN'
-    );
-    const points = data.grapthData || data.graphData || [];
-    res.json(points.map(p => ({ time: p[0], price: p[1] })));
+    const result = await nseGet('https://www.nseindia.com/api/chart-databyindex?index=' + req.params.symbol + 'EQN');
+    const points = result.data.grapthData || result.data.graphData || [];
+    res.json(points.map(function(p) { return { time: p[0], price: p[1] }; }));
   } catch (err) {
-    console.log('Chart fallback used');
-    let v = 23000;
+    console.log('Chart fallback');
+    let v = 23400;
     const points = Array.from({ length: 75 }, function(_, i) {
       v += (Math.random() - 0.47) * 40;
       const h = 9 + Math.floor(i * (6.5 / 75));
@@ -184,39 +183,30 @@ router.get('/chart/:symbol', async (req, res) => {
   }
 });
 
-// ── CRYPTO (CoinGecko) ────────────────────────────────────────────
-router.get('/crypto', async (req, res) => {
+router.get('/crypto', async function(req, res) {
   try {
-    const data = await getCached('crypto', async () => {
-      const { data } = await axios.get(
+    const data = await getCached('crypto', async function() {
+      const result = await axios.get(
         'https://api.coingecko.com/api/v3/coins/markets' +
-        '?vs_currency=inr' +
-        '&order=market_cap_desc' +
-        '&per_page=15' +
-        '&page=1' +
-        '&price_change_percentage=1h,24h,7d',
-        {
-          timeout: 10000,
-          headers: { 'Accept': 'application/json' }
-        }
+        '?vs_currency=inr&order=market_cap_desc&per_page=15&page=1&price_change_percentage=1h,24h,7d',
+        { timeout: 10000, headers: { 'Accept': 'application/json' } }
       );
-      return data.map(c => ({
-        id:        c.id,
-        symbol:    c.symbol.toUpperCase(),
-        name:      c.name,
-        image:     c.image,
-        price:     c.current_price,
-        change24h: c.price_change_percentage_24h
-          ? c.price_change_percentage_24h.toFixed(2) : '0',
-        change7d:  c.price_change_percentage_7d_in_currency
-          ? c.price_change_percentage_7d_in_currency.toFixed(2) : '0',
-        change1h:  c.price_change_percentage_1h_in_currency
-          ? c.price_change_percentage_1h_in_currency.toFixed(2) : '0',
-        marketCap: c.market_cap,
-        volume:    c.total_volume,
-        high24h:   c.high_24h,
-        low24h:    c.low_24h,
-      }));
+      return result.data.map(function(c) {
+        return {
+          id:        c.id,
+          symbol:    c.symbol.toUpperCase(),
+          name:      c.name,
+          image:     c.image,
+          price:     c.current_price,
+          change24h: c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2) : '0',
+          change7d:  c.price_change_percentage_7d_in_currency ? c.price_change_percentage_7d_in_currency.toFixed(2) : '0',
+          change1h:  c.price_change_percentage_1h_in_currency ? c.price_change_percentage_1h_in_currency.toFixed(2) : '0',
+          marketCap: c.market_cap,
+          volume:    c.total_volume,
+          high24h:   c.high_24h,
+          low24h:    c.low_24h,
+        };
+      });
     }, 120);
     res.json(data);
   } catch (err) {
@@ -225,10 +215,9 @@ router.get('/crypto', async (req, res) => {
   }
 });
 
-// ── MUTUAL FUNDS (mfapi.in) ───────────────────────────────────────
-router.get('/mutualfunds', async (req, res) => {
+router.get('/mutualfunds', async function(req, res) {
   try {
-    const data = await getCached('mf', async () => {
+    const data = await getCached('mf', async function() {
       const funds = [
         { code: '119598', name: 'Mirae Asset Large Cap Fund'  },
         { code: '122639', name: 'Parag Parikh Flexi Cap Fund' },
@@ -237,24 +226,20 @@ router.get('/mutualfunds', async (req, res) => {
         { code: '120503', name: 'Axis Small Cap Fund'         },
         { code: '119533', name: 'ICICI Pru Bluechip Fund'     },
       ];
-      return await Promise.all(funds.map(async (f) => {
-        const { data } = await axios.get(
-          'https://api.mfapi.in/mf/' + f.code,
-          { timeout: 8000 }
-        );
-        const latest = data.data && data.data[0];
-        const prev   = data.data && data.data[1];
+      return await Promise.all(funds.map(async function(f) {
+        const result = await axios.get('https://api.mfapi.in/mf/' + f.code, { timeout: 8000 });
+        const latest = result.data.data && result.data.data[0];
+        const prev   = result.data.data && result.data.data[1];
         const change = latest && prev
-          ? ((parseFloat(latest.nav) - parseFloat(prev.nav))
-              / parseFloat(prev.nav) * 100).toFixed(2)
+          ? ((parseFloat(latest.nav) - parseFloat(prev.nav)) / parseFloat(prev.nav) * 100).toFixed(2)
           : '0.00';
         return {
           code:     f.code,
-          name:     data.meta ? data.meta.scheme_name : f.name,
-          category: data.meta ? data.meta.scheme_category : 'Equity',
+          name:     result.data.meta ? result.data.meta.scheme_name : f.name,
+          category: result.data.meta ? result.data.meta.scheme_category : 'Equity',
           nav:      latest ? parseFloat(latest.nav).toFixed(2) : '0',
           date:     latest ? latest.date : '',
-          change,
+          change:   change,
         };
       }));
     }, 3600);
@@ -265,8 +250,7 @@ router.get('/mutualfunds', async (req, res) => {
   }
 });
 
-// ── COMMODITIES ───────────────────────────────────────────────────
-router.get('/commodities', async (req, res) => {
+router.get('/commodities', async function(req, res) {
   res.json({
     gold:   { price: 71240 + Math.floor(Math.random() * 200 - 100), change: '+0.18%', unit: '10g'  },
     silver: { price: 84500 + Math.floor(Math.random() * 500 - 250), change: '+0.32%', unit: 'kg'   },
@@ -274,48 +258,41 @@ router.get('/commodities', async (req, res) => {
   });
 });
 
-// ── NEWS ──────────────────────────────────────────────────────────
-router.get('/news', async (req, res) => {
+router.get('/news', async function(req, res) {
   try {
     const KEY = process.env.NEWS_API_KEY;
-    if (!KEY || KEY === 'your_newsapi_key_here') throw new Error('No valid API key');
-    const data = await getCached('news', async () => {
-      const { data } = await axios.get(
-        'https://newsapi.org/v2/everything' +
-        '?q=india+stock+market+nifty+sensex' +
-        '&sortBy=publishedAt' +
-        '&pageSize=15' +
-        '&language=en' +
-        '&apiKey=' + KEY,
+    if (!KEY || KEY === 'your_newsapi_key_here') throw new Error('No key');
+    const data = await getCached('news', async function() {
+      const result = await axios.get(
+        'https://newsapi.org/v2/everything?q=india+stock+market+nifty+sensex&sortBy=publishedAt&pageSize=15&language=en&apiKey=' + KEY,
         { timeout: 8000 }
       );
-      return data.articles.map(a => ({
-        title:       a.title,
-        source:      a.source.name,
-        url:         a.url,
-        image:       a.urlToImage,
-        time:        a.publishedAt,
-        description: a.description,
-      }));
+      return result.data.articles.map(function(a) {
+        return {
+          title:       a.title,
+          source:      a.source.name,
+          url:         a.url,
+          image:       a.urlToImage,
+          time:        a.publishedAt,
+          description: a.description,
+        };
+      });
     }, 600);
     res.json(data);
   } catch (err) {
-    console.log('News fallback used:', err.message);
+    console.log('News fallback:', err.message);
     res.json(getFallbackNews());
   }
 });
 
-// ── MARKET STATUS ─────────────────────────────────────────────────
-router.get('/status', (req, res) => {
-  const ist  = new Date(
-    new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })
-  );
+router.get('/status', function(req, res) {
+  const ist  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const day  = ist.getDay();
   const mins = ist.getHours() * 60 + ist.getMinutes();
   const isOpen = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
   const isPre  = day >= 1 && day <= 5 && mins >= 540 && mins < 555;
   res.json({
-    isOpen,
+    isOpen:    isOpen,
     isPreOpen: isPre,
     status:    isOpen ? 'Market Open' : isPre ? 'Pre-Open Session' : 'Market Closed',
     message:   isOpen ? 'NSE and BSE trading live' : 'Opens Mon-Fri 9:15 AM IST',
@@ -323,41 +300,29 @@ router.get('/status', (req, res) => {
   });
 });
 
-router.get('/debug-gainers', async (req, res) => {
-  try {
-    const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
-    const first = data.NIFTY && data.NIFTY.data ? data.NIFTY.data[0] : {};
-    res.json({ keys: Object.keys(first), sample: first });
-  } catch (err) {
-    res.json({ error: err.message });
-  }
-});
-
-
-// ── FALLBACK DATA ─────────────────────────────────────────────────
 function getFallbackGainers() {
   return [
-    { symbol: 'TATAMOTORS', ltp: 952.30,  netPrice: 3.20,  tradedQuantity: 8234567 },
-    { symbol: 'BAJFINANCE', ltp: 6721.00, netPrice: 2.11,  tradedQuantity: 1234567 },
-    { symbol: 'M&M',        ltp: 2187.55, netPrice: 1.55,  tradedQuantity: 2345678 },
-    { symbol: 'WIPRO',      ltp: 452.15,  netPrice: 1.40,  tradedQuantity: 5678901 },
-    { symbol: 'RELIANCE',   ltp: 2912.40, netPrice: 1.12,  tradedQuantity: 3456789 },
-    { symbol: 'HDFCBANK',   ltp: 1642.30, netPrice: 0.67,  tradedQuantity: 4567890 },
-    { symbol: 'ADANIPORTS', ltp: 1287.55, netPrice: 0.55,  tradedQuantity: 2345678 },
-    { symbol: 'AXISBANK',   ltp: 1124.40, netPrice: 0.33,  tradedQuantity: 3456789 },
+    { symbol: 'ETERNAL',    ltp: 232.59,  netPrice: 3.20, tradedQuantity: 8234567 },
+    { symbol: 'TATASTEEL',  ltp: 191.25,  netPrice: 2.80, tradedQuantity: 9234567 },
+    { symbol: 'M&M',        ltp: 3103.20, netPrice: 2.11, tradedQuantity: 2345678 },
+    { symbol: 'HDFCLIFE',   ltp: 638.45,  netPrice: 1.55, tradedQuantity: 3456789 },
+    { symbol: 'BHARTIARTL', ltp: 1815.90, netPrice: 1.40, tradedQuantity: 5678901 },
+    { symbol: 'RELIANCE',   ltp: 1285.40, netPrice: 1.12, tradedQuantity: 3456789 },
+    { symbol: 'HDFCBANK',   ltp: 1762.30, netPrice: 0.67, tradedQuantity: 4567890 },
+    { symbol: 'AXISBANK',   ltp: 1124.40, netPrice: 0.33, tradedQuantity: 3456789 },
   ];
 }
 
 function getFallbackLosers() {
   return [
-    { symbol: 'TATASTEEL',  ltp: 142.30,  netPrice: -2.10, tradedQuantity: 9234567 },
-    { symbol: 'JSWSTEEL',   ltp: 865.45,  netPrice: -1.44, tradedQuantity: 2134567 },
-    { symbol: 'LT',         ltp: 3421.10, netPrice: -1.22, tradedQuantity: 1234567 },
-    { symbol: 'INFY',       ltp: 1423.60, netPrice: -0.88, tradedQuantity: 4567890 },
-    { symbol: 'TCS',        ltp: 3887.75, netPrice: -0.34, tradedQuantity: 2345678 },
+    { symbol: 'WIPRO',      ltp: 190.74,  netPrice: -2.10, tradedQuantity: 9234567 },
+    { symbol: 'BAJFINANCE', ltp: 863.40,  netPrice: -1.80, tradedQuantity: 2134567 },
+    { symbol: 'CIPLA',      ltp: 1279.60, netPrice: -1.44, tradedQuantity: 1234567 },
+    { symbol: 'ADANIENT',   ltp: 1950.20, netPrice: -1.22, tradedQuantity: 2345678 },
+    { symbol: 'ADANIPORTS', ltp: 1355.80, netPrice: -0.88, tradedQuantity: 4567890 },
+    { symbol: 'INFY',       ltp: 1423.60, netPrice: -0.77, tradedQuantity: 3456789 },
+    { symbol: 'TCS',        ltp: 3387.75, netPrice: -0.34, tradedQuantity: 2345678 },
     { symbol: 'ITC',        ltp: 428.90,  netPrice: -0.14, tradedQuantity: 6789012 },
-    { symbol: 'NESTLEIND',  ltp: 2245.30, netPrice: -0.77, tradedQuantity: 1234567 },
-    { symbol: 'KOTAKBK',    ltp: 1876.45, netPrice: -0.50, tradedQuantity: 2345678 },
   ];
 }
 
@@ -373,14 +338,14 @@ function getFallbackCrypto() {
 
 function getFallbackNews() {
   return [
-    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',          source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 9   * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.' },
-    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',        source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 24  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.' },
-    { title: 'Nifty eyes 22,500 resistance; FII inflows of Rs.4,200 Cr',     source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 41  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.' },
-    { title: 'Bitcoin surges past $82K on spot ETF inflow uptick',            source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.' },
-    { title: 'Hyundai India IPO oversubscribed 2.4x on Day 2',               source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.' },
-    { title: 'Gold hits Rs.71,240 per 10g on safe-haven demand',             source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.' },
-    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',   source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.' },
-    { title: 'SEBI tightens F and O rules; new lot sizes effective from April', source: 'Livemint',        url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.' },
+    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',           source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 9   * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.' },
+    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',         source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 24  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.' },
+    { title: 'Nifty eyes 22,500 resistance; FII inflows of Rs.4,200 Cr',      source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 41  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.' },
+    { title: 'Bitcoin surges past $82K on spot ETF inflow uptick',             source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.' },
+    { title: 'Hyundai India IPO oversubscribed 2.4x on Day 2',                source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.' },
+    { title: 'Gold hits Rs.71,240 per 10g on safe-haven demand',              source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.' },
+    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',    source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.' },
+    { title: 'SEBI tightens F and O rules; new lot sizes effective from April',source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.' },
   ];
 }
 
