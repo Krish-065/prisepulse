@@ -79,10 +79,10 @@ router.get('/gainers', async (req, res) => {
       const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackGainers();
       return list.map(s => ({
-        symbol:          s.symbol,
-        ltp:             s.ltp || s.lastPrice || 0,
-        netPrice:        s.netPrice || s.pChange || 0,
-        tradedQuantity:  s.tradedQuantity || s.totalTradedVolume || 0,
+        symbol:         s.symbol,
+        ltp:            s.ltp || s.lastPrice || s.last || 0,
+        netPrice:       s.netPrice || s.pChange || s.percentChange || s.per || 0,
+        tradedQuantity: s.tradedQuantity || s.totalTradedVolume || s.volume || 0,
       }));
     }, 60);
     res.json(data);
@@ -92,7 +92,6 @@ router.get('/gainers', async (req, res) => {
   }
 });
 
-
 // ── TOP LOSERS ────────────────────────────────────────────────────
 router.get('/losers', async (req, res) => {
   try {
@@ -101,10 +100,10 @@ router.get('/losers', async (req, res) => {
       const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackLosers();
       return list.map(s => ({
-        symbol:          s.symbol,
-        ltp:             s.ltp || s.lastPrice || 0,
-        netPrice:        s.netPrice || s.pChange || 0,
-        tradedQuantity:  s.tradedQuantity || s.totalTradedVolume || 0,
+        symbol:         s.symbol,
+        ltp:            s.ltp || s.lastPrice || s.last || 0,
+        netPrice:       s.netPrice || s.pChange || s.percentChange || s.per || 0,
+        tradedQuantity: s.tradedQuantity || s.totalTradedVolume || s.volume || 0,
       }));
     }, 60);
     res.json(data);
@@ -323,6 +322,21 @@ router.get('/status', (req, res) => {
     time:      ist.toLocaleTimeString('en-IN'),
   });
 });
+
+router.get('/debug-gainers', async (req, res) => {
+  try {
+    const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
+    const first = data.NIFTY && data.NIFTY.data ? data.NIFTY.data[0] : {};
+    res.json({ keys: Object.keys(first), sample: first });
+  } catch (err) {
+    res.json({ error: err.message });
+  }
+});
+```
+
+Then after deploying, open this URL in browser:
+```
+https://prisepulse-server.onrender.com/api/market/debug-gainers
 
 // ── FALLBACK DATA ─────────────────────────────────────────────────
 function getFallbackGainers() {
