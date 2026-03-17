@@ -87,10 +87,10 @@ const broadcastMarket = async () => {
       SENSEX:            sensex    ? parseFloat(sensex.last)       : 76012,
       BANK_NIFTY:        bankNifty ? parseFloat(bankNifty.last)    : 47312,
       NIFTY_IT:          niftyIT   ? parseFloat(niftyIT.last)      : 34201,
-      NIFTY_CHANGE:      nifty     ? parseFloat(nifty.pChange)     : 0,
-      SENSEX_CHANGE:     sensex    ? parseFloat(sensex.pChange)    : 0,
-      BANK_NIFTY_CHANGE: bankNifty ? parseFloat(bankNifty.pChange) : 0,
-      NIFTY_IT_CHANGE:   niftyIT   ? parseFloat(niftyIT.pChange)   : 0,
+      NIFTY_CHANGE:      nifty     ? parseFloat(nifty.percentChange)     : 0,
+      SENSEX_CHANGE:     sensex    ? parseFloat(sensex.percentChange)    : 0,
+      BANK_NIFTY_CHANGE: bankNifty ? parseFloat(bankNifty.percentChange) : 0,
+      NIFTY_IT_CHANGE:   niftyIT   ? parseFloat(niftyIT.percentChange)   : 0,
       timestamp: new Date(),
     };
 

@@ -63,7 +63,16 @@ router.get('/indices', async function(req, res) {
     const data = await getCached('indices', async function() {
       const result = await nseGet('https://www.nseindia.com/api/allIndices');
       const wanted = ['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 100'];
-      return result.data.data.filter(function(i) { return wanted.includes(i.index); });
+return result.data.data
+  .filter(function(i) { return wanted.includes(i.index); })
+  .map(function(i) {
+    return {
+      index:   i.index,
+      last:    i.last,
+      change:  i.variation,
+      pChange: i.percentChange,
+    };
+  });
     }, 30);
     res.json(data);
   } catch (err) {
