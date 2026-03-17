@@ -30,66 +30,95 @@ app.get('/', (req, res) => {
   res.json({ message: 'PrisePulse API is running!' });
 });
 
-const NSE_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'application/json',
-  'Accept-Language': 'en-US,en;q=0.9',
-  'Referer': 'https://www.nseindia.com/',
-};
+// NSE cookie session for broadcast
+let broadcastCookie = '';
+let broadcastCookieTime = 0;
 
-let nseCookie = '';
-let cookieTime = 0;
-
-const refreshCookie = async () => {
+const getBroadcastCookie = async () => {
+  if (broadcastCookie && Date.now() - broadcastCookieTime < 25 * 60 * 1000) {
+    return broadcastCookie;
+  }
   try {
     const res = await axios.get('https://www.nseindia.com', {
-      headers: { 'User-Agent': NSE_HEADERS['User-Agent'] },
-      timeout: 5000
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 8000
     });
     const cookies = res.headers['set-cookie'];
     if (cookies) {
-      nseCookie = cookies.map(c => c.split(';')[0]).join('; ');
-      cookieTime = Date.now();
+      broadcastCookie     = cookies.map(c => c.split(';')[0]).join('; ');
+      broadcastCookieTime = Date.now();
     }
-  } catch (e) {}
+  } catch (e) {
+    console.log('Broadcast cookie error:', e.message);
+  }
+  return broadcastCookie;
 };
 
 const broadcastMarket = async () => {
   try {
-    if (!nseCookie || Date.now() - cookieTime > 25 * 60 * 1000) {
-      await refreshCookie();
-    }
+    const cookie = await getBroadcastCookie();
+
     const { data } = await axios.get(
       'https://www.nseindia.com/api/allIndices',
-      { headers: { ...NSE_HEADERS, 'Cookie': nseCookie }, timeout: 5000 }
+      {
+        headers: {
+          'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Accept':          'application/json, text/plain, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer':         'https://www.nseindia.com/',
+          'Cookie':          cookie,
+        },
+        timeout: 6000
+      }
     );
-    const find = (name) => data.data.find(i => i.index === name);
-    const nifty     = find('NIFTY 50');
-    const sensex    = find('SENSEX') || find('S&P BSE SENSEX');
-    const bankNifty = find('NIFTY BANK');
-    const niftyIT   = find('NIFTY IT');
-    io.emit('price-update', {
-      NIFTY:             nifty?.last        || 23151,
-      SENSEX:            sensex?.last       || 76012,
-      BANK_NIFTY:        bankNifty?.last    || 47312,
-      NIFTY_IT:          niftyIT?.last      || 34201,
-      NIFTY_CHANGE:      nifty?.pChange     || 0,
-      SENSEX_CHANGE:     sensex?.pChange    || 0,
-      BANK_NIFTY_CHANGE: bankNifty?.pChange || 0,
-      NIFTY_IT_CHANGE:   niftyIT?.pChange   || 0,
+
+    const indices   = data.data || [];
+    const nifty     = indices.find(i => i.index === 'NIFTY 50');
+    const sensex    = indices.find(i => i.index === 'SENSEX') ||
+                      indices.find(i => i.index === 'S&P BSE SENSEX');
+    const bankNifty = indices.find(i => i.index === 'NIFTY BANK');
+    const niftyIT   = indices.find(i => i.index === 'NIFTY IT');
+
+    const payload = {
+      NIFTY:             nifty     ? parseFloat(nifty.last)        : 23151,
+      SENSEX:            sensex    ? parseFloat(sensex.last)       : 76012,
+      BANK_NIFTY:        bankNifty ? parseFloat(bankNifty.last)    : 47312,
+      NIFTY_IT:          niftyIT   ? parseFloat(niftyIT.last)      : 34201,
+      NIFTY_CHANGE:      nifty     ? parseFloat(nifty.pChange)     : 0,
+      SENSEX_CHANGE:     sensex    ? parseFloat(sensex.pChange)    : 0,
+      BANK_NIFTY_CHANGE: bankNifty ? parseFloat(bankNifty.pChange) : 0,
+      NIFTY_IT_CHANGE:   niftyIT   ? parseFloat(niftyIT.pChange)   : 0,
       timestamp: new Date(),
-    });
-    console.log('[' + new Date().toLocaleTimeString() + '] NIFTY ' + (nifty?.last || 'N/A'));
+    };
+
+    io.emit('price-update', payload);
+    console.log(
+      '[' + new Date().toLocaleTimeString() + ']' +
+      ' NIFTY ' + payload.NIFTY +
+      ' (' + (payload.NIFTY_CHANGE >= 0 ? '+' : '') + payload.NIFTY_CHANGE + '%)'
+    );
+
   } catch (err) {
+    console.log('NSE fetch failed, sending simulated data:', err.message);
+
+    // Simulate realistic fluctuating prices when NSE is blocked
+    const niftyBase     = 23151;
+    const sensexBase    = 76012;
+    const bankBase      = 47312;
+    const itBase        = 34201;
+
     io.emit('price-update', {
-      NIFTY: 23151 + (Math.random()*100-50),
-      SENSEX: 76012 + (Math.random()*300-150),
-      BANK_NIFTY: 47312 + (Math.random()*150-75),
-      NIFTY_IT: 34201 + (Math.random()*100-50),
-      NIFTY_CHANGE: parseFloat((Math.random()*2-1).toFixed(2)),
-      SENSEX_CHANGE: parseFloat((Math.random()*2-1).toFixed(2)),
-      BANK_NIFTY_CHANGE: parseFloat((Math.random()*2-1).toFixed(2)),
-      NIFTY_IT_CHANGE: parseFloat((Math.random()*2-1).toFixed(2)),
+      NIFTY:             parseFloat((niftyBase  + (Math.random() * 200 - 100)).toFixed(2)),
+      SENSEX:            parseFloat((sensexBase + (Math.random() * 500 - 250)).toFixed(2)),
+      BANK_NIFTY:        parseFloat((bankBase   + (Math.random() * 300 - 150)).toFixed(2)),
+      NIFTY_IT:          parseFloat((itBase     + (Math.random() * 200 - 100)).toFixed(2)),
+      NIFTY_CHANGE:      parseFloat((Math.random() * 2 - 1).toFixed(2)),
+      SENSEX_CHANGE:     parseFloat((Math.random() * 2 - 1).toFixed(2)),
+      BANK_NIFTY_CHANGE: parseFloat((Math.random() * 2 - 1).toFixed(2)),
+      NIFTY_IT_CHANGE:   parseFloat((Math.random() * 2 - 1).toFixed(2)),
       timestamp: new Date(),
     });
   }
@@ -97,14 +126,21 @@ const broadcastMarket = async () => {
 
 io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
+
+  // Send data immediately when client connects
   broadcastMarket();
-  socket.on('disconnect', () => console.log('Disconnected:', socket.id));
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
 });
 
+// Broadcast every 10 seconds
 cron.schedule('*/10 * * * * *', broadcastMarket);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log('Server running on port ' + PORT);
+  console.log('Starting market data broadcast...');
   broadcastMarket();
 });

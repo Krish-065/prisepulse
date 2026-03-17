@@ -78,7 +78,12 @@ router.get('/gainers', async (req, res) => {
       const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
       const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackGainers();
-      return list;
+      return list.map(s => ({
+        symbol:          s.symbol,
+        ltp:             s.ltp || s.lastPrice || 0,
+        netPrice:        s.netPrice || s.pChange || 0,
+        tradedQuantity:  s.tradedQuantity || s.totalTradedVolume || 0,
+      }));
     }, 60);
     res.json(data);
   } catch (err) {
@@ -87,6 +92,7 @@ router.get('/gainers', async (req, res) => {
   }
 });
 
+
 // ── TOP LOSERS ────────────────────────────────────────────────────
 router.get('/losers', async (req, res) => {
   try {
@@ -94,7 +100,12 @@ router.get('/losers', async (req, res) => {
       const { data } = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=loosers');
       const list = data.NIFTY && data.NIFTY.data ? data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackLosers();
-      return list;
+      return list.map(s => ({
+        symbol:          s.symbol,
+        ltp:             s.ltp || s.lastPrice || 0,
+        netPrice:        s.netPrice || s.pChange || 0,
+        tradedQuantity:  s.tradedQuantity || s.totalTradedVolume || 0,
+      }));
     }, 60);
     res.json(data);
   } catch (err) {
@@ -129,20 +140,18 @@ router.get('/quote/:symbol', async (req, res) => {
 router.post('/quotes', async (req, res) => {
   try {
     const { symbols } = req.body;
-    const KEY = process.env.ALPHA_VANTAGE_KEY;
     const results = await Promise.all(
       symbols.map(async (symbol) => {
         try {
-          const url = 'https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol='
-            + symbol + '.BSE&apikey=' + KEY;
-          const { data } = await axios.get(url, { timeout: 8000 });
-          const q = data['Global Quote'];
-          if (!q || !q['05. price']) return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+          const { data } = await nseGet(
+            'https://www.nseindia.com/api/quote-equity?symbol=' + symbol
+          );
+          const p = data.priceInfo;
           return {
             symbol,
-            price:     parseFloat(q['05. price']).toFixed(2),
-            change:    parseFloat(q['09. change']).toFixed(2),
-            changePct: q['10. change percent'],
+            price:     p.lastPrice.toFixed(2),
+            change:    p.change.toFixed(2),
+            changePct: p.pChange.toFixed(2) + '%',
           };
         } catch {
           return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
