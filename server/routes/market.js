@@ -332,11 +332,7 @@ router.get('/debug-gainers', async (req, res) => {
     res.json({ error: err.message });
   }
 });
-```
 
-Then after deploying, open this URL in browser:
-```
-https://prisepulse-server.onrender.com/api/market/debug-gainers
 
 // ── FALLBACK DATA ─────────────────────────────────────────────────
 function getFallbackGainers() {
