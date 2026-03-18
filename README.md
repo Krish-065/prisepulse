@@ -78,13 +78,11 @@ A full-stack real-time financial intelligence web application inspired by MoneyC
 - [ ] **F&O Data** — Options chain, put-call ratio, futures data
 - [ ] **IPO Tracker** — Upcoming IPOs with subscription status and GMP
 - [ ] **Screener** — Filter stocks by P/E, P/B, market cap, dividend yield, sector
-- [ ] **Technical Indicators** — RSI, MACD, Moving Averages on charts
 - [ ] **Compare Stocks** — Side by side comparison of multiple stocks
 - [ ] **Dark/Light Theme Toggle** — User preference for theme
 - [ ] **Mobile App** — React Native version for Android and iOS
 - [ ] **Paper Trading** — Simulated trading with virtual money
 - [ ] **AI Insights** — GPT-powered stock analysis and market summaries
-- [ ] **Multi-language Support** — Hindi and Gujarati interface
 - [ ] **Export Portfolio** — Download holdings as Excel or PDF
 - [ ] **Broker Integration** — Connect Zerodha or Upstox for real portfolio sync
 
@@ -123,4 +121,3 @@ prisepulse/
 
 ---
 
-Made with React, Node.js, MongoDB and Socket.io | Data from NSE India and CoinGecko
