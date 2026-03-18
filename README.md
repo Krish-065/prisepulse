@@ -3,8 +3,6 @@
 A full-stack real-time financial intelligence web application inspired by MoneyControl — built for Indian investors to track stocks, crypto, mutual funds, and manage portfolios.
 
 🌐 **Live App:** [prisepulse-two.vercel.app](https://prisepulse-two.vercel.app)  
-🖥️ **Backend API:** [prisepulse-server.onrender.com](https://prisepulse-server.onrender.com)
-
 ---
 
 ## What It Does
