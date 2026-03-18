@@ -61,13 +61,8 @@ A full-stack real-time financial intelligence web application inspired by MoneyC
 
 ## Limitations
 
-- **NSE data** is fetched via an unofficial API — NSE may occasionally block requests causing fallback data to show
-- **Alpha Vantage** free tier allows only 25 stock quote calls per day — watchlist prices may show 0 if limit is hit
-- **CoinGecko** free tier allows 30 calls per minute — crypto prices are cached for 2 minutes to stay within limits
-- **NewsAPI** free tier allows 100 calls per day and does not work on deployed frontend (only localhost) — fallback static news is shown on production
-- **Render free tier** spins down after 15 minutes of inactivity causing a cold start delay of 30-50 seconds
-- **Sensex** live percentage change may show 0.00% as NSE does not include Sensex in their indices API
-- **No real trading** — this is a tracking and analytics tool only, not connected to any broker
+- No email OTP verification — users can register with any email without confirming it is real or belongs to them
+- No password strength enforcement — any password is accepted including very weak ones like "123" or "password"
 
 ---
 
