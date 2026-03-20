@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -73,7 +73,6 @@ const NSE_STOCKS = [
   { sym: 'TATAELXSI',  name: 'Tata Elxsi'                    },
   { sym: 'KPITTECH',   name: 'KPIT Technologies'             },
   { sym: 'HAPPSTMNDS', name: 'Happiest Minds Technologies'   },
-  { sym: 'TANLA',      name: 'Tanla Platforms'               },
   { sym: 'TVSMOTORS',  name: 'TVS Motors'                    },
   { sym: 'ASHOKLEY',   name: 'Ashok Leyland'                 },
   { sym: 'BAJAJ-AUTO', name: 'Bajaj Auto'                    },
@@ -150,7 +149,7 @@ const CRYPTO_LIST = [
   { id: 'polkadot',      sym: 'DOT',  name: 'Polkadot'      },
   { id: 'shiba-inu',     sym: 'SHIB', name: 'Shiba Inu'     },
   { id: 'avalanche-2',   sym: 'AVAX', name: 'Avalanche'     },
-  { id: 'polygon',       sym: 'MATIC',name: 'Polygon'       },
+  { id: 'matic-network', sym: 'MATIC',name: 'Polygon'       },
   { id: 'chainlink',     sym: 'LINK', name: 'Chainlink'     },
   { id: 'litecoin',      sym: 'LTC',  name: 'Litecoin'      },
   { id: 'uniswap',       sym: 'UNI',  name: 'Uniswap'       },
@@ -190,44 +189,77 @@ export default function Watchlist() {
   const navigate  = useNavigate();
   const token     = localStorage.getItem('token');
 
-  // ── ALL HOOKS BEFORE ANY EARLY RETURN ─────────────────────────
-  useEffect(function() {
+  // ── PRICE FETCHERS (defined before useEffect) ─────────────────
+  const fetchStockPrices = useCallback(async (symbols) => {
+    setPriceLoading(true);
+    try {
+      const res = await axios.post(BASE + '/market/quotes', { symbols });
+      const map = {};
+      res.data.forEach(d => { map[d.symbol] = d; });
+      setPrices(map);
+    } catch (err) { console.log('Stock price error:', err); }
+    setPriceLoading(false);
+  }, []);
+
+  const fetchCryptoPrices = useCallback(async () => {
+    try {
+      const res = await axios.get(BASE + '/market/crypto');
+      const map = {};
+      res.data.forEach(c => {
+        map[c.id]                    = c;
+        map[c.symbol]                = c;
+        map[c.symbol.toUpperCase()]  = c;
+        map[c.symbol.toLowerCase()]  = c;
+      });
+      setCryptoPrices(map);
+    } catch (err) { console.log('Crypto price error:', err); }
+  }, []);
+
+  const fetchCommPrices = useCallback(async () => {
+    try {
+      const res = await axios.get(BASE + '/market/commodities');
+      setCommPrices(res.data);
+    } catch (err) { console.log('Commodity price error:', err); }
+  }, []);
+
+  // ── ALL HOOKS BEFORE EARLY RETURN ─────────────────────────────
+  useEffect(() => {
     if (!token) return;
-    var load = async function() {
+    const load = async () => {
       try {
-        var res = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
-        var data = res.data;
+        const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
+        const data = res.data;
         setWatchlist(data);
-        if (data.symbols && data.symbols.length > 0)     fetchStockPrices(data.symbols);
-        if (data.cryptos && data.cryptos.length > 0)     fetchCryptoPrices();
+        if (data.symbols    && data.symbols.length    > 0) fetchStockPrices(data.symbols);
+        if (data.cryptos    && data.cryptos.length    > 0) fetchCryptoPrices();
         if (data.commodities && data.commodities.length > 0) fetchCommPrices();
       } catch (err) { console.log('Watchlist load error:', err); }
     };
     load();
-  }, []); // eslint-disable-line
+  }, [fetchStockPrices, fetchCryptoPrices, fetchCommPrices, token]);
 
-  useEffect(function() {
-    var handler = function(e) {
+  useEffect(() => {
+    const handler = e => {
       if (searchRef.current && !searchRef.current.contains(e.target)) setShowDrop(false);
     };
     document.addEventListener('mousedown', handler);
-    return function() { document.removeEventListener('mousedown', handler); };
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(function() {
-    var q = search.trim().toUpperCase();
+  useEffect(() => {
+    const q = search.trim().toUpperCase();
     if (q.length < 1) { setSuggestions([]); setShowDrop(false); return; }
-    var matched = NSE_STOCKS.filter(function(s) {
-      return s.sym.toUpperCase().startsWith(q) || s.name.toUpperCase().includes(q);
-    }).slice(0, 10);
-    if (q.length >= 2 && !matched.find(function(s) { return s.sym === q; })) {
+    const matched = NSE_STOCKS.filter(s =>
+      s.sym.toUpperCase().startsWith(q) || s.name.toUpperCase().includes(q)
+    ).slice(0, 10);
+    if (q.length >= 2 && !matched.find(s => s.sym === q)) {
       matched.push({ sym: q, name: 'Search "' + q + '" on NSE' });
     }
     setSuggestions(matched);
     setShowDrop(matched.length > 0);
   }, [search]);
 
-  // ── GUEST GATE (after all hooks) ──────────────────────────────
+  // ── GUEST GATE ────────────────────────────────────────────────
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -237,11 +269,11 @@ export default function Watchlist() {
           </div>
           <h2 className="text-white text-xl font-bold mb-2">Login to use Watchlist</h2>
           <p className="text-gray-500 text-sm mb-6">Save stocks, crypto and commodities in one place.</p>
-          <button onClick={function() { navigate('/login'); }}
+          <button onClick={() => navigate('/login')}
             className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3">
             Login or Sign Up
           </button>
-          <button onClick={function() { navigate(-1); }}
+          <button onClick={() => navigate(-1)}
             className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono">
             ← Go back
           </button>
@@ -250,104 +282,73 @@ export default function Watchlist() {
     );
   }
 
-  // ── HELPERS ───────────────────────────────────────────────────
-  var fetchStockPrices = async function(symbols) {
-    setPriceLoading(true);
-    try {
-      var res = await axios.post(BASE + '/market/quotes', { symbols });
-      var map = {};
-      res.data.forEach(function(d) { map[d.symbol] = d; });
-      setPrices(map);
-    } catch (err) { console.log('Stock price error:', err); }
-    setPriceLoading(false);
-  };
-
-  var fetchCryptoPrices = async function() {
-    try {
-      var res = await axios.get(BASE + '/market/crypto');
-      var map = {};
-      res.data.forEach(function(c) {
-        map[c.id]     = c;
-        map[c.symbol] = c;
-        map[c.symbol.toLowerCase()] = c;
-      });
-      setCryptoPrices(map);
-    } catch (err) { console.log('Crypto price error:', err); }
-  };
-
-  var fetchCommPrices = async function() {
-    try {
-      var res = await axios.get(BASE + '/market/commodities');
-      setCommPrices(res.data);
-    } catch (err) { console.log('Commodity price error:', err); }
-  };
-
-  var addStock = async function(sym) {
-    var symbol = sym.toUpperCase().trim();
+  // ── ACTIONS ───────────────────────────────────────────────────
+  const addStock = async (sym) => {
+    const symbol = sym.toUpperCase().trim();
     if (!symbol) return;
     if (watchlist.symbols.includes(symbol)) {
       setAddError(symbol + ' already in watchlist');
-      setTimeout(function() { setAddError(''); }, 3000);
+      setTimeout(() => setAddError(''), 3000);
       setSearch(''); setShowDrop(false); return;
     }
     setAdding(symbol); setAddError(''); setSearch(''); setShowDrop(false);
     try {
-      var res = await axios.post(BASE + '/watchlist/add', { symbol }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/add', { symbol }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchStockPrices(res.data.symbols);
     } catch (err) {
       setAddError('Could not add ' + symbol + '. Check if it is a valid NSE symbol.');
-      setTimeout(function() { setAddError(''); }, 4000);
+      setTimeout(() => setAddError(''), 4000);
     }
     setAdding('');
   };
 
-  var removeStock = async function(symbol) {
+  const removeStock = async (symbol) => {
     try {
-      var res = await axios.post(BASE + '/watchlist/remove', { symbol }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/remove', { symbol }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
     } catch (err) { console.log('Remove error:', err); }
   };
 
-  var addCrypto = async function(id) {
+  const addCrypto = async (id) => {
     if (watchlist.cryptos && watchlist.cryptos.includes(id)) return;
     try {
-      var res = await axios.post(BASE + '/watchlist/crypto/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/crypto/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchCryptoPrices();
     } catch (err) { console.log('Crypto add error:', err); }
   };
 
-  var removeCrypto = async function(id) {
+  const removeCrypto = async (id) => {
     try {
-      var res = await axios.post(BASE + '/watchlist/crypto/remove', { id }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/crypto/remove', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
     } catch (err) { console.log('Crypto remove error:', err); }
   };
 
-  var addCommodity = async function(id) {
+  const addCommodity = async (id) => {
     if (watchlist.commodities && watchlist.commodities.includes(id)) return;
     try {
-      var res = await axios.post(BASE + '/watchlist/commodity/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/commodity/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchCommPrices();
     } catch (err) { console.log('Commodity add error:', err); }
   };
 
-  var removeCommodity = async function(id) {
+  const removeCommodity = async (id) => {
     try {
-      var res = await axios.post(BASE + '/watchlist/commodity/remove', { id }, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await axios.post(BASE + '/watchlist/commodity/remove', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
     } catch (err) { console.log('Commodity remove error:', err); }
   };
 
-  var filteredCrypto = CRYPTO_LIST.filter(function(c) {
-    return c.sym.toLowerCase().includes(cryptoSearch.toLowerCase()) ||
-           c.name.toLowerCase().includes(cryptoSearch.toLowerCase());
-  });
+  const filteredCrypto = CRYPTO_LIST.filter(c =>
+    c.sym.toLowerCase().includes(cryptoSearch.toLowerCase()) ||
+    c.name.toLowerCase().includes(cryptoSearch.toLowerCase())
+  );
 
-  var tabs = ['stocks', 'crypto', 'commodities'];
-  var totalWatching = (watchlist.symbols || []).length + (watchlist.cryptos || []).length + (watchlist.commodities || []).length;
+  const tabs = ['stocks', 'crypto', 'commodities'];
+  const totalWatching = (watchlist.symbols || []).length + (watchlist.cryptos || []).length + (watchlist.commodities || []).length;
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -356,23 +357,20 @@ export default function Watchlist() {
         <span className="text-gray-500 text-xs font-mono">{totalWatching} item{totalWatching !== 1 ? 's' : ''} watching</span>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gray-800">
-        {tabs.map(function(t) {
-          return (
-            <button key={t} onClick={function() { setTab(t); }}
-              className={'px-5 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
-                (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
-              {t}
-              {t === 'stocks'      && (watchlist.symbols || []).length      > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.symbols.length}</span>}
-              {t === 'crypto'      && (watchlist.cryptos || []).length      > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.cryptos.length}</span>}
-              {t === 'commodities' && (watchlist.commodities || []).length  > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.commodities.length}</span>}
-            </button>
-          );
-        })}
+        {tabs.map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            className={'px-5 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
+              (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
+            {t}
+            {t === 'stocks'      && (watchlist.symbols     || []).length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.symbols.length}</span>}
+            {t === 'crypto'      && (watchlist.cryptos     || []).length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.cryptos.length}</span>}
+            {t === 'commodities' && (watchlist.commodities || []).length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{watchlist.commodities.length}</span>}
+          </button>
+        ))}
       </div>
 
-      {/* ── STOCKS TAB ── */}
+      {/* STOCKS TAB */}
       {tab === 'stocks' && (
         <div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5" ref={searchRef}>
@@ -380,26 +378,24 @@ export default function Watchlist() {
             <div className="relative">
               <input type="text" placeholder="Search any NSE stock — symbol or company name..."
                 value={search}
-                onChange={function(e) { setSearch(e.target.value); setAddError(''); }}
-                onKeyDown={function(e) {
-                  if (e.key === 'Enter' && search.trim()) { suggestions.length > 0 ? addStock(suggestions[0].sym) : addStock(search.trim()); }
+                onChange={e => { setSearch(e.target.value); setAddError(''); }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && search.trim()) suggestions.length > 0 ? addStock(suggestions[0].sym) : addStock(search.trim());
                   if (e.key === 'Escape') { setShowDrop(false); setSearch(''); }
                 }}
-                onFocus={function() { if (suggestions.length > 0) setShowDrop(true); }}
+                onFocus={() => { if (suggestions.length > 0) setShowDrop(true); }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm w-full outline-none focus:border-green-400 transition-colors pr-24"
               />
-              <button onClick={function() { if (search.trim()) addStock(search.trim()); }}
-                disabled={!search.trim() || adding !== ''}
+              <button onClick={() => search.trim() && addStock(search.trim())} disabled={!search.trim() || adding !== ''}
                 className="absolute right-2 top-2 bg-green-400 text-gray-950 font-bold text-xs px-3 py-1.5 rounded hover:bg-green-300 transition-colors disabled:opacity-40">
                 {adding ? 'Adding...' : '+ Add'}
               </button>
               {showDrop && suggestions.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-50 shadow-xl">
-                  {suggestions.map(function(s, i) {
-                    var inList = watchlist.symbols.includes(s.sym);
+                  {suggestions.map((s, i) => {
+                    const inList = watchlist.symbols.includes(s.sym);
                     return (
-                      <div key={i}
-                        onClick={function() { if (!inList) addStock(s.sym); }}
+                      <div key={i} onClick={() => !inList && addStock(s.sym)}
                         className={'flex items-center justify-between px-4 py-3 border-b border-gray-700 last:border-0 transition-colors ' +
                           (inList ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:bg-gray-700')}>
                         <div className="flex items-center gap-3">
@@ -430,7 +426,7 @@ export default function Watchlist() {
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-800 flex justify-between items-center">
                 <span className="text-white font-semibold text-sm">Watching {watchlist.symbols.length} stocks</span>
-                <button onClick={function() { fetchStockPrices(watchlist.symbols); }} className="text-green-400 text-xs font-mono hover:underline">
+                <button onClick={() => fetchStockPrices(watchlist.symbols)} className="text-green-400 text-xs font-mono hover:underline">
                   {priceLoading ? 'Refreshing...' : '↻ Refresh'}
                 </button>
               </div>
@@ -444,9 +440,9 @@ export default function Watchlist() {
                   </tr>
                 </thead>
                 <tbody>
-                  {watchlist.symbols.map(function(sym) {
-                    var p = prices[sym];
-                    var change = p ? parseFloat(p.change) : 0;
+                  {watchlist.symbols.map(sym => {
+                    const p = prices[sym];
+                    const change = p ? parseFloat(p.change) : 0;
                     return (
                       <tr key={sym} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                         <td className="px-5 py-4 font-mono font-bold text-white">{sym}</td>
@@ -457,7 +453,7 @@ export default function Watchlist() {
                           {p && !p.error ? (change >= 0 ? '+' : '') + p.change + ' (' + p.changePct + ')' : '—'}
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <button onClick={function() { removeStock(sym); }} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
+                          <button onClick={() => removeStock(sym)} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
                         </td>
                       </tr>
                     );
@@ -469,21 +465,20 @@ export default function Watchlist() {
         </div>
       )}
 
-      {/* ── CRYPTO TAB ── */}
+      {/* CRYPTO TAB */}
       {tab === 'crypto' && (
         <div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
             <div className="text-white font-semibold text-sm mb-3">Search and Add Crypto</div>
             <input type="text" placeholder="Search by name or symbol... e.g. Bitcoin, ETH, SOL"
-              value={cryptoSearch} onChange={function(e) { setCryptoSearch(e.target.value); }}
+              value={cryptoSearch} onChange={e => setCryptoSearch(e.target.value)}
               className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-sm w-full outline-none focus:border-green-400 transition-colors mb-3"
             />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-56 overflow-y-auto pr-1">
-              {filteredCrypto.map(function(c) {
-                var inList = watchlist.cryptos && watchlist.cryptos.includes(c.id);
+              {filteredCrypto.map(c => {
+                const inList = watchlist.cryptos && watchlist.cryptos.includes(c.id);
                 return (
-                  <div key={c.id}
-                    onClick={function() { if (!inList) addCrypto(c.id); }}
+                  <div key={c.id} onClick={() => !inList && addCrypto(c.id)}
                     className={'flex items-center justify-between px-3 py-2 rounded-lg border transition-colors ' +
                       (inList ? 'border-green-400/30 bg-green-400/5 cursor-not-allowed' : 'border-gray-700 hover:border-green-400/40 hover:bg-gray-800 cursor-pointer')}>
                     <div>
@@ -503,8 +498,9 @@ export default function Watchlist() {
             </div>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-800">
+              <div className="px-5 py-3 border-b border-gray-800 flex justify-between items-center">
                 <span className="text-white font-semibold text-sm">Watching {watchlist.cryptos.length} coins</span>
+                <button onClick={fetchCryptoPrices} className="text-green-400 text-xs font-mono hover:underline">↻ Refresh</button>
               </div>
               <table className="w-full">
                 <thead>
@@ -516,10 +512,10 @@ export default function Watchlist() {
                   </tr>
                 </thead>
                 <tbody>
-                  {watchlist.cryptos.map(function(id) {
-                    var coin = CRYPTO_LIST.find(function(c) { return c.id === id; });
-                    var p    = cryptoPrices[id];
-                    var chg  = p ? parseFloat(p.change24h) : 0;
+                  {watchlist.cryptos.map(id => {
+                    const coin = CRYPTO_LIST.find(c => c.id === id);
+                    const p    = cryptoPrices[id];
+                    const chg  = p ? parseFloat(p.change24h) : 0;
                     return (
                       <tr key={id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                         <td className="px-5 py-4">
@@ -527,13 +523,13 @@ export default function Watchlist() {
                           <div className="text-gray-500 text-xs">{coin ? coin.name : id}</div>
                         </td>
                         <td className="px-5 py-4 text-right font-mono text-white">
-                          {p ? 'Rs.' + Number(p.price).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '—'}
+                          {p ? 'Rs.' + Number(p.price).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : <span className="text-gray-500 text-xs">loading...</span>}
                         </td>
                         <td className={'px-5 py-4 text-right font-mono font-bold text-sm ' + (chg >= 0 ? 'text-green-400' : 'text-red-400')}>
                           {p ? (chg >= 0 ? '+' : '') + chg + '%' : '—'}
                         </td>
                         <td className="px-5 py-4 text-right">
-                          <button onClick={function() { removeCrypto(id); }} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
+                          <button onClick={() => removeCrypto(id)} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
                         </td>
                       </tr>
                     );
@@ -545,17 +541,16 @@ export default function Watchlist() {
         </div>
       )}
 
-      {/* ── COMMODITIES TAB ── */}
+      {/* COMMODITIES TAB */}
       {tab === 'commodities' && (
         <div>
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
             <div className="text-white font-semibold text-sm mb-3">Add Commodities</div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {COMMODITY_LIST.map(function(c) {
-                var inList = watchlist.commodities && watchlist.commodities.includes(c.id);
+              {COMMODITY_LIST.map(c => {
+                const inList = watchlist.commodities && watchlist.commodities.includes(c.id);
                 return (
-                  <div key={c.id}
-                    onClick={function() { if (!inList) addCommodity(c.id); }}
+                  <div key={c.id} onClick={() => !inList && addCommodity(c.id)}
                     className={'px-3 py-3 rounded-lg border transition-colors ' +
                       (inList ? 'border-green-400/30 bg-green-400/5 cursor-not-allowed' : 'border-gray-700 hover:border-green-400/40 hover:bg-gray-800 cursor-pointer')}>
                     <div className="flex items-center justify-between mb-1">
@@ -576,9 +571,9 @@ export default function Watchlist() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {watchlist.commodities.map(function(id) {
-                var comm = COMMODITY_LIST.find(function(c) { return c.id === id; });
-                var p    = commPrices[id];
+              {watchlist.commodities.map(id => {
+                const comm = COMMODITY_LIST.find(c => c.id === id);
+                const p    = commPrices[id];
                 return (
                   <div key={id} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
                     <div className="flex items-center justify-between mb-3">
@@ -587,7 +582,7 @@ export default function Watchlist() {
                         <div className="text-white font-semibold mt-1">{comm ? comm.name : id}</div>
                         <div className="text-gray-500 text-xs">{comm ? comm.unit : ''}</div>
                       </div>
-                      <button onClick={function() { removeCommodity(id); }} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
+                      <button onClick={() => removeCommodity(id)} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
                     </div>
                     {p ? (
                       <div>
