@@ -2,12 +2,12 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 
 const API      = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-const MAX_PAGES = 6; // 6 x 15 = 90 articles max
+const MAX_PAGE = 6; // 6 x 15 = 90 articles max (stays under 100/day limit)
 
 function timeAgo(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
-  if (diff < 1)  return 'just now';
-  if (diff < 60) return diff + 'm ago';
+  if (diff < 1)    return 'just now';
+  if (diff < 60)   return diff + 'm ago';
   if (diff < 1440) return Math.floor(diff / 60) + 'h ago';
   return Math.floor(diff / 1440) + 'd ago';
 }
@@ -20,7 +20,7 @@ export default function News() {
   const [hasMore,     setHasMore]     = useState(true);
   const [error,       setError]       = useState('');
   const loaderRef  = useRef(null);
-  const fetchingRef = useRef(false); // prevents double fetch
+  const fetchingRef = useRef(false); // prevent double-fetch
 
   const fetchPage = useCallback(async (pageNum) => {
     if (fetchingRef.current) return;
@@ -32,15 +32,17 @@ export default function News() {
     try {
       const { data } = await axios.get(API + '/api/market/news?page=' + pageNum);
 
-      if (!data || data.length === 0 || pageNum >= MAX_PAGES) {
+      if (!data || data.length === 0 || pageNum >= MAX_PAGE) {
         setHasMore(false);
       }
 
-      setNews(prev => {
-        const seen  = new Set(prev.map(n => n.url));
-        const fresh = (data || []).filter(n => !seen.has(n.url));
-        return [...prev, ...fresh];
-      });
+      if (data && data.length > 0) {
+        setNews(prev => {
+          const seen  = new Set(prev.map(n => n.url));
+          const fresh = data.filter(n => !seen.has(n.url));
+          return [...prev, ...fresh];
+        });
+      }
 
       setError('');
     } catch (err) {
@@ -59,13 +61,13 @@ export default function News() {
     fetchPage(1);
   }, [fetchPage]);
 
-  // IntersectionObserver — auto-load next page on scroll
+  // IntersectionObserver — fires when loader div scrolls into view
   useEffect(() => {
-    if (!hasMore || loadingMore || loading) return;
+    if (!hasMore) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !fetchingRef.current) {
           setPage(prev => {
             const next = prev + 1;
             fetchPage(next);
@@ -79,7 +81,7 @@ export default function News() {
     const el = loaderRef.current;
     if (el) observer.observe(el);
     return () => { if (el) observer.unobserve(el); };
-  }, [hasMore, loadingMore, loading, fetchPage]);
+  }, [hasMore, loadingMore, fetchPage]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -88,37 +90,39 @@ export default function News() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white text-2xl font-bold">Market News</h1>
-          <div className="text-gray-600 text-xs font-mono mt-1">
-            Live from NewsAPI · Today's articles · Updates every 5 minutes
+          <div className="text-gray-500 text-xs font-mono mt-1">
+            Live from NewsAPI · updates every 5 minutes
           </div>
         </div>
         <div className="text-gray-500 text-xs font-mono text-right">
-          <div>{news.length} articles loaded</div>
-          {hasMore && <div className="text-green-400">scroll for more</div>}
+          {news.length > 0 && (
+            <span className="bg-green-400/10 text-green-400 border border-green-400/20 px-2 py-1 rounded font-mono text-xs">
+              {news.length} articles
+            </span>
+          )}
         </div>
       </div>
 
+      {/* Error banner */}
       {error && (
-        <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-xs font-mono px-4 py-3 rounded-lg mb-4">
+        <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-xs font-mono px-4 py-2 rounded-lg mb-4">
           {error}
         </div>
       )}
 
+      {/* Loading state */}
       {loading ? (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-          <div className="flex items-center justify-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
-          <div className="text-gray-500 text-sm font-mono mt-3">Fetching today's news...</div>
+          <div className="text-gray-500 text-sm font-mono mb-1">Fetching today's news...</div>
+          <div className="text-gray-600 text-xs font-mono">Powered by NewsAPI.org</div>
         </div>
       ) : (
         <>
+          {/* Articles list */}
           {news.length === 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-              <div className="text-gray-500 text-sm font-mono">No news articles available right now.</div>
-              <div className="text-gray-600 text-xs font-mono mt-2">NewsAPI may have no articles for today yet. Check back later.</div>
+              <div className="text-gray-500 text-sm font-mono">No articles found for today yet.</div>
+              <div className="text-gray-600 text-xs font-mono mt-1">Check back after market hours.</div>
             </div>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -145,43 +149,40 @@ export default function News() {
                     {n.description && (
                       <div className="text-gray-500 text-xs mb-2 line-clamp-1">{n.description}</div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <span className="text-green-400/60 text-xs font-mono">{n.source}</span>
-                      <span className="text-gray-700 text-xs">·</span>
-                      <span className="text-gray-600 text-xs font-mono">{timeAgo(n.time)}</span>
+                    <div className="flex items-center gap-2 text-xs font-mono">
+                      <span className="text-green-400/70">{n.source}</span>
+                      <span className="text-gray-700">·</span>
+                      <span className="text-gray-600">{timeAgo(n.time)}</span>
                     </div>
-                  </div>
-                  <div className="text-gray-700 group-hover:text-green-400 transition-colors flex-shrink-0 self-center text-xs">
-                    →
                   </div>
                 </a>
               ))}
             </div>
           )}
 
-          {/* Invisible loader div — triggers next page fetch when visible */}
-          {hasMore && !loading && (
+          {/* Scroll trigger */}
+          {hasMore && (
             <div ref={loaderRef} className="py-8 text-center">
               {loadingMore ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  <span className="text-gray-500 text-xs font-mono ml-2">Loading more articles...</span>
+                <div className="text-gray-500 text-xs font-mono">
+                  Loading more articles...
                 </div>
               ) : (
-                <div className="text-gray-700 text-xs font-mono">↓ Scroll for more</div>
+                <div className="text-gray-700 text-xs font-mono">
+                  Scroll down to load more
+                </div>
               )}
             </div>
           )}
 
           {/* End of articles */}
           {!hasMore && news.length > 0 && (
-            <div className="py-6 text-center border-t border-gray-800 mt-0">
+            <div className="py-6 text-center border-t border-gray-800 mt-2">
               <div className="text-gray-600 text-xs font-mono">
                 {news.length >= 90
-                  ? 'All 90 articles loaded — daily API limit reached'
-                  : 'All ' + news.length + ' articles for today loaded'}
+                  ? 'Reached daily limit of 90 articles — check back tomorrow for fresh news'
+                  : 'All ' + news.length + ' articles loaded for today'
+                }
               </div>
             </div>
           )}
