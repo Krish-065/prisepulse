@@ -4,6 +4,38 @@ import axios from 'axios';
 
 const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
 
+// Direct CoinGecko fetch by specific IDs — guaranteed to return all requested coins
+const fetchCryptoByIds = async (ids) => {
+  if (!ids || ids.length === 0) return {};
+  try {
+    const res = await axios.get(
+      'https://api.coingecko.com/api/v3/coins/markets' +
+      '?vs_currency=inr' +
+      '&ids=' + ids.join(',') +
+      '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
+      { timeout: 15000, headers: { 'Accept': 'application/json' } }
+    );
+    const map = {};
+    res.data.forEach(c => {
+      const obj = {
+        id:        c.id,
+        symbol:    c.symbol.toUpperCase(),
+        name:      c.name,
+        price:     c.current_price,
+        change24h: c.price_change_percentage_24h
+          ? c.price_change_percentage_24h.toFixed(2) : '0',
+      };
+      map[c.id]                   = obj;
+      map[c.symbol.toUpperCase()] = obj;
+      map[c.symbol.toLowerCase()] = obj;
+    });
+    return map;
+  } catch (err) {
+    console.log('CoinGecko direct error:', err.message);
+    return {};
+  }
+};
+
 const NSE_STOCKS = [
   { sym: 'RELIANCE',   name: 'Reliance Industries'        },
   { sym: 'TCS',        name: 'Tata Consultancy Services'  },
@@ -132,18 +164,12 @@ export default function Portfolio() {
     } catch (err) { console.log('Price error:', err); }
   }, []);
 
-  const fetchCryptoPricesP = useCallback(async () => {
-    try {
-      const { data } = await axios.get(BASE + '/market/crypto');
-      const map = {};
-      data.forEach(c => {
-        map[c.id]                   = c;
-        map[c.symbol]               = c;
-        map[c.symbol.toUpperCase()] = c;
-        map[c.symbol.toLowerCase()] = c;
-      });
-      setCryptoPrices(map);
-    } catch (err) { console.log('Crypto price error:', err); }
+  const fetchCryptoPricesP = useCallback(async (holdings) => {
+    if (!holdings || holdings.length === 0) return;
+    // Get the stored symbol/id from each crypto holding
+    const ids = holdings.map(h => h.symbol);
+    const map = await fetchCryptoByIds(ids);
+    setCryptoPrices(map);
   }, []);
 
   const fetchCommPricesP = useCallback(async () => {
@@ -161,7 +187,8 @@ export default function Portfolio() {
       const hasCrypto = data.some(h => h.type === 'crypto');
       const hasComm   = data.some(h => h.type === 'commodity');
       if (stocks.length > 0) fetchStockPricesP([...new Set(stocks)]);
-      if (hasCrypto)         fetchCryptoPricesP();
+      const cryptoH = data.filter(h => h.type === "crypto");
+      if (hasCrypto)         fetchCryptoPricesP(cryptoH);
       if (hasComm)           fetchCommPricesP();
     } catch (err) { console.log('Holdings error:', err); }
   }, [token, fetchStockPricesP, fetchCryptoPricesP, fetchCommPricesP]);
