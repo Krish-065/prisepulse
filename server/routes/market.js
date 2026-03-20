@@ -52,27 +52,28 @@ const nseGet = async function(url) {
 const normalizeStock = function(s) {
   return {
     symbol:         s.symbol || '',
-    ltp:            s.ltp || 0,
-    netPrice:       s.perChange || s.net_price || s.netPrice || 0,
-    tradedQuantity: s.trade_quantity || s.tradedQuantity || 0,
+    ltp:            s.ltp || s.lastPrice || s.last || 0,
+    netPrice:       s.perChange || s.netPrice || s.pChange || 0,
+    tradedQuantity: s.trade_quantity || s.tradedQuantity || s.totalTradedVolume || 0,
   };
 };
 
+// ── INDICES ───────────────────────────────────────────────────────
 router.get('/indices', async function(req, res) {
   try {
     const data = await getCached('indices', async function() {
       const result = await nseGet('https://www.nseindia.com/api/allIndices');
       const wanted = ['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 100'];
-return result.data.data
-  .filter(function(i) { return wanted.includes(i.index); })
-  .map(function(i) {
-    return {
-      index:   i.index,
-      last:    i.last,
-      change:  i.variation,
-      pChange: i.percentChange,
-    };
-  });
+      return result.data.data
+        .filter(function(i) { return wanted.includes(i.index); })
+        .map(function(i) {
+          return {
+            index:   i.index,
+            last:    i.last,
+            change:  i.variation,
+            pChange: i.percentChange,
+          };
+        });
     }, 30);
     res.json(data);
   } catch (err) {
@@ -86,13 +87,13 @@ return result.data.data
   }
 });
 
+// ── TOP GAINERS ───────────────────────────────────────────────────
 router.get('/gainers', async function(req, res) {
   try {
     const data = await getCached('gainers', async function() {
       const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
       const list = result.data.NIFTY && result.data.NIFTY.data
-        ? result.data.NIFTY.data.slice(0, 10)
-        : null;
+        ? result.data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackGainers();
       return list.map(normalizeStock);
     }, 60);
@@ -103,13 +104,13 @@ router.get('/gainers', async function(req, res) {
   }
 });
 
+// ── TOP LOSERS ────────────────────────────────────────────────────
 router.get('/losers', async function(req, res) {
   try {
     const data = await getCached('losers', async function() {
       const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=loosers');
       const list = result.data.NIFTY && result.data.NIFTY.data
-        ? result.data.NIFTY.data.slice(0, 10)
-        : null;
+        ? result.data.NIFTY.data.slice(0, 10) : null;
       if (!list || list.length === 0) return getFallbackLosers();
       return list.map(normalizeStock);
     }, 60);
@@ -120,6 +121,7 @@ router.get('/losers', async function(req, res) {
   }
 });
 
+// ── DEBUG GAINERS ─────────────────────────────────────────────────
 router.get('/debug-gainers', async function(req, res) {
   try {
     const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
@@ -130,6 +132,7 @@ router.get('/debug-gainers', async function(req, res) {
   }
 });
 
+// ── SINGLE STOCK QUOTE ────────────────────────────────────────────
 router.get('/quote/:symbol', async function(req, res) {
   try {
     const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + req.params.symbol);
@@ -149,6 +152,7 @@ router.get('/quote/:symbol', async function(req, res) {
   }
 });
 
+// ── MULTIPLE QUOTES (Watchlist and Portfolio) ─────────────────────
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols;
@@ -174,6 +178,7 @@ router.post('/quotes', async function(req, res) {
   }
 });
 
+// ── INTRADAY CHART ────────────────────────────────────────────────
 router.get('/chart/:symbol', async function(req, res) {
   try {
     const result = await nseGet('https://www.nseindia.com/api/chart-databyindex?index=' + req.params.symbol + 'EQN');
@@ -192,12 +197,13 @@ router.get('/chart/:symbol', async function(req, res) {
   }
 });
 
+// ── CRYPTO (CoinGecko) ────────────────────────────────────────────
 router.get('/crypto', async function(req, res) {
   try {
     const data = await getCached('crypto', async function() {
       const result = await axios.get(
         'https://api.coingecko.com/api/v3/coins/markets' +
-        '?vs_currency=inr&order=market_cap_desc&per_page=15&page=1&price_change_percentage=1h,24h,7d',
+        '?vs_currency=inr&order=market_cap_desc&per_page=20&page=1&price_change_percentage=1h,24h,7d',
         { timeout: 10000, headers: { 'Accept': 'application/json' } }
       );
       return result.data.map(function(c) {
@@ -224,6 +230,7 @@ router.get('/crypto', async function(req, res) {
   }
 });
 
+// ── MUTUAL FUNDS ──────────────────────────────────────────────────
 router.get('/mutualfunds', async function(req, res) {
   try {
     const data = await getCached('mf', async function() {
@@ -259,14 +266,21 @@ router.get('/mutualfunds', async function(req, res) {
   }
 });
 
+// ── COMMODITIES (all 8 types) ─────────────────────────────────────
 router.get('/commodities', async function(req, res) {
   res.json({
-    gold:   { price: 71240 + Math.floor(Math.random() * 200 - 100), change: '+0.18%', unit: '10g'  },
-    silver: { price: 84500 + Math.floor(Math.random() * 500 - 250), change: '+0.32%', unit: 'kg'   },
-    crude:  { price: 6842  + Math.floor(Math.random() * 50  - 25),  change: '-0.44%', unit: 'bbl'  },
+    gold:       { price: 71240 + Math.floor(Math.random() * 200 - 100), change: '+0.18%', unit: '10g'   },
+    silver:     { price: 84500 + Math.floor(Math.random() * 500 - 250), change: '+0.32%', unit: 'kg'    },
+    crude:      { price: 6842  + Math.floor(Math.random() * 50  - 25),  change: '-0.44%', unit: 'bbl'   },
+    naturalgas: { price: 287   + Math.floor(Math.random() * 10  - 5),   change: '+1.12%', unit: 'mmBtu' },
+    copper:     { price: 812   + Math.floor(Math.random() * 20  - 10),  change: '+0.55%', unit: 'kg'    },
+    aluminium:  { price: 224   + Math.floor(Math.random() * 8   - 4),   change: '-0.22%', unit: 'kg'    },
+    zinc:       { price: 268   + Math.floor(Math.random() * 10  - 5),   change: '+0.38%', unit: 'kg'    },
+    nickel:     { price: 1342  + Math.floor(Math.random() * 30  - 15),  change: '-0.15%', unit: 'kg'    },
   });
 });
 
+// ── NEWS ──────────────────────────────────────────────────────────
 router.get('/news', async function(req, res) {
   try {
     const KEY = process.env.NEWS_API_KEY;
@@ -294,6 +308,7 @@ router.get('/news', async function(req, res) {
   }
 });
 
+// ── MARKET STATUS ─────────────────────────────────────────────────
 router.get('/status', function(req, res) {
   const ist  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const day  = ist.getDay();
@@ -309,52 +324,53 @@ router.get('/status', function(req, res) {
   });
 });
 
+// ── FALLBACK DATA ─────────────────────────────────────────────────
 function getFallbackGainers() {
   return [
-    { symbol: 'ETERNAL',    ltp: 232.59,  netPrice: 3.20, tradedQuantity: 8234567 },
-    { symbol: 'TATASTEEL',  ltp: 191.25,  netPrice: 2.80, tradedQuantity: 9234567 },
-    { symbol: 'M&M',        ltp: 3103.20, netPrice: 2.11, tradedQuantity: 2345678 },
-    { symbol: 'HDFCLIFE',   ltp: 638.45,  netPrice: 1.55, tradedQuantity: 3456789 },
-    { symbol: 'BHARTIARTL', ltp: 1815.90, netPrice: 1.40, tradedQuantity: 5678901 },
-    { symbol: 'RELIANCE',   ltp: 1285.40, netPrice: 1.12, tradedQuantity: 3456789 },
-    { symbol: 'HDFCBANK',   ltp: 1762.30, netPrice: 0.67, tradedQuantity: 4567890 },
-    { symbol: 'AXISBANK',   ltp: 1124.40, netPrice: 0.33, tradedQuantity: 3456789 },
+    { symbol: 'ETERNAL',    ltp: 234.55,  netPrice: 5.63, tradedQuantity: 49176321 },
+    { symbol: 'TATASTEEL',  ltp: 192.23,  netPrice: 2.83, tradedQuantity: 20468067 },
+    { symbol: 'M&M',        ltp: 3112.80, netPrice: 2.53, tradedQuantity: 2302037  },
+    { symbol: 'HDFCLIFE',   ltp: 640.70,  netPrice: 2.35, tradedQuantity: 1609934  },
+    { symbol: 'BHARTIARTL', ltp: 1815.90, netPrice: 1.81, tradedQuantity: 3283765  },
+    { symbol: 'RELIANCE',   ltp: 1285.40, netPrice: 1.12, tradedQuantity: 3456789  },
+    { symbol: 'HDFCBANK',   ltp: 1762.30, netPrice: 0.67, tradedQuantity: 4567890  },
+    { symbol: 'AXISBANK',   ltp: 1124.40, netPrice: 0.33, tradedQuantity: 3456789  },
   ];
 }
 
 function getFallbackLosers() {
   return [
-    { symbol: 'WIPRO',      ltp: 190.74,  netPrice: -2.10, tradedQuantity: 9234567 },
-    { symbol: 'BAJFINANCE', ltp: 863.40,  netPrice: -1.80, tradedQuantity: 2134567 },
-    { symbol: 'CIPLA',      ltp: 1279.60, netPrice: -1.44, tradedQuantity: 1234567 },
-    { symbol: 'ADANIENT',   ltp: 1950.20, netPrice: -1.22, tradedQuantity: 2345678 },
-    { symbol: 'ADANIPORTS', ltp: 1355.80, netPrice: -0.88, tradedQuantity: 4567890 },
-    { symbol: 'INFY',       ltp: 1423.60, netPrice: -0.77, tradedQuantity: 3456789 },
-    { symbol: 'TCS',        ltp: 3387.75, netPrice: -0.34, tradedQuantity: 2345678 },
-    { symbol: 'ITC',        ltp: 428.90,  netPrice: -0.14, tradedQuantity: 6789012 },
+    { symbol: 'WIPRO',      ltp: 190.92,  netPrice: -2.15, tradedQuantity: 13827722 },
+    { symbol: 'BAJFINANCE', ltp: 866.70,  netPrice: -1.30, tradedQuantity: 5215656  },
+    { symbol: 'INFY',       ltp: 1233.80, netPrice: -1.30, tradedQuantity: 5882698  },
+    { symbol: 'CIPLA',      ltp: 1283.90, netPrice: -1.24, tradedQuantity: 881525   },
+    { symbol: 'ADANIENT',   ltp: 1950.20, netPrice: -1.00, tradedQuantity: 2345678  },
+    { symbol: 'TCS',        ltp: 3387.75, netPrice: -0.34, tradedQuantity: 2345678  },
+    { symbol: 'ITC',        ltp: 428.90,  netPrice: -0.14, tradedQuantity: 6789012  },
+    { symbol: 'NESTLEIND',  ltp: 2245.30, netPrice: -0.77, tradedQuantity: 1234567  },
   ];
 }
 
 function getFallbackCrypto() {
   return [
-    { id: 'bitcoin',  symbol: 'BTC', name: 'Bitcoin',  image: '', price: 6887640, change24h: '3.22',  change7d: '5.10',  change1h: '0.45',  marketCap: 135000000000000, volume: 2500000000000, high24h: 7100000, low24h: 6650000 },
-    { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', image: '', price: 334500,  change24h: '1.87',  change7d: '3.20',  change1h: '0.22',  marketCap: 40000000000000,  volume: 1200000000000, high24h: 345000,  low24h: 325000  },
-    { id: 'solana',   symbol: 'SOL', name: 'Solana',   image: '', price: 14890,   change24h: '5.10',  change7d: '8.40',  change1h: '1.20',  marketCap: 6500000000000,   volume: 450000000000,  high24h: 15500,   low24h: 14100   },
-    { id: 'bnb',      symbol: 'BNB', name: 'BNB',      image: '', price: 34400,   change24h: '-0.44', change7d: '1.20',  change1h: '-0.10', marketCap: 5200000000000,   volume: 380000000000,  high24h: 35000,   low24h: 34000   },
-    { id: 'xrp',      symbol: 'XRP', name: 'XRP',      image: '', price: 53,      change24h: '1.20',  change7d: '2.80',  change1h: '0.30',  marketCap: 2900000000000,   volume: 280000000000,  high24h: 55,      low24h: 52      },
+    { id: 'bitcoin',     symbol: 'BTC',  name: 'Bitcoin',  image: '', price: 6887640, change24h: '3.22',  change7d: '5.10',  change1h: '0.45',  marketCap: 135000000000000, volume: 2500000000000, high24h: 7100000, low24h: 6650000 },
+    { id: 'ethereum',    symbol: 'ETH',  name: 'Ethereum', image: '', price: 334500,  change24h: '1.87',  change7d: '3.20',  change1h: '0.22',  marketCap: 40000000000000,  volume: 1200000000000, high24h: 345000,  low24h: 325000  },
+    { id: 'solana',      symbol: 'SOL',  name: 'Solana',   image: '', price: 14890,   change24h: '5.10',  change7d: '8.40',  change1h: '1.20',  marketCap: 6500000000000,   volume: 450000000000,  high24h: 15500,   low24h: 14100   },
+    { id: 'binancecoin', symbol: 'BNB',  name: 'BNB',      image: '', price: 34400,   change24h: '-0.44', change7d: '1.20',  change1h: '-0.10', marketCap: 5200000000000,   volume: 380000000000,  high24h: 35000,   low24h: 34000   },
+    { id: 'ripple',      symbol: 'XRP',  name: 'XRP',      image: '', price: 53,      change24h: '1.20',  change7d: '2.80',  change1h: '0.30',  marketCap: 2900000000000,   volume: 280000000000,  high24h: 55,      low24h: 52      },
   ];
 }
 
 function getFallbackNews() {
   return [
-    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',           source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 9   * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.' },
-    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',         source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 24  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.' },
-    { title: 'Nifty eyes 22,500 resistance; FII inflows of Rs.4,200 Cr',      source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 41  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.' },
-    { title: 'Bitcoin surges past $82K on spot ETF inflow uptick',             source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.' },
-    { title: 'Hyundai India IPO oversubscribed 2.4x on Day 2',                source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.' },
-    { title: 'Gold hits Rs.71,240 per 10g on safe-haven demand',              source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.' },
-    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',    source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.' },
-    { title: 'SEBI tightens F and O rules; new lot sizes effective from April',source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.' },
+    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',            source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 9   * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.'       },
+    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',          source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 24  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.'   },
+    { title: 'Nifty eyes 22500 resistance; FII inflows of Rs.4200 Cr',          source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 41  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.'     },
+    { title: 'Bitcoin surges past $82K on spot ETF inflow uptick',              source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.'        },
+    { title: 'Hyundai India IPO oversubscribed 2.4x on Day 2',                 source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.'         },
+    { title: 'Gold hits Rs.71240 per 10g on safe-haven demand',                source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.'          },
+    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',     source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.'     },
+    { title: 'SEBI tightens F and O rules; new lot sizes effective from April', source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.'    },
   ];
 }
 
