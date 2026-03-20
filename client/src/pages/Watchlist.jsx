@@ -266,7 +266,11 @@ export default function Watchlist() {
     try {
       var res = await axios.get(BASE + '/market/crypto');
       var map = {};
-      res.data.forEach(function(c) { map[c.id] = c; });
+      res.data.forEach(function(c) {
+        map[c.id]     = c;
+        map[c.symbol] = c;
+        map[c.symbol.toLowerCase()] = c;
+      });
       setCryptoPrices(map);
     } catch (err) { console.log('Crypto price error:', err); }
   };

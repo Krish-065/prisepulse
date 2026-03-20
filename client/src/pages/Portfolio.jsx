@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -190,7 +190,11 @@ export default function Portfolio() {
     try {
       const { data } = await axios.get(BASE + '/market/crypto');
       const map = {};
-      data.forEach(c => { map[c.id] = c; });
+      data.forEach(function(c) {
+        map[c.id]     = c;
+        map[c.symbol] = c;
+        map[c.symbol.toLowerCase()] = c;
+      });
       setCryptoPrices(map);
     } catch (err) { console.log('Crypto price error:', err); }
   };
