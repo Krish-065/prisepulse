@@ -111,7 +111,7 @@ export default function Markets() {
           {change >= 0 ? '+' : ''}{change.toFixed(2)}%
           {value > 0 && (
             <span className="ml-2 text-gray-400">
-              ({change >= 0 ? '+' : ''}{Number(absoluteChange).toLocaleString('en-IN', { maximumFractionDigits: 2 })} pts)
+              ({change >= 0 ? '+' : ''}{Number(absoluteChange).toLocaleString('en-IN', { maximumFractionDigits: 2 })} )
             </span>
           )}
         </div>
