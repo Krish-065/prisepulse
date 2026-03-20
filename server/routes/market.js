@@ -201,9 +201,18 @@ router.get('/chart/:symbol', async function(req, res) {
 router.get('/crypto', async function(req, res) {
   try {
     const data = await getCached('crypto', async function() {
+      // Fetch all coins we support by ID so none are missed
+      const ALL_IDS = [
+        'bitcoin','ethereum','binancecoin','solana','ripple',
+        'cardano','dogecoin','polkadot','shiba-inu','avalanche-2',
+        'matic-network','chainlink','litecoin','uniswap','stellar',
+        'tron','cosmos','near','pepe','filecoin',
+        'the-open-network','aptos','sui','arbitrum','optimism'
+      ].join(',');
       const result = await axios.get(
         'https://api.coingecko.com/api/v3/coins/markets' +
-        '?vs_currency=inr&order=market_cap_desc&per_page=50&page=1&price_change_percentage=1h,24h,7d',
+        '?vs_currency=inr&ids=' + ALL_IDS +
+        '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=1h,24h,7d',
         { timeout: 10000, headers: { 'Accept': 'application/json' } }
       );
       return result.data.map(function(c) {
@@ -222,7 +231,7 @@ router.get('/crypto', async function(req, res) {
           low24h:    c.low_24h,
         };
       });
-    }, 120);
+    }, 60);
     res.json(data);
   } catch (err) {
     console.log('Crypto error:', err.message);
