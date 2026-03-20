@@ -18,17 +18,80 @@ const STOCK_OPTIONS = [
 ];
 
 export default function Portfolio() {
-  const [holdings,  setHoldings]  = useState([]);
-  const [prices,    setPrices]    = useState({});
-  const [loading,   setLoading]   = useState(false);
-  const [showForm,  setShowForm]  = useState(false);
+  const [holdings, setHoldings] = useState([]);
+  const [prices,   setPrices]   = useState({});
+  const [loading,  setLoading]  = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     symbol: 'RELIANCE', name: 'Reliance Industries', quantity: '', buyPrice: ''
   });
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
-  // ── Guest gate ────────────────────────────────────────────────
+  // ── ALL HOOKS MUST BE BEFORE ANY RETURN ──────────────────────
+  useEffect(function() {
+    if (!token) return;
+    fetchHoldings();
+  // eslint-disable-next-line
+  }, []);
+
+  var fetchHoldings = async function() {
+    try {
+      var res = await axios.get(BASE + '/portfolio', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      setHoldings(res.data);
+      if (res.data.length > 0) fetchPrices(res.data.map(function(h) { return h.symbol; }));
+    } catch (err) {
+      console.log('Holdings error:', err);
+    }
+  };
+
+  var fetchPrices = async function(symbols) {
+    try {
+      var unique = [...new Set(symbols)];
+      var res = await axios.post(BASE + '/market/quotes', { symbols: unique });
+      var map = {};
+      res.data.forEach(function(d) { map[d.symbol] = d; });
+      setPrices(map);
+    } catch (err) {
+      console.log('Price error:', err);
+    }
+  };
+
+  var addHolding = async function() {
+    if (!form.quantity || !form.buyPrice) return;
+    setLoading(true);
+    try {
+      var res = await axios.post(BASE + '/portfolio/add', {
+        symbol:   form.symbol,
+        name:     form.name,
+        quantity: Number(form.quantity),
+        buyPrice: Number(form.buyPrice),
+      }, { headers: { Authorization: 'Bearer ' + token } });
+      setHoldings(res.data);
+      fetchPrices(res.data.map(function(h) { return h.symbol; }));
+      setShowForm(false);
+      setForm({ symbol: 'RELIANCE', name: 'Reliance Industries', quantity: '', buyPrice: '' });
+    } catch (err) {
+      console.log('Add error:', err);
+    }
+    setLoading(false);
+  };
+
+  var removeHolding = async function(id) {
+    try {
+      var res = await axios.post(BASE + '/portfolio/remove',
+        { id },
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      setHoldings(res.data);
+    } catch (err) {
+      console.log('Remove error:', err);
+    }
+  };
+
+  // ── GUEST GATE — after all hooks ──────────────────────────────
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -41,16 +104,16 @@ export default function Portfolio() {
             Create a free account to add your stock holdings and track your profit and loss in real time.
           </p>
           <button
-            onClick={() => navigate('/login')}
+            onClick={function() { navigate('/login'); }}
             className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3"
           >
             Login or Sign Up — It's Free
           </button>
           <button
-            onClick={() => navigate(-1)}
+            onClick={function() { navigate(-1); }}
             className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono"
           >
-            ← Go back
+            Go back
           </button>
           <p className="text-gray-600 text-xs mt-4">
             Markets, News, Crypto and Tools are free without an account.
@@ -60,79 +123,17 @@ export default function Portfolio() {
     );
   }
 
-  // ── Load holdings ─────────────────────────────────────────────
-  useEffect(() => {
-    fetchHoldings();
-  // eslint-disable-next-line
-  }, []);
-
-  const fetchHoldings = async () => {
-    try {
-      const { data } = await axios.get(BASE + '/portfolio', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      setHoldings(data);
-      if (data.length > 0) fetchPrices(data.map(h => h.symbol));
-    } catch (err) {
-      console.log('Holdings error:', err);
-    }
-  };
-
-  const fetchPrices = async (symbols) => {
-    try {
-      const unique = [...new Set(symbols)];
-      const { data } = await axios.post(BASE + '/market/quotes', { symbols: unique });
-      const map = {};
-      data.forEach(d => { map[d.symbol] = d; });
-      setPrices(map);
-    } catch (err) {
-      console.log('Price error:', err);
-    }
-  };
-
-  const addHolding = async () => {
-    if (!form.quantity || !form.buyPrice) return;
-    setLoading(true);
-    try {
-      const { data } = await axios.post(BASE + '/portfolio/add', {
-        symbol:   form.symbol,
-        name:     form.name,
-        quantity: Number(form.quantity),
-        buyPrice: Number(form.buyPrice),
-      }, { headers: { Authorization: 'Bearer ' + token } });
-      setHoldings(data);
-      fetchPrices(data.map(h => h.symbol));
-      setShowForm(false);
-      setForm({ symbol: 'RELIANCE', name: 'Reliance Industries', quantity: '', buyPrice: '' });
-    } catch (err) {
-      console.log('Add error:', err);
-    }
-    setLoading(false);
-  };
-
-  const removeHolding = async (id) => {
-    try {
-      const { data } = await axios.post(BASE + '/portfolio/remove',
-        { id },
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      setHoldings(data);
-    } catch (err) {
-      console.log('Remove error:', err);
-    }
-  };
-
   // ── Totals ────────────────────────────────────────────────────
-  let totalInvested = 0;
-  let totalCurrent  = 0;
-  holdings.forEach(h => {
-    const invested = h.buyPrice * h.quantity;
+  var totalInvested = 0;
+  var totalCurrent  = 0;
+  holdings.forEach(function(h) {
+    var invested = h.buyPrice * h.quantity;
     totalInvested += invested;
-    const p = prices[h.symbol];
+    var p = prices[h.symbol];
     totalCurrent += p && !p.error ? parseFloat(p.price) * h.quantity : invested;
   });
-  const totalPL    = totalCurrent - totalInvested;
-  const totalPLPct = totalInvested > 0
+  var totalPL    = totalCurrent - totalInvested;
+  var totalPLPct = totalInvested > 0
     ? ((totalPL / totalInvested) * 100).toFixed(2) : 0;
 
   return (
@@ -140,7 +141,7 @@ export default function Portfolio() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-white text-2xl font-bold">Portfolio</h1>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={function() { setShowForm(!showForm); }}
           className="bg-green-400 text-gray-950 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors"
         >
           + Add Stock
@@ -155,12 +156,14 @@ export default function Portfolio() {
           { label: 'Total P&L',
             value: (totalPL >= 0 ? '+' : '') + 'Rs.' + Math.abs(totalPL).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + totalPLPct + '%)',
             color: totalPL >= 0 ? 'text-green-400' : 'text-red-400' },
-        ].map(card => (
-          <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className="text-gray-400 text-xs font-mono mb-1">{card.label}</div>
-            <div className={'text-xl font-bold font-mono ' + card.color}>{card.value}</div>
-          </div>
-        ))}
+        ].map(function(card) {
+          return (
+            <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <div className="text-gray-400 text-xs font-mono mb-1">{card.label}</div>
+              <div className={'text-xl font-bold font-mono ' + card.color}>{card.value}</div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Add Stock Form */}
@@ -172,15 +175,15 @@ export default function Portfolio() {
               <label className="text-gray-400 text-xs font-mono mb-1 block">STOCK</label>
               <select
                 value={form.symbol}
-                onChange={e => {
-                  const stock = STOCK_OPTIONS.find(s => s.sym === e.target.value);
+                onChange={function(e) {
+                  var stock = STOCK_OPTIONS.find(function(s) { return s.sym === e.target.value; });
                   setForm({ ...form, symbol: stock.sym, name: stock.name });
                 }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
               >
-                {STOCK_OPTIONS.map(s => (
-                  <option key={s.sym} value={s.sym}>{s.sym} — {s.name}</option>
-                ))}
+                {STOCK_OPTIONS.map(function(s) {
+                  return <option key={s.sym} value={s.sym}>{s.sym} — {s.name}</option>;
+                })}
               </select>
             </div>
             <div>
@@ -189,7 +192,7 @@ export default function Portfolio() {
                 type="number"
                 placeholder="e.g. 10"
                 value={form.quantity}
-                onChange={e => setForm({ ...form, quantity: e.target.value })}
+                onChange={function(e) { setForm({ ...form, quantity: e.target.value }); }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
               />
             </div>
@@ -199,7 +202,7 @@ export default function Portfolio() {
                 type="number"
                 placeholder="e.g. 2800"
                 value={form.buyPrice}
-                onChange={e => setForm({ ...form, buyPrice: e.target.value })}
+                onChange={function(e) { setForm({ ...form, buyPrice: e.target.value }); }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
               />
             </div>
@@ -236,13 +239,13 @@ export default function Portfolio() {
               </tr>
             </thead>
             <tbody>
-              {holdings.map(h => {
-                const p        = prices[h.symbol];
-                const curPrice = p && !p.error ? parseFloat(p.price) : null;
-                const invested = h.buyPrice * h.quantity;
-                const current  = curPrice ? curPrice * h.quantity : null;
-                const pl       = current ? current - invested : null;
-                const plPct    = pl ? ((pl / invested) * 100).toFixed(2) : null;
+              {holdings.map(function(h) {
+                var p        = prices[h.symbol];
+                var curPrice = p && !p.error ? parseFloat(p.price) : null;
+                var invested = h.buyPrice * h.quantity;
+                var current  = curPrice ? curPrice * h.quantity : null;
+                var pl       = current ? current - invested : null;
+                var plPct    = pl ? ((pl / invested) * 100).toFixed(2) : null;
                 return (
                   <tr key={h._id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-4">
@@ -266,7 +269,7 @@ export default function Portfolio() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => removeHolding(h._id)}
+                        onClick={function() { removeHolding(h._id); }}
                         className="text-red-400 text-xs hover:text-red-300 font-mono"
                       >
                         Remove
