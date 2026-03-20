@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import axios from 'axios';
 
-const API      = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-const MAX_PAGE = 6; // 6 x 15 = 90 articles max (stays under 100/day limit)
+const NEWS_API_KEY = '2254829406fb447d91aa57aaadce71ae';
+const MAX_PAGE     = 6;
 
 function timeAgo(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
@@ -16,11 +16,11 @@ export default function News() {
   const [news,        setNews]        = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [, setPage] = useState(1);
   const [hasMore,     setHasMore]     = useState(true);
   const [error,       setError]       = useState('');
-  const loaderRef  = useRef(null);
-  const fetchingRef = useRef(false); // prevent double-fetch
+  const pageRef     = useRef(1);
+  const fetchingRef = useRef(false);
+  const loaderRef   = useRef(null);
 
   const fetchPage = useCallback(async (pageNum) => {
     if (fetchingRef.current) return;
@@ -30,25 +30,47 @@ export default function News() {
     else               setLoadingMore(true);
 
     try {
-      const { data } = await axios.get(API + '/api/market/news?page=' + pageNum);
+      const from7 = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
 
-      if (data && data.length > 0) {
+      const { data } = await axios.get(
+        'https://newsapi.org/v2/everything' +
+        '?q=india+stock+market+nifty+sensex+economy+RBI+crypto' +
+        '&sortBy=publishedAt' +
+        '&from=' + from7 +
+        '&pageSize=15' +
+        '&page=' + pageNum +
+        '&language=en' +
+        '&apiKey=' + NEWS_API_KEY
+      );
+
+      const articles = (data.articles || [])
+        .filter(a => a.title && a.title !== '[Removed]' && a.url)
+        .map(a => ({
+          title:       a.title,
+          source:      a.source.name,
+          url:         a.url,
+          image:       a.urlToImage,
+          time:        a.publishedAt,
+          description: a.description,
+        }));
+
+      if (articles.length > 0) {
         setNews(prev => {
           const seen  = new Set(prev.map(n => n.url));
-          const fresh = data.filter(n => !seen.has(n.url));
-          // Stop if nothing new after dedup, or empty, or max page
+          const fresh = articles.filter(n => !seen.has(n.url));
           if (fresh.length === 0 || pageNum >= MAX_PAGE) setHasMore(false);
           return [...prev, ...fresh];
         });
       } else {
-        // Empty response — no more articles
         setHasMore(false);
       }
 
       setError('');
     } catch (err) {
       console.log('News error:', err.message);
-      setError('Could not load news. Showing cached articles.');
+      if (pageNum === 1) {
+        setError('Could not load live news. Check back shortly.');
+      }
       setHasMore(false);
     }
 
@@ -57,88 +79,65 @@ export default function News() {
     fetchingRef.current = false;
   }, []);
 
-  // Load page 1 on mount
   useEffect(() => {
     fetchPage(1);
   }, [fetchPage]);
 
-  // IntersectionObserver — fires when loader div scrolls into view
   useEffect(() => {
     if (!hasMore) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !fetchingRef.current) {
-          setPage(prev => {
-            const next = prev + 1;
-            fetchPage(next);
-            return next;
-          });
+        if (entries[0].isIntersecting && !fetchingRef.current && hasMore) {
+          pageRef.current += 1;
+          fetchPage(pageRef.current);
         }
       },
-      { rootMargin: '200px', threshold: 0.1 }
+      { rootMargin: '300px', threshold: 0.1 }
     );
-
     const el = loaderRef.current;
     if (el) observer.observe(el);
     return () => { if (el) observer.unobserve(el); };
-  }, [hasMore, loadingMore, fetchPage]);
+  }, [hasMore, fetchPage]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white text-2xl font-bold">Market News</h1>
           <div className="text-gray-500 text-xs font-mono mt-1">
-            Live from NewsAPI · updates every 5 minutes
+            Live from NewsAPI · last 7 days · sorted newest first
           </div>
         </div>
-        <div className="text-gray-500 text-xs font-mono text-right">
-          {news.length > 0 && (
-            <span className="bg-green-400/10 text-green-400 border border-green-400/20 px-2 py-1 rounded font-mono text-xs">
-              {news.length} articles
-            </span>
-          )}
-        </div>
+        {news.length > 0 && (
+          <span className="bg-green-400/10 text-green-400 border border-green-400/20 px-3 py-1 rounded font-mono text-xs">
+            {news.length} articles
+          </span>
+        )}
       </div>
 
-      {/* Error banner */}
       {error && (
         <div className="bg-red-400/10 border border-red-400/20 text-red-400 text-xs font-mono px-4 py-2 rounded-lg mb-4">
           {error}
         </div>
       )}
 
-      {/* Loading state */}
       {loading ? (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-          <div className="text-gray-500 text-sm font-mono mb-1">Fetching today's news...</div>
-          <div className="text-gray-600 text-xs font-mono">Powered by NewsAPI.org</div>
+          <div className="text-gray-500 text-sm font-mono">Fetching latest news...</div>
         </div>
       ) : (
         <>
-          {/* Articles list */}
           {news.length === 0 ? (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-              <div className="text-gray-500 text-sm font-mono">No articles found for today yet.</div>
-              <div className="text-gray-600 text-xs font-mono mt-1">Check back after market hours.</div>
+              <div className="text-gray-500 text-sm font-mono">No articles available right now.</div>
             </div>
           ) : (
             <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
               {news.map((n, i) => (
-                <a
-                  key={n.url || i}
-                  href={n.url || '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex gap-4 px-5 py-4 border-b border-gray-800 last:border-0 hover:bg-gray-800/30 transition-colors group"
-                >
+                <a key={n.url || i} href={n.url} target="_blank" rel="noreferrer"
+                  className="flex gap-4 px-5 py-4 border-b border-gray-800 last:border-0 hover:bg-gray-800/30 transition-colors group">
                   {n.image && (
-                    <img
-                      src={n.image}
-                      alt=""
+                    <img src={n.image} alt=""
                       className="w-20 h-14 object-cover rounded-lg flex-shrink-0 bg-gray-800"
                       onError={e => { e.target.style.display = 'none'; }}
                     />
@@ -161,29 +160,19 @@ export default function News() {
             </div>
           )}
 
-          {/* Scroll trigger */}
           {hasMore && (
             <div ref={loaderRef} className="py-8 text-center">
-              {loadingMore ? (
-                <div className="text-gray-500 text-xs font-mono">
-                  Loading more articles...
-                </div>
-              ) : (
-                <div className="text-gray-700 text-xs font-mono">
-                  Scroll down to load more
-                </div>
-              )}
+              {loadingMore
+                ? <div className="text-gray-500 text-xs font-mono">Loading more articles...</div>
+                : <div className="text-gray-700 text-xs font-mono">Scroll down for more</div>
+              }
             </div>
           )}
 
-          {/* End of articles */}
           {!hasMore && news.length > 0 && (
             <div className="py-6 text-center border-t border-gray-800 mt-2">
               <div className="text-gray-600 text-xs font-mono">
-                {news.length >= 90
-                  ? 'Reached daily limit of 90 articles — check back tomorrow for fresh news'
-                  : 'All ' + news.length + ' articles loaded for today'
-                }
+                {news.length >= 75 ? 'All articles loaded' : 'All ' + news.length + ' articles loaded'}
               </div>
             </div>
           )}
