@@ -16,7 +16,7 @@ export default function News() {
   const [news,        setNews]        = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [page,        setPage]        = useState(1);
+  const [, setPage] = useState(1);
   const [hasMore,     setHasMore]     = useState(true);
   const [error,       setError]       = useState('');
   const loaderRef  = useRef(null);
