@@ -92,7 +92,7 @@ export default function Markets() {
     };
   }, []);
 
-  var tabs = ['overview', 'gainers', 'losers', 'news', 'commodities'];
+  var tabs = ['overview', 'gainers', 'losers', 'commodities'];
 
   var IndexCard = function(props) {
     return (
