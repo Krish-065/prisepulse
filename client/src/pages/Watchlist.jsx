@@ -1,50 +1,82 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const BASE = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api`;const DEFAULT_STOCKS = [
-  { sym: 'RELIANCE', name: 'Reliance Industries' },
-  { sym: 'TCS',      name: 'Tata Consultancy'    },
-  { sym: 'HDFCBANK', name: 'HDFC Bank'            },
-  { sym: 'INFY',     name: 'Infosys'              },
-  { sym: 'WIPRO',    name: 'Wipro'                },
-  { sym: 'ITC',      name: 'ITC Ltd'              },
-  { sym: 'AXISBANK', name: 'Axis Bank'            },
-  { sym: 'BAJFINANCE', name: 'Bajaj Finance'      },
+const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+
+const DEFAULT_STOCKS = [
+  { sym: 'RELIANCE',   name: 'Reliance Industries' },
+  { sym: 'TCS',        name: 'Tata Consultancy'    },
+  { sym: 'HDFCBANK',   name: 'HDFC Bank'           },
+  { sym: 'INFY',       name: 'Infosys'             },
+  { sym: 'WIPRO',      name: 'Wipro'               },
+  { sym: 'ITC',        name: 'ITC Ltd'             },
+  { sym: 'AXISBANK',   name: 'Axis Bank'           },
+  { sym: 'BAJFINANCE', name: 'Bajaj Finance'       },
 ];
 
-function Watchlist() {
-  const [watchlist, setWatchlist]   = useState([]);
-  const [prices, setPrices]         = useState({});
-  const [loading, setLoading]       = useState(false);
+export default function Watchlist() {
+  const [watchlist,    setWatchlist]    = useState([]);
+  const [prices,       setPrices]       = useState({});
+  const [loading,      setLoading]      = useState(false);
   const [priceLoading, setPriceLoading] = useState(false);
-  const [search, setSearch]         = useState('');
+  const [search,       setSearch]       = useState('');
+  const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
-  // Load watchlist from DB
-        useEffect(() => {
-        if (!token) return;
+  // ── Guest gate ────────────────────────────────────────────────
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 w-full max-w-md text-center">
+          <div className="w-14 h-14 bg-green-400/10 border border-green-400/20 rounded-full flex items-center justify-center mx-auto mb-5">
+            <span className="text-green-400 text-2xl">★</span>
+          </div>
+          <h2 className="text-white text-xl font-bold mb-2">Login to use Watchlist</h2>
+          <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+            Create a free account to save your favourite stocks and track them in one place.
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3"
+          >
+            Login or Sign Up — It's Free
+          </button>
+          <button
+            onClick={() => navigate(-1)}
+            className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono"
+          >
+            ← Go back
+          </button>
+          <p className="text-gray-600 text-xs mt-4">
+            Markets, News, Crypto and Tools are free without an account.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-        const loadWatchlist = async () => {
-            try {
-            const { data } = await axios.get(`${BASE}/watchlist`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+  // ── Load watchlist ────────────────────────────────────────────
+  useEffect(() => {
+    const loadWatchlist = async () => {
+      try {
+        const { data } = await axios.get(BASE + '/watchlist', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        setWatchlist(data);
+        if (data.length > 0) fetchPrices(data);
+      } catch (err) {
+        console.log('Watchlist fetch error:', err);
+      }
+    };
+    loadWatchlist();
+  // eslint-disable-next-line
+  }, []);
 
-            setWatchlist(data);
-            if (data.length > 0) fetchPrices(data);
-            } catch (err) {
-            console.log("Watchlist fetch error:", err);
-            }
-        };
-
-        loadWatchlist();
-        }, [token]);
-
-  // Fetch real prices
   const fetchPrices = async (symbols) => {
     setPriceLoading(true);
     try {
-      const { data } = await axios.post(`${BASE}/market/quotes`, { symbols });
+      const { data } = await axios.post(BASE + '/market/quotes', { symbols });
       const priceMap = {};
       data.forEach(d => { priceMap[d.symbol] = d; });
       setPrices(priceMap);
@@ -54,14 +86,12 @@ function Watchlist() {
     setPriceLoading(false);
   };
 
-  // Add stock
   const addStock = async (symbol) => {
-    if (!token) { alert('Please login first'); return; }
     setLoading(true);
     try {
-      const { data } = await axios.post(`${BASE}/watchlist/add`,
+      const { data } = await axios.post(BASE + '/watchlist/add',
         { symbol },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: 'Bearer ' + token } }
       );
       setWatchlist(data);
       fetchPrices(data);
@@ -71,12 +101,11 @@ function Watchlist() {
     setLoading(false);
   };
 
-  // Remove stock
   const removeStock = async (symbol) => {
     try {
-      const { data } = await axios.post(`${BASE}/watchlist/remove`,
+      const { data } = await axios.post(BASE + '/watchlist/remove',
         { symbol },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: 'Bearer ' + token } }
       );
       setWatchlist(data);
     } catch (err) {
@@ -93,7 +122,6 @@ function Watchlist() {
     <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-white text-2xl font-bold mb-6">My Watchlist</h1>
 
-      {/* My Watchlist */}
       {watchlist.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-8">
           <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
@@ -121,12 +149,12 @@ function Watchlist() {
                   <tr key={sym} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-4 font-mono font-bold text-white">{sym}</td>
                     <td className="px-5 py-4 text-right font-mono text-white">
-                      {p ? `₹${p.price}` : priceLoading ? '...' : 'N/A'}
+                      {p ? 'Rs.' + p.price : priceLoading ? '...' : 'N/A'}
                     </td>
-                    <td className={`px-5 py-4 text-right font-mono font-bold ${
+                    <td className={'px-5 py-4 text-right font-mono font-bold ' + (
                       p ? (parseFloat(p.change) >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-500'
-                    }`}>
-                      {p ? `${parseFloat(p.change) >= 0 ? '+' : ''}${p.change} (${p.changePct})` : '-'}
+                    )}>
+                      {p ? (parseFloat(p.change) >= 0 ? '+' : '') + p.change + ' (' + p.changePct + ')' : '-'}
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
@@ -144,7 +172,6 @@ function Watchlist() {
         </div>
       )}
 
-      {/* Add Stocks */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-800">
           <h2 className="text-white font-semibold mb-3">Add Stocks</h2>
@@ -181,5 +208,3 @@ function Watchlist() {
     </div>
   );
 }
-
-export default Watchlist;
