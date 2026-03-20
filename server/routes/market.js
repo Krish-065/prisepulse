@@ -252,33 +252,19 @@ router.get('/commodities', async function(req, res) {
 
 // ── NEWS (paginated, live, date-aware) ────────────────────────────
 router.get('/news', async function(req, res) {
-  const KEY  = process.env.NEWS_API_KEY;
-  const page = parseInt(req.query.page) || 1;
-
-  // No API key — return fallback on page 1 only
-  if (!KEY || KEY === 'your_newsapi_key_here') {
-    return res.json(page === 1 ? getFallbackNews() : []);
-  }
-
   try {
-    // Use last 7 days — ensures plenty of articles across all pages
-    const from7days = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
-    const today     = new Date().toISOString().split('T')[0];
-    const cacheKey  = 'news_' + today + '_p' + page;
-
-    const data = await getCached(cacheKey, async function() {
+    const KEY = process.env.NEWS_API_KEY;
+    if (!KEY || KEY === 'your_newsapi_key_here') throw new Error('No key');
+    const data = await getCached('news', async function() {
       const result = await axios.get(
         'https://newsapi.org/v2/everything' +
-        '?q=india+stock+market+nifty+sensex+economy+RBI+SEBI+crypto' +
+        '?q=india+stock+market+nifty+sensex+economy+RBI+crypto' +
         '&sortBy=publishedAt' +
-        '&from=' + from7days +
         '&pageSize=15' +
-        '&page=' + page +
         '&language=en' +
         '&apiKey=' + KEY,
         { timeout: 10000 }
       );
-
       return (result.data.articles || [])
         .filter(function(a) { return a.title && a.title !== '[Removed]' && a.url; })
         .map(function(a) {
@@ -291,14 +277,11 @@ router.get('/news', async function(req, res) {
             description: a.description,
           };
         });
-    }, 300);
-
-    console.log('News p' + page + ': ' + data.length + ' articles');
+    }, 600);
     res.json(data);
-
   } catch (err) {
-    console.log('News error page ' + page + ':', err.message);
-    res.json(page === 1 ? getFallbackNews() : []);
+    console.log('News fallback:', err.message);
+    res.json(getFallbackNews());
   }
 });
 
