@@ -91,7 +91,7 @@ export default function Login() {
             onClick={() => { setIsSignup(!isSignup); setError(''); }}
             className="text-green-400 ml-1 hover:underline"
           >
-            {isSignup ? 'Login' : 'Sign Up'}
+          {isSignup ? 'Login' : 'Create Account'}
           </button>
         </p>
 
