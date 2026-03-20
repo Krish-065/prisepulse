@@ -32,16 +32,17 @@ export default function News() {
     try {
       const { data } = await axios.get(API + '/api/market/news?page=' + pageNum);
 
-      if (!data || data.length === 0 || pageNum >= MAX_PAGE) {
-        setHasMore(false);
-      }
-
       if (data && data.length > 0) {
         setNews(prev => {
           const seen  = new Set(prev.map(n => n.url));
           const fresh = data.filter(n => !seen.has(n.url));
+          // Stop if nothing new after dedup, or empty, or max page
+          if (fresh.length === 0 || pageNum >= MAX_PAGE) setHasMore(false);
           return [...prev, ...fresh];
         });
+      } else {
+        // Empty response — no more articles
+        setHasMore(false);
       }
 
       setError('');

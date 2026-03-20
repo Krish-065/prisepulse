@@ -261,16 +261,17 @@ router.get('/news', async function(req, res) {
   }
 
   try {
-    // Cache key includes today's date so cache auto-resets daily
-    const today    = new Date().toISOString().split('T')[0];
-    const cacheKey = 'news_' + today + '_p' + page;
+    // Use last 7 days — ensures plenty of articles across all pages
+    const from7days = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+    const today     = new Date().toISOString().split('T')[0];
+    const cacheKey  = 'news_' + today + '_p' + page;
 
     const data = await getCached(cacheKey, async function() {
       const result = await axios.get(
         'https://newsapi.org/v2/everything' +
         '?q=india+stock+market+nifty+sensex+economy+RBI+SEBI+crypto' +
         '&sortBy=publishedAt' +
-        '&from=' + today +
+        '&from=' + from7days +
         '&pageSize=15' +
         '&page=' + page +
         '&language=en' +
@@ -278,7 +279,7 @@ router.get('/news', async function(req, res) {
         { timeout: 10000 }
       );
 
-      const articles = (result.data.articles || [])
+      return (result.data.articles || [])
         .filter(function(a) { return a.title && a.title !== '[Removed]' && a.url; })
         .map(function(a) {
           return {
@@ -290,33 +291,9 @@ router.get('/news', async function(req, res) {
             description: a.description,
           };
         });
+    }, 300);
 
-      // If today has 0 articles (very early morning), fetch yesterday too
-      if (articles.length === 0 && page === 1) {
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-        const fallback  = await axios.get(
-          'https://newsapi.org/v2/everything' +
-          '?q=india+stock+market+nifty+sensex' +
-          '&sortBy=publishedAt' +
-          '&from=' + yesterday +
-          '&to='   + today +
-          '&pageSize=15' +
-          '&page=1' +
-          '&language=en' +
-          '&apiKey=' + KEY,
-          { timeout: 10000 }
-        );
-        return (fallback.data.articles || [])
-          .filter(function(a) { return a.title && a.title !== '[Removed]' && a.url; })
-          .map(function(a) {
-            return { title: a.title, source: a.source.name, url: a.url, image: a.urlToImage, time: a.publishedAt, description: a.description };
-          });
-      }
-
-      return articles;
-    }, 300); // 5 minute cache
-
-    console.log('News page ' + page + ' (' + today + '): ' + data.length + ' articles');
+    console.log('News p' + page + ': ' + data.length + ' articles');
     res.json(data);
 
   } catch (err) {
