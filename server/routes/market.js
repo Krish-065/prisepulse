@@ -292,31 +292,50 @@ router.get('/commodities', async function(req, res) {
 // ── NEWS ──────────────────────────────────────────────────────────
 router.get('/news', async function(req, res) {
   try {
-    const KEY = process.env.NEWS_API_KEY;
+    const KEY  = process.env.NEWS_API_KEY;
+    const page = parseInt(req.query.page) || 1;
     if (!KEY || KEY === 'your_newsapi_key_here') throw new Error('No key');
-    const data = await getCached('news', async function() {
+
+    // Fetch all 90 articles once and cache — uses only 1 API call per hour
+    const allNews = await getCached('news_all', async function() {
       const result = await axios.get(
-        'https://newsapi.org/v2/everything?q=india+stock+market+nifty+sensex&sortBy=publishedAt&pageSize=15&language=en&apiKey=' + KEY,
-        { timeout: 8000 }
+        'https://newsapi.org/v2/everything' +
+        '?q=india+stock+market+nifty+sensex+economy+RBI+crypto' +
+        '&sortBy=publishedAt' +
+        '&pageSize=90' +
+        '&page=1' +
+        '&language=en' +
+        '&apiKey=' + KEY,
+        { timeout: 10000 }
       );
-      return result.data.articles.map(function(a) {
-        return {
-          title:       a.title,
-          source:      a.source.name,
-          url:         a.url,
-          image:       a.urlToImage,
-          time:        a.publishedAt,
-          description: a.description,
-        };
-      });
-    }, 600);
-    res.json(data);
+      return result.data.articles
+        .filter(function(a) { return a.title && a.title !== '[Removed]'; })
+        .map(function(a) {
+          return {
+            title:       a.title,
+            source:      a.source.name,
+            url:         a.url,
+            image:       a.urlToImage,
+            time:        a.publishedAt,
+            description: a.description,
+          };
+        });
+    }, 3600); // cache for 1 hour = 24 API calls per day max
+
+    // Return 15 articles per page from the cached full list
+    const start = (page - 1) * 15;
+    const slice = allNews.slice(start, start + 15);
+    res.json(slice);
+
   } catch (err) {
-    console.log('News fallback:', err.message);
-    res.json(getFallbackNews());
+    console.log('News error:', err.message);
+    if (page === 1) {
+      res.json(getFallbackNews());
+    } else {
+      res.json([]);
+    }
   }
 });
-
 // ── MARKET STATUS ─────────────────────────────────────────────────
 router.get('/status', function(req, res) {
   const ist  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
@@ -371,15 +390,28 @@ function getFallbackCrypto() {
 }
 
 function getFallbackNews() {
+  var now = Date.now();
   return [
-    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',            source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 9   * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.'       },
-    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',          source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 24  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.'   },
-    { title: 'Nifty eyes 22500 resistance; FII inflows of Rs.4200 Cr',          source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 41  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.'     },
-    { title: 'Bitcoin surges past $82K on spot ETF inflow uptick',              source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.'        },
-    { title: 'Hyundai India IPO oversubscribed 2.4x on Day 2',                 source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.'         },
-    { title: 'Gold hits Rs.71240 per 10g on safe-haven demand',                source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.'          },
-    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',     source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.'     },
-    { title: 'SEBI tightens F and O rules; new lot sizes effective from April', source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.'    },
+    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',                    source: 'Economic Times',    url: '#', image: null, time: new Date(now - 5   * 60000).toISOString(), description: 'The Reserve Bank of India kept benchmark rates unchanged citing inflation concerns.'        },
+    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18,540 Cr',                  source: 'Moneycontrol',      url: '#', image: null, time: new Date(now - 12  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly earnings driven by retail and Jio segments.'   },
+    { title: 'Nifty eyes 23500 resistance; FII inflows of Rs.4200 Cr in two sessions',  source: 'Business Standard', url: '#', image: null, time: new Date(now - 22  * 60000).toISOString(), description: 'Foreign institutional investors turn buyers after three weeks of selling.'               },
+    { title: 'Bitcoin crosses Rs.70 lakh mark; Ethereum up 4% in 24 hours',            source: 'CoinDesk India',    url: '#', image: null, time: new Date(now - 35  * 60000).toISOString(), description: 'Crypto markets see broad rally on ETF inflow data and improving sentiment.'              },
+    { title: 'Adani Group stocks rally up to 6% on strong quarterly results',           source: 'NDTV Profit',       url: '#', image: null, time: new Date(now - 48  * 60000).toISOString(), description: 'Adani Enterprises and Adani Ports lead the gains in the Adani group rally.'             },
+    { title: 'Hyundai India IPO oversubscribed 2.4x; strong retail interest seen',     source: 'Mint',              url: '#', image: null, time: new Date(now - 65  * 60000).toISOString(), description: 'Hyundai Motor India IPO receives robust response from all categories of investors.'      },
+    { title: 'Gold hits Rs.71240 per 10g as US dollar weakens on Fed signals',         source: 'Reuters India',     url: '#', image: null, time: new Date(now - 80  * 60000).toISOString(), description: 'Precious metals gain as US Federal Reserve signals possible rate cuts ahead.'            },
+    { title: 'Tata Motors Q3 results: PAT up 22%, JLR volumes beat estimates',         source: 'NDTV Profit',       url: '#', image: null, time: new Date(now - 95  * 60000).toISOString(), description: 'Tata Motors posts strong numbers driven by Jaguar Land Rover recovery.'                 },
+    { title: 'SEBI tightens F and O norms; weekly expiry limited to one per exchange', source: 'Livemint',          url: '#', image: null, time: new Date(now - 115 * 60000).toISOString(), description: 'Market regulator SEBI announces sweeping changes to derivatives framework.'             },
+    { title: 'Paytm shares jump 12% after RBI nod for payment aggregator licence',     source: 'Economic Times',    url: '#', image: null, time: new Date(now - 130 * 60000).toISOString(), description: 'One97 Communications shares surge as regulatory overhang clears.'                       },
+    { title: 'Nykaa reports 28% revenue growth; beauty segment leads expansion',       source: 'Business Standard', url: '#', image: null, time: new Date(now - 150 * 60000).toISOString(), description: 'FSN E-Commerce shows strong operational performance in Q3 FY25.'                        },
+    { title: 'Smallcap index hits all-time high; 40 stocks touch 52-week highs',       source: 'Moneycontrol',      url: '#', image: null, time: new Date(now - 170 * 60000).toISOString(), description: 'Broader market outperforms benchmarks with strong breadth in midcap and smallcap space.' },
+    { title: 'Coal India output rises 8% YoY; dividend payout likely to increase',    source: 'Reuters India',     url: '#', image: null, time: new Date(now - 190 * 60000).toISOString(), description: 'State-run coal giant posts record production driven by thermal power demand.'            },
+    { title: 'HDFC Bank credit card spends hit Rs.50000 Cr in December quarter',      source: 'Mint',              url: '#', image: null, time: new Date(now - 210 * 60000).toISOString(), description: 'India largest private bank sees strong consumer spending recovery.'                     },
+    { title: 'Zomato acquires Paytm entertainment business for Rs.2048 Cr',           source: 'Economic Times',    url: '#', image: null, time: new Date(now - 230 * 60000).toISOString(), description: 'Quick commerce giant expands into ticketing and events with strategic acquisition.'      },
+    { title: 'HAL bags Rs.62000 Cr order for 156 LCA Tejas Mk1A fighter jets',        source: 'Business Standard', url: '#', image: null, time: new Date(now - 250 * 60000).toISOString(), description: 'Hindustan Aeronautics wins largest ever defence production contract from Indian Air Force.' },
+    { title: 'Crude oil falls to 6800 per barrel; OMC stocks rally on margin relief', source: 'NDTV Profit',       url: '#', image: null, time: new Date(now - 270 * 60000).toISOString(), description: 'Lower crude prices benefit Indian oil marketing companies BPCL HPCL and IOC.'           },
+    { title: 'IT sector Q3 preview: TCS Infosys Wipro expected to show 3-5% growth',  source: 'Livemint',          url: '#', image: null, time: new Date(now - 290 * 60000).toISOString(), description: 'Analysts expect IT services recovery driven by BFSI and healthcare verticals.'           },
+    { title: 'SBI reports record Q3 profit of Rs.16891 Cr on strong NII growth',      source: 'Moneycontrol',      url: '#', image: null, time: new Date(now - 310 * 60000).toISOString(), description: 'State Bank of India posts best ever quarterly results on improving asset quality.'       },
+    { title: 'Sensex crosses 77000 for first time; banking stocks lead rally',         source: 'Reuters India',     url: '#', image: null, time: new Date(now - 330 * 60000).toISOString(), description: 'Indian benchmark indices hit fresh lifetime highs on strong domestic fundamentals.'      },
   ];
 }
 
