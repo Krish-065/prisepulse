@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const NEWS_KEY = '2254829406fb447d91aa57aaadce71ae';
 
 function timeAgo(iso) {
   const diff = Math.floor((Date.now() - new Date(iso)) / 60000);
@@ -16,9 +16,36 @@ export default function News() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    axios.get(API + '/api/market/news')
-      .then(({ data }) => { setNews(data); setLoading(false); })
-      .catch(() => setLoading(false));
+    // Call NewsAPI directly from browser — free tier blocks server requests
+    axios.get(
+      'https://newsapi.org/v2/everything' +
+      '?q=india+stock+market+nifty+sensex+economy+RBI+crypto' +
+      '&sortBy=publishedAt' +
+      '&pageSize=15' +
+      '&language=en' +
+      '&apiKey=' + NEWS_KEY
+    )
+      .then(({ data }) => {
+        const articles = (data.articles || [])
+          .filter(a => a.title && a.title !== '[Removed]' && a.url)
+          .map(a => ({
+            title:       a.title,
+            source:      a.source.name,
+            url:         a.url,
+            image:       a.urlToImage,
+            time:        a.publishedAt,
+            description: a.description,
+          }));
+        setNews(articles);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.log('NewsAPI error:', err.message);
+        // Fallback to backend if direct call fails
+        axios.get((process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api/market/news')
+          .then(({ data }) => { setNews(data); setLoading(false); })
+          .catch(() => setLoading(false));
+      });
   }, []);
 
   return (
@@ -32,10 +59,14 @@ export default function News() {
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
           <div className="text-gray-500 text-sm font-mono">Loading news...</div>
         </div>
+      ) : news.length === 0 ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
+          <div className="text-gray-500 text-sm font-mono">No articles available right now.</div>
+        </div>
       ) : (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           {news.map((n, i) => (
-            <a key={i} href={n.url || '#'} target="_blank" rel="noreferrer"
+            <a key={i} href={n.url} target="_blank" rel="noreferrer"
               className="flex gap-4 px-5 py-4 border-b border-gray-800 last:border-0 hover:bg-gray-800/30 transition-colors group">
               {n.image && (
                 <img src={n.image} alt=""
