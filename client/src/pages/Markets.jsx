@@ -95,16 +95,25 @@ export default function Markets() {
   var tabs = ['overview', 'gainers', 'losers', 'commodities'];
 
   var IndexCard = function(props) {
+    var change = Number(props.change);
+    var value  = Number(props.value);
+    var absoluteChange = value > 0 ? (value * change / (100 + change)).toFixed(2) : 0;
+
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="text-gray-400 text-xs font-mono mb-1">{props.label} - LIVE</div>
         <div className="text-white text-xl font-bold font-mono">
-          {props.value > 0
-            ? props.value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
+          {value > 0
+            ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
             : 'Loading...'}
         </div>
-        <div className={'text-xs font-mono mt-1 ' + (props.change >= 0 ? 'text-green-400' : 'text-red-400')}>
-          {props.change >= 0 ? '+' : ''}{props.change.toFixed(2)}%
+        <div className={'text-xs font-mono mt-1 ' + (change >= 0 ? 'text-green-400' : 'text-red-400')}>
+          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+          {value > 0 && (
+            <span className="ml-2 text-gray-400">
+              ({change >= 0 ? '+' : ''}{Number(absoluteChange).toLocaleString('en-IN', { maximumFractionDigits: 2 })} pts)
+            </span>
+          )}
         </div>
       </div>
     );
