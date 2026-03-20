@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -122,11 +122,55 @@ export default function Portfolio() {
   const navigate = useNavigate();
   const token    = localStorage.getItem('token');
 
-  // ── ALL HOOKS MUST BE BEFORE ANY EARLY RETURN ─────────────────
+  // ── FETCH FUNCTIONS DEFINED BEFORE useEffect ─────────────────
+  const fetchStockPricesP = useCallback(async (symbols) => {
+    try {
+      const { data } = await axios.post(BASE + '/market/quotes', { symbols });
+      const map = {};
+      data.forEach(d => { map[d.symbol] = d; });
+      setPrices(map);
+    } catch (err) { console.log('Price error:', err); }
+  }, []);
+
+  const fetchCryptoPricesP = useCallback(async () => {
+    try {
+      const { data } = await axios.get(BASE + '/market/crypto');
+      const map = {};
+      data.forEach(c => {
+        map[c.id]                   = c;
+        map[c.symbol]               = c;
+        map[c.symbol.toUpperCase()] = c;
+        map[c.symbol.toLowerCase()] = c;
+      });
+      setCryptoPrices(map);
+    } catch (err) { console.log('Crypto price error:', err); }
+  }, []);
+
+  const fetchCommPricesP = useCallback(async () => {
+    try {
+      const { data } = await axios.get(BASE + '/market/commodities');
+      setCommPrices(data);
+    } catch (err) { console.log('Commodity price error:', err); }
+  }, []);
+
+  const fetchHoldingsP = useCallback(async () => {
+    try {
+      const { data } = await axios.get(BASE + '/portfolio', { headers: { Authorization: 'Bearer ' + token } });
+      setHoldings(data);
+      const stocks    = data.filter(h => h.type === 'stock' || !h.type).map(h => h.symbol);
+      const hasCrypto = data.some(h => h.type === 'crypto');
+      const hasComm   = data.some(h => h.type === 'commodity');
+      if (stocks.length > 0) fetchStockPricesP([...new Set(stocks)]);
+      if (hasCrypto)         fetchCryptoPricesP();
+      if (hasComm)           fetchCommPricesP();
+    } catch (err) { console.log('Holdings error:', err); }
+  }, [token, fetchStockPricesP, fetchCryptoPricesP, fetchCommPricesP]);
+
+  // ── ALL HOOKS BEFORE EARLY RETURN ─────────────────────────────
   useEffect(() => {
     if (!token) return;
-    fetchHoldings();
-  }, []); // eslint-disable-line
+    fetchHoldingsP();
+  }, [fetchHoldingsP, token]);
 
   useEffect(() => {
     const q = stockSearch.trim().toUpperCase();
@@ -162,49 +206,7 @@ export default function Portfolio() {
   }
 
   // ── DATA FETCHING ─────────────────────────────────────────────
-  const fetchHoldings = async () => {
-    try {
-      const { data } = await axios.get(BASE + '/portfolio', {
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      setHoldings(data);
-      const stocks  = data.filter(h => h.type === 'stock' || !h.type).map(h => h.symbol);
-      const hasCrypto = data.some(h => h.type === 'crypto');
-      const hasComm   = data.some(h => h.type === 'commodity');
-      if (stocks.length > 0)  fetchStockPrices([...new Set(stocks)]);
-      if (hasCrypto)           fetchCryptoPrices();
-      if (hasComm)             fetchCommPrices();
-    } catch (err) { console.log('Holdings error:', err); }
-  };
 
-  const fetchStockPrices = async (symbols) => {
-    try {
-      const { data } = await axios.post(BASE + '/market/quotes', { symbols });
-      const map = {};
-      data.forEach(d => { map[d.symbol] = d; });
-      setPrices(map);
-    } catch (err) { console.log('Price error:', err); }
-  };
-
-  const fetchCryptoPrices = async () => {
-    try {
-      const { data } = await axios.get(BASE + '/market/crypto');
-      const map = {};
-      data.forEach(function(c) {
-        map[c.id]     = c;
-        map[c.symbol] = c;
-        map[c.symbol.toLowerCase()] = c;
-      });
-      setCryptoPrices(map);
-    } catch (err) { console.log('Crypto price error:', err); }
-  };
-
-  const fetchCommPrices = async () => {
-    try {
-      const { data } = await axios.get(BASE + '/market/commodities');
-      setCommPrices(data);
-    } catch (err) { console.log('Commodity price error:', err); }
-  };
 
   const addHolding = async () => {
     if (!form.symbol || !form.quantity || !form.buyPrice) return;
@@ -221,7 +223,7 @@ export default function Portfolio() {
       setShowForm(false);
       setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: 'stock' });
       setStockSearch('');
-      fetchHoldings();
+      fetchHoldingsP();
     } catch (err) { console.log('Add error:', err); }
     setLoading(false);
   };
