@@ -203,7 +203,7 @@ router.get('/crypto', async function(req, res) {
     const data = await getCached('crypto', async function() {
       const result = await axios.get(
         'https://api.coingecko.com/api/v3/coins/markets' +
-        '?vs_currency=inr&order=market_cap_desc&per_page=20&page=1&price_change_percentage=1h,24h,7d',
+        '?vs_currency=inr&order=market_cap_desc&per_page=50&page=1&price_change_percentage=1h,24h,7d',
         { timeout: 10000, headers: { 'Accept': 'application/json' } }
       );
       return result.data.map(function(c) {
