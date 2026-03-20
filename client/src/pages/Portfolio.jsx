@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-const BASE = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api`;const STOCK_OPTIONS = [
+
+const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+
+const STOCK_OPTIONS = [
   { sym: 'RELIANCE',   name: 'Reliance Industries' },
   { sym: 'TCS',        name: 'Tata Consultancy'    },
   { sym: 'HDFCBANK',   name: 'HDFC Bank'           },
@@ -13,29 +17,62 @@ const BASE = `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api`;c
   { sym: 'MARUTI',     name: 'Maruti Suzuki'       },
 ];
 
-function Portfolio() {
-  const [holdings, setHoldings]   = useState([]);
-  const [prices, setPrices]       = useState({});
-  const [loading, setLoading]     = useState(false);
-  const [showForm, setShowForm]   = useState(false);
-  const [form, setForm]           = useState({ symbol: 'RELIANCE', name: 'Reliance Industries', quantity: '', buyPrice: '' });
+export default function Portfolio() {
+  const [holdings,  setHoldings]  = useState([]);
+  const [prices,    setPrices]    = useState({});
+  const [loading,   setLoading]   = useState(false);
+  const [showForm,  setShowForm]  = useState(false);
+  const [form, setForm] = useState({
+    symbol: 'RELIANCE', name: 'Reliance Industries', quantity: '', buyPrice: ''
+  });
+  const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
+  // ── Guest gate ────────────────────────────────────────────────
+  if (!token) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-10 w-full max-w-md text-center">
+          <div className="w-14 h-14 bg-green-400/10 border border-green-400/20 rounded-full flex items-center justify-center mx-auto mb-5">
+            <span className="text-green-400 text-2xl">◈</span>
+          </div>
+          <h2 className="text-white text-xl font-bold mb-2">Login to track Portfolio</h2>
+          <p className="text-gray-500 text-sm mb-6 leading-relaxed">
+            Create a free account to add your stock holdings and track your profit and loss in real time.
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3"
+          >
+            Login or Sign Up — It's Free
+          </button>
+          <button
+            onClick={() => navigate(-1)}
+            className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono"
+          >
+            ← Go back
+          </button>
+          <p className="text-gray-600 text-xs mt-4">
+            Markets, News, Crypto and Tools are free without an account.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Load holdings ─────────────────────────────────────────────
   useEffect(() => {
-    if (!token) return;
     fetchHoldings();
   // eslint-disable-next-line
   }, []);
 
   const fetchHoldings = async () => {
     try {
-      const { data } = await axios.get(`${BASE}/portfolio`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const { data } = await axios.get(BASE + '/portfolio', {
+        headers: { Authorization: 'Bearer ' + token }
       });
       setHoldings(data);
-      if (data.length > 0) {
-        fetchPrices(data.map(h => h.symbol));
-      }
+      if (data.length > 0) fetchPrices(data.map(h => h.symbol));
     } catch (err) {
       console.log('Holdings error:', err);
     }
@@ -44,7 +81,7 @@ function Portfolio() {
   const fetchPrices = async (symbols) => {
     try {
       const unique = [...new Set(symbols)];
-      const { data } = await axios.post(`${BASE}/market/quotes`, { symbols: unique });
+      const { data } = await axios.post(BASE + '/market/quotes', { symbols: unique });
       const map = {};
       data.forEach(d => { map[d.symbol] = d; });
       setPrices(map);
@@ -57,12 +94,12 @@ function Portfolio() {
     if (!form.quantity || !form.buyPrice) return;
     setLoading(true);
     try {
-      const { data } = await axios.post(`${BASE}/portfolio/add`, {
+      const { data } = await axios.post(BASE + '/portfolio/add', {
         symbol:   form.symbol,
         name:     form.name,
         quantity: Number(form.quantity),
         buyPrice: Number(form.buyPrice),
-      }, { headers: { Authorization: `Bearer ${token}` } });
+      }, { headers: { Authorization: 'Bearer ' + token } });
       setHoldings(data);
       fetchPrices(data.map(h => h.symbol));
       setShowForm(false);
@@ -75,9 +112,9 @@ function Portfolio() {
 
   const removeHolding = async (id) => {
     try {
-      const { data } = await axios.post(`${BASE}/portfolio/remove`,
+      const { data } = await axios.post(BASE + '/portfolio/remove',
         { id },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: { Authorization: 'Bearer ' + token } }
       );
       setHoldings(data);
     } catch (err) {
@@ -85,29 +122,18 @@ function Portfolio() {
     }
   };
 
-  // Calculate totals
+  // ── Totals ────────────────────────────────────────────────────
   let totalInvested = 0;
   let totalCurrent  = 0;
   holdings.forEach(h => {
     const invested = h.buyPrice * h.quantity;
     totalInvested += invested;
     const p = prices[h.symbol];
-    if (p && !p.error) {
-      totalCurrent += parseFloat(p.price) * h.quantity;
-    } else {
-      totalCurrent += invested;
-    }
+    totalCurrent += p && !p.error ? parseFloat(p.price) * h.quantity : invested;
   });
   const totalPL    = totalCurrent - totalInvested;
-  const totalPLPct = totalInvested > 0 ? ((totalPL / totalInvested) * 100).toFixed(2) : 0;
-
-  if (!token) return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center text-gray-500">
-        Please <a href="/login" className="text-green-400 hover:underline">login</a> to view your portfolio
-      </div>
-    </div>
-  );
+  const totalPLPct = totalInvested > 0
+    ? ((totalPL / totalInvested) * 100).toFixed(2) : 0;
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -124,13 +150,15 @@ function Portfolio() {
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         {[
-          { label: 'Invested',      value: `₹${totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, color: 'text-white'   },
-          { label: 'Current Value', value: `₹${totalCurrent.toLocaleString('en-IN',  { maximumFractionDigits: 0 })}`, color: 'text-white'   },
-          { label: 'Total P&L',     value: `${totalPL >= 0 ? '+' : ''}₹${totalPL.toLocaleString('en-IN', { maximumFractionDigits: 0 })} (${totalPLPct}%)`, color: totalPL >= 0 ? 'text-green-400' : 'text-red-400' },
+          { label: 'Invested',      value: 'Rs.' + totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: 'text-white' },
+          { label: 'Current Value', value: 'Rs.' + totalCurrent.toLocaleString('en-IN',  { maximumFractionDigits: 0 }), color: 'text-white' },
+          { label: 'Total P&L',
+            value: (totalPL >= 0 ? '+' : '') + 'Rs.' + Math.abs(totalPL).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + totalPLPct + '%)',
+            color: totalPL >= 0 ? 'text-green-400' : 'text-red-400' },
         ].map(card => (
           <div key={card.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <div className="text-gray-400 text-xs font-mono mb-1">{card.label}</div>
-            <div className={`text-xl font-bold font-mono ${card.color}`}>{card.value}</div>
+            <div className={'text-xl font-bold font-mono ' + card.color}>{card.value}</div>
           </div>
         ))}
       </div>
@@ -166,7 +194,7 @@ function Portfolio() {
               />
             </div>
             <div>
-              <label className="text-gray-400 text-xs font-mono mb-1 block">BUY PRICE (₹)</label>
+              <label className="text-gray-400 text-xs font-mono mb-1 block">BUY PRICE (Rs.)</label>
               <input
                 type="number"
                 placeholder="e.g. 2800"
@@ -209,12 +237,12 @@ function Portfolio() {
             </thead>
             <tbody>
               {holdings.map(h => {
-                const p         = prices[h.symbol];
-                const curPrice  = p && !p.error ? parseFloat(p.price) : null;
-                const invested  = h.buyPrice * h.quantity;
-                const current   = curPrice ? curPrice * h.quantity : null;
-                const pl        = current ? current - invested : null;
-                const plPct     = pl ? ((pl / invested) * 100).toFixed(2) : null;
+                const p        = prices[h.symbol];
+                const curPrice = p && !p.error ? parseFloat(p.price) : null;
+                const invested = h.buyPrice * h.quantity;
+                const current  = curPrice ? curPrice * h.quantity : null;
+                const pl       = current ? current - invested : null;
+                const plPct    = pl ? ((pl / invested) * 100).toFixed(2) : null;
                 return (
                   <tr key={h._id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-4">
@@ -222,15 +250,19 @@ function Portfolio() {
                       <div className="text-gray-500 text-xs">{h.name}</div>
                     </td>
                     <td className="px-5 py-4 text-right font-mono text-white">{h.quantity}</td>
-                    <td className="px-5 py-4 text-right font-mono text-white">₹{h.buyPrice}</td>
+                    <td className="px-5 py-4 text-right font-mono text-white">Rs.{h.buyPrice}</td>
                     <td className="px-5 py-4 text-right font-mono text-white">
-                      {curPrice ? `₹${curPrice}` : 'Loading...'}
+                      {curPrice ? 'Rs.' + curPrice : 'Loading...'}
                     </td>
                     <td className="px-5 py-4 text-right font-mono text-white">
-                      ₹{invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      Rs.{invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </td>
-                    <td className={`px-5 py-4 text-right font-mono font-bold ${pl === null ? 'text-gray-500' : pl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {pl === null ? '-' : `${pl >= 0 ? '+' : ''}₹${Math.abs(pl).toLocaleString('en-IN', { maximumFractionDigits: 0 })} (${plPct}%)`}
+                    <td className={'px-5 py-4 text-right font-mono font-bold ' + (
+                      pl === null ? 'text-gray-500' : pl >= 0 ? 'text-green-400' : 'text-red-400'
+                    )}>
+                      {pl === null
+                        ? '-'
+                        : (pl >= 0 ? '+' : '-') + 'Rs.' + Math.abs(pl).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + plPct + '%)'}
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
@@ -250,5 +282,3 @@ function Portfolio() {
     </div>
   );
 }
-
-export default Portfolio;
