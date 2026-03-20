@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -81,47 +81,64 @@ const NSE_STOCKS = [
 ];
 
 const CRYPTO_LIST = [
-  { id: 'bitcoin',     sym: 'BTC',  name: 'Bitcoin'      },
-  { id: 'ethereum',    sym: 'ETH',  name: 'Ethereum'     },
-  { id: 'binancecoin', sym: 'BNB',  name: 'BNB'          },
-  { id: 'solana',      sym: 'SOL',  name: 'Solana'       },
-  { id: 'ripple',      sym: 'XRP',  name: 'XRP'          },
-  { id: 'cardano',     sym: 'ADA',  name: 'Cardano'      },
-  { id: 'dogecoin',    sym: 'DOGE', name: 'Dogecoin'     },
-  { id: 'polkadot',    sym: 'DOT',  name: 'Polkadot'     },
-  { id: 'avalanche-2', sym: 'AVAX', name: 'Avalanche'    },
-  { id: 'polygon',     sym: 'MATIC',name: 'Polygon'      },
-  { id: 'chainlink',   sym: 'LINK', name: 'Chainlink'    },
-  { id: 'litecoin',    sym: 'LTC',  name: 'Litecoin'     },
-  { id: 'shiba-inu',   sym: 'SHIB', name: 'Shiba Inu'    },
-  { id: 'tron',        sym: 'TRX',  name: 'TRON'         },
-  { id: 'stellar',     sym: 'XLM',  name: 'Stellar'      },
+  { id: 'bitcoin',     sym: 'BTC',  name: 'Bitcoin'   },
+  { id: 'ethereum',    sym: 'ETH',  name: 'Ethereum'  },
+  { id: 'binancecoin', sym: 'BNB',  name: 'BNB'       },
+  { id: 'solana',      sym: 'SOL',  name: 'Solana'    },
+  { id: 'ripple',      sym: 'XRP',  name: 'XRP'       },
+  { id: 'cardano',     sym: 'ADA',  name: 'Cardano'   },
+  { id: 'dogecoin',    sym: 'DOGE', name: 'Dogecoin'  },
+  { id: 'polkadot',    sym: 'DOT',  name: 'Polkadot'  },
+  { id: 'avalanche-2', sym: 'AVAX', name: 'Avalanche' },
+  { id: 'polygon',     sym: 'MATIC',name: 'Polygon'   },
+  { id: 'chainlink',   sym: 'LINK', name: 'Chainlink' },
+  { id: 'litecoin',    sym: 'LTC',  name: 'Litecoin'  },
+  { id: 'shiba-inu',   sym: 'SHIB', name: 'Shiba Inu' },
+  { id: 'tron',        sym: 'TRX',  name: 'TRON'      },
+  { id: 'stellar',     sym: 'XLM',  name: 'Stellar'   },
 ];
 
 const COMMODITY_LIST = [
-  { id: 'gold',       name: 'Gold',       unit: 'per 10g',   icon: 'GOLD' },
-  { id: 'silver',     name: 'Silver',     unit: 'per kg',    icon: 'SLVR' },
-  { id: 'crude',      name: 'Crude Oil',  unit: 'per bbl',   icon: 'CRUD' },
-  { id: 'copper',     name: 'Copper',     unit: 'per kg',    icon: 'COPR' },
-  { id: 'aluminium',  name: 'Aluminium',  unit: 'per kg',    icon: 'ALUM' },
-  { id: 'zinc',       name: 'Zinc',       unit: 'per kg',    icon: 'ZINC' },
+  { id: 'gold',      name: 'Gold',      unit: 'per 10g', icon: 'GOLD' },
+  { id: 'silver',    name: 'Silver',    unit: 'per kg',  icon: 'SLVR' },
+  { id: 'crude',     name: 'Crude Oil', unit: 'per bbl', icon: 'CRUD' },
+  { id: 'copper',    name: 'Copper',    unit: 'per kg',  icon: 'COPR' },
+  { id: 'aluminium', name: 'Aluminium', unit: 'per kg',  icon: 'ALUM' },
+  { id: 'zinc',      name: 'Zinc',      unit: 'per kg',  icon: 'ZINC' },
 ];
 
 export default function Portfolio() {
-  const [tab,          setTab]         = useState('stocks');
-  const [holdings,     setHoldings]    = useState([]);
-  const [prices,       setPrices]      = useState({});
-  const [cryptoPrices, setCryptoPrices]= useState({});
-  const [commPrices,   setCommPrices]  = useState({});
-  const [loading,      setLoading]     = useState(false);
-  const [showForm,     setShowForm]    = useState(false);
-  const [stockSearch,  setStockSearch] = useState('');
-  const [stockSugg,    setStockSugg]   = useState([]);
-  const [showSugg,     setShowSugg]    = useState(false);
+  const [tab,          setTab]          = useState('stocks');
+  const [holdings,     setHoldings]     = useState([]);
+  const [prices,       setPrices]       = useState({});
+  const [cryptoPrices, setCryptoPrices] = useState({});
+  const [commPrices,   setCommPrices]   = useState({});
+  const [loading,      setLoading]      = useState(false);
+  const [showForm,     setShowForm]     = useState(false);
+  const [stockSearch,  setStockSearch]  = useState('');
+  const [stockSugg,    setStockSugg]    = useState([]);
+  const [showSugg,     setShowSugg]     = useState(false);
   const [form, setForm] = useState({ symbol: '', name: '', quantity: '', buyPrice: '', type: 'stock' });
   const navigate = useNavigate();
   const token    = localStorage.getItem('token');
 
+  // ── ALL HOOKS MUST BE BEFORE ANY EARLY RETURN ─────────────────
+  useEffect(() => {
+    if (!token) return;
+    fetchHoldings();
+  }, []); // eslint-disable-line
+
+  useEffect(() => {
+    const q = stockSearch.trim().toUpperCase();
+    if (q.length < 1) { setStockSugg([]); setShowSugg(false); return; }
+    const matched = NSE_STOCKS.filter(s =>
+      s.sym.toUpperCase().startsWith(q) || s.name.toUpperCase().includes(q)
+    ).slice(0, 8);
+    setStockSugg(matched);
+    setShowSugg(matched.length > 0);
+  }, [stockSearch]);
+
+  // ── GUEST GATE (after all hooks) ──────────────────────────────
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -131,32 +148,32 @@ export default function Portfolio() {
           </div>
           <h2 className="text-white text-xl font-bold mb-2">Login to track Portfolio</h2>
           <p className="text-gray-500 text-sm mb-6">Track stocks, crypto and commodities in one portfolio.</p>
-          <button onClick={() => navigate('/login')} className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3">Login or Sign Up</button>
-          <button onClick={() => navigate(-1)} className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono">← Go back</button>
+          <button onClick={() => navigate('/login')}
+            className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3">
+            Login or Sign Up
+          </button>
+          <button onClick={() => navigate(-1)}
+            className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono">
+            ← Go back
+          </button>
         </div>
       </div>
     );
   }
 
-  useEffect(() => { fetchHoldings(); }, []); // eslint-disable-line
-
-  useEffect(() => {
-    const q = stockSearch.trim().toUpperCase();
-    if (q.length < 1) { setStockSugg([]); setShowSugg(false); return; }
-    const matched = NSE_STOCKS.filter(s => s.sym.toUpperCase().startsWith(q) || s.name.toUpperCase().includes(q)).slice(0, 8);
-    setStockSugg(matched);
-    setShowSugg(matched.length > 0);
-  }, [stockSearch]);
-
+  // ── DATA FETCHING ─────────────────────────────────────────────
   const fetchHoldings = async () => {
     try {
-      const { data } = await axios.get(BASE + '/portfolio', { headers: { Authorization: 'Bearer ' + token } });
+      const { data } = await axios.get(BASE + '/portfolio', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
       setHoldings(data);
-      const stocks = data.filter(h => h.type === 'stock' || !h.type).map(h => h.symbol);
-      const cryptos = data.filter(h => h.type === 'crypto').map(h => h.symbol);
-      if (stocks.length > 0) fetchStockPrices([...new Set(stocks)]);
-      if (cryptos.length > 0) fetchCryptoPrices();
-      if (data.some(h => h.type === 'commodity')) fetchCommPrices();
+      const stocks  = data.filter(h => h.type === 'stock' || !h.type).map(h => h.symbol);
+      const hasCrypto = data.some(h => h.type === 'crypto');
+      const hasComm   = data.some(h => h.type === 'commodity');
+      if (stocks.length > 0)  fetchStockPrices([...new Set(stocks)]);
+      if (hasCrypto)           fetchCryptoPrices();
+      if (hasComm)             fetchCommPrices();
     } catch (err) { console.log('Holdings error:', err); }
   };
 
@@ -198,7 +215,7 @@ export default function Portfolio() {
       }, { headers: { Authorization: 'Bearer ' + token } });
       setHoldings(data);
       setShowForm(false);
-      setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: tab === 'crypto' ? 'crypto' : tab === 'commodities' ? 'commodity' : 'stock' });
+      setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: 'stock' });
       setStockSearch('');
       fetchHoldings();
     } catch (err) { console.log('Add error:', err); }
@@ -207,35 +224,49 @@ export default function Portfolio() {
 
   const removeHolding = async (id) => {
     try {
-      const { data } = await axios.post(BASE + '/portfolio/remove', { id }, { headers: { Authorization: 'Bearer ' + token } });
+      const { data } = await axios.post(BASE + '/portfolio/remove', { id }, {
+        headers: { Authorization: 'Bearer ' + token }
+      });
       setHoldings(data);
     } catch (err) { console.log('Remove error:', err); }
   };
 
-  const stockHoldings = holdings.filter(h => h.type === 'stock' || !h.type);
-  const cryptoHoldings = holdings.filter(h => h.type === 'crypto');
-  const commHoldings = holdings.filter(h => h.type === 'commodity');
-
+  // ── HELPERS ───────────────────────────────────────────────────
   const calcPL = (h) => {
-    let curPrice = null;
-    if (h.type === 'crypto') { const p = cryptoPrices[h.symbol]; curPrice = p ? p.price : null; }
-    else if (h.type === 'commodity') { const p = commPrices[h.symbol]; curPrice = p ? p.price : null; }
-    else { const p = prices[h.symbol]; curPrice = p && !p.error ? parseFloat(p.price) : null; }
-    const invested = h.buyPrice * h.quantity;
-    const current  = curPrice ? curPrice * h.quantity : null;
-    const pl       = current ? current - invested : null;
-    const plPct    = pl ? ((pl / invested) * 100).toFixed(2) : null;
+    var curPrice = null;
+    if (h.type === 'crypto') {
+      var cp = cryptoPrices[h.symbol];
+      curPrice = cp ? cp.price : null;
+    } else if (h.type === 'commodity') {
+      var cm = commPrices[h.symbol];
+      curPrice = cm ? cm.price : null;
+    } else {
+      var sp = prices[h.symbol];
+      curPrice = sp && !sp.error ? parseFloat(sp.price) : null;
+    }
+    var invested = h.buyPrice * h.quantity;
+    var current  = curPrice ? curPrice * h.quantity : null;
+    var pl       = current ? current - invested : null;
+    var plPct    = pl ? ((pl / invested) * 100).toFixed(2) : null;
     return { invested, current, pl, plPct, curPrice };
   };
 
   const calcTotal = (list) => {
-    let inv = 0; let cur = 0;
-    list.forEach(h => { const c = calcPL(h); inv += c.invested; cur += c.current || c.invested; });
-    return { inv, cur, pl: cur - inv, plPct: inv > 0 ? (((cur - inv) / inv) * 100).toFixed(2) : 0 };
+    var inv = 0; var cur = 0;
+    list.forEach(function(h) {
+      var c = calcPL(h);
+      inv += c.invested;
+      cur += c.current || c.invested;
+    });
+    return {
+      inv, cur,
+      pl:    cur - inv,
+      plPct: inv > 0 ? (((cur - inv) / inv) * 100).toFixed(2) : 0
+    };
   };
 
-  const renderHoldingsTable = (list) => {
-    const tot = calcTotal(list);
+  const renderTable = (list) => {
+    var tot = calcTotal(list);
     return (
       <div>
         <div className="grid grid-cols-3 gap-4 mb-5">
@@ -244,17 +275,20 @@ export default function Portfolio() {
             { label: 'Current Value', value: 'Rs.' + tot.cur.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: 'text-white' },
             { label: 'Total P&L',
               value: (tot.pl >= 0 ? '+' : '-') + 'Rs.' + Math.abs(tot.pl).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + tot.plPct + '%)',
-              color: tot.pl >= 0 ? 'text-green-400' : 'text-red-400' }
-          ].map(c => (
-            <div key={c.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <div className="text-gray-400 text-xs font-mono mb-1">{c.label}</div>
-              <div className={'text-xl font-bold font-mono ' + c.color}>{c.value}</div>
-            </div>
-          ))}
+              color: tot.pl >= 0 ? 'text-green-400' : 'text-red-400'
+            }
+          ].map(function(c) {
+            return (
+              <div key={c.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="text-gray-400 text-xs font-mono mb-1">{c.label}</div>
+                <div className={'text-xl font-bold font-mono ' + c.color}>{c.value}</div>
+              </div>
+            );
+          })}
         </div>
         {list.length === 0 ? (
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-10 text-center">
-            <div className="text-gray-600 text-sm font-mono">No holdings yet — click Add to get started</div>
+            <div className="text-gray-600 text-sm font-mono">No holdings yet — click Add Holding to get started</div>
           </div>
         ) : (
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -271,8 +305,8 @@ export default function Portfolio() {
                 </tr>
               </thead>
               <tbody>
-                {list.map(h => {
-                  const { invested, curPrice, pl, plPct } = calcPL(h);
+                {list.map(function(h) {
+                  var r = calcPL(h);
                   return (
                     <tr key={h._id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                       <td className="px-5 py-4">
@@ -282,14 +316,14 @@ export default function Portfolio() {
                       <td className="px-5 py-4 text-right font-mono text-white text-sm">{h.quantity}</td>
                       <td className="px-5 py-4 text-right font-mono text-white text-sm">Rs.{Number(h.buyPrice).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                       <td className="px-5 py-4 text-right font-mono text-white text-sm">
-                        {curPrice ? 'Rs.' + Number(curPrice).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : <span className="text-gray-600 text-xs">Loading...</span>}
+                        {r.curPrice ? 'Rs.' + Number(r.curPrice).toLocaleString('en-IN', { maximumFractionDigits: 2 }) : <span className="text-gray-600 text-xs">Loading...</span>}
                       </td>
-                      <td className="px-5 py-4 text-right font-mono text-white text-sm">Rs.{invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                      <td className={'px-5 py-4 text-right font-mono font-bold text-sm ' + (pl === null ? 'text-gray-500' : pl >= 0 ? 'text-green-400' : 'text-red-400')}>
-                        {pl === null ? '—' : (pl >= 0 ? '+' : '-') + 'Rs.' + Math.abs(pl).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + plPct + '%)'}
+                      <td className="px-5 py-4 text-right font-mono text-white text-sm">Rs.{r.invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                      <td className={'px-5 py-4 text-right font-mono font-bold text-sm ' + (r.pl === null ? 'text-gray-500' : r.pl >= 0 ? 'text-green-400' : 'text-red-400')}>
+                        {r.pl === null ? '—' : (r.pl >= 0 ? '+' : '-') + 'Rs.' + Math.abs(r.pl).toLocaleString('en-IN', { maximumFractionDigits: 0 }) + ' (' + r.plPct + '%)'}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <button onClick={() => removeHolding(h._id)} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
+                        <button onClick={function() { removeHolding(h._id); }} className="text-red-400 text-xs hover:text-red-300 font-mono">Remove</button>
                       </td>
                     </tr>
                   );
@@ -302,30 +336,41 @@ export default function Portfolio() {
     );
   };
 
-  const tabs = ['stocks', 'crypto', 'commodities'];
+  var stockHoldings = holdings.filter(function(h) { return h.type === 'stock' || !h.type; });
+  var cryptoHoldings = holdings.filter(function(h) { return h.type === 'crypto'; });
+  var commHoldings   = holdings.filter(function(h) { return h.type === 'commodity'; });
+  var tabs = ['stocks', 'crypto', 'commodities'];
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-white text-2xl font-bold">Portfolio</h1>
-        <button onClick={() => { setShowForm(!showForm); setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: tab === 'crypto' ? 'crypto' : tab === 'commodities' ? 'commodity' : 'stock' }); setStockSearch(''); }}
-          className="bg-green-400 text-gray-950 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors">
+        <button
+          onClick={function() {
+            setShowForm(!showForm);
+            setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: tab === 'crypto' ? 'crypto' : tab === 'commodities' ? 'commodity' : 'stock' });
+            setStockSearch('');
+          }}
+          className="bg-green-400 text-gray-950 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors"
+        >
           + Add Holding
         </button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-gray-800">
-        {tabs.map(t => (
-          <button key={t} onClick={() => { setTab(t); setShowForm(false); }}
-            className={'px-5 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
-              (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
-            {t}
-            {t === 'stocks' && stockHoldings.length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{stockHoldings.length}</span>}
-            {t === 'crypto' && cryptoHoldings.length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{cryptoHoldings.length}</span>}
-            {t === 'commodities' && commHoldings.length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{commHoldings.length}</span>}
-          </button>
-        ))}
+        {tabs.map(function(t) {
+          return (
+            <button key={t} onClick={function() { setTab(t); setShowForm(false); }}
+              className={'px-5 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
+                (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
+              {t}
+              {t === 'stocks'      && stockHoldings.length  > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{stockHoldings.length}</span>}
+              {t === 'crypto'      && cryptoHoldings.length > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{cryptoHoldings.length}</span>}
+              {t === 'commodities' && commHoldings.length   > 0 && <span className="ml-1 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{commHoldings.length}</span>}
+            </button>
+          );
+        })}
       </div>
 
       {/* Add Form */}
@@ -336,50 +381,60 @@ export default function Portfolio() {
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
 
-            {/* Stock search */}
             {tab === 'stocks' && (
               <div className="col-span-2 relative">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SEARCH STOCK</label>
                 <input type="text" placeholder="Type symbol or company name..."
                   value={stockSearch}
-                  onChange={e => { setStockSearch(e.target.value); setForm({ ...form, symbol: e.target.value.toUpperCase(), name: '' }); }}
-                  onKeyDown={e => { if (e.key === 'Escape') { setShowSugg(false); } }}
+                  onChange={function(e) { setStockSearch(e.target.value); setForm(function(f) { return { ...f, symbol: e.target.value.toUpperCase(), name: '' }; }); }}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
                 />
                 {showSugg && stockSugg.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg overflow-hidden z-50 shadow-xl">
-                    {stockSugg.map((s, i) => (
-                      <div key={i} onClick={() => { setForm({ ...form, symbol: s.sym, name: s.name, type: 'stock' }); setStockSearch(s.sym + ' — ' + s.name); setShowSugg(false); }}
-                        className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-700 border-b border-gray-700 last:border-0">
-                        <span className="font-mono font-bold text-white text-sm w-24 flex-shrink-0">{s.sym}</span>
-                        <span className="text-gray-400 text-xs">{s.name}</span>
-                      </div>
-                    ))}
+                    {stockSugg.map(function(s, i) {
+                      return (
+                        <div key={i}
+                          onClick={function() { setForm(function(f) { return { ...f, symbol: s.sym, name: s.name, type: 'stock' }; }); setStockSearch(s.sym + ' — ' + s.name); setShowSugg(false); }}
+                          className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-700 border-b border-gray-700 last:border-0"
+                        >
+                          <span className="font-mono font-bold text-white text-sm w-24 flex-shrink-0">{s.sym}</span>
+                          <span className="text-gray-400 text-xs">{s.name}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             )}
 
-            {/* Crypto select */}
             {tab === 'crypto' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT CRYPTO</label>
-                <select value={form.symbol} onChange={e => { const c = CRYPTO_LIST.find(x => x.id === e.target.value); setForm({ ...form, symbol: c.id, name: c.name + ' (' + c.sym + ')', type: 'crypto' }); }}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400">
+                <select value={form.symbol}
+                  onChange={function(e) {
+                    var c = CRYPTO_LIST.find(function(x) { return x.id === e.target.value; });
+                    if (c) setForm(function(f) { return { ...f, symbol: c.id, name: c.name + ' (' + c.sym + ')', type: 'crypto' }; });
+                  }}
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
+                >
                   <option value="">-- Select Crypto --</option>
-                  {CRYPTO_LIST.map(c => <option key={c.id} value={c.id}>{c.sym} — {c.name}</option>)}
+                  {CRYPTO_LIST.map(function(c) { return <option key={c.id} value={c.id}>{c.sym} — {c.name}</option>; })}
                 </select>
               </div>
             )}
 
-            {/* Commodity select */}
             {tab === 'commodities' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT COMMODITY</label>
-                <select value={form.symbol} onChange={e => { const c = COMMODITY_LIST.find(x => x.id === e.target.value); setForm({ ...form, symbol: c.id, name: c.name, type: 'commodity' }); }}
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400">
+                <select value={form.symbol}
+                  onChange={function(e) {
+                    var c = COMMODITY_LIST.find(function(x) { return x.id === e.target.value; });
+                    if (c) setForm(function(f) { return { ...f, symbol: c.id, name: c.name, type: 'commodity' }; });
+                  }}
+                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
+                >
                   <option value="">-- Select Commodity --</option>
-                  {COMMODITY_LIST.map(c => <option key={c.id} value={c.id}>{c.name} ({c.unit})</option>)}
+                  {COMMODITY_LIST.map(function(c) { return <option key={c.id} value={c.id}>{c.name} ({c.unit})</option>; })}
                 </select>
               </div>
             )}
@@ -387,14 +442,14 @@ export default function Portfolio() {
             <div>
               <label className="text-gray-400 text-xs font-mono mb-1 block">QUANTITY</label>
               <input type="number" placeholder="e.g. 10" value={form.quantity}
-                onChange={e => setForm({ ...form, quantity: e.target.value })}
+                onChange={function(e) { setForm(function(f) { return { ...f, quantity: e.target.value }; }); }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
               />
             </div>
             <div>
               <label className="text-gray-400 text-xs font-mono mb-1 block">BUY PRICE (Rs.)</label>
               <input type="number" placeholder="e.g. 2800" value={form.buyPrice}
-                onChange={e => setForm({ ...form, buyPrice: e.target.value })}
+                onChange={function(e) { setForm(function(f) { return { ...f, buyPrice: e.target.value }; }); }}
                 className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
               />
             </div>
@@ -403,15 +458,18 @@ export default function Portfolio() {
                 className="bg-green-400 text-gray-950 font-bold px-6 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors disabled:opacity-50">
                 {loading ? 'Adding...' : 'Add to Portfolio'}
               </button>
-              <button onClick={() => setShowForm(false)} className="text-gray-500 text-sm px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">Cancel</button>
+              <button onClick={function() { setShowForm(false); }}
+                className="text-gray-500 text-sm px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {tab === 'stocks'     && renderHoldingsTable(stockHoldings)}
-      {tab === 'crypto'     && renderHoldingsTable(cryptoHoldings)}
-      {tab === 'commodities'&& renderHoldingsTable(commHoldings)}
+      {tab === 'stocks'      && renderTable(stockHoldings)}
+      {tab === 'crypto'      && renderTable(cryptoHoldings)}
+      {tab === 'commodities' && renderTable(commHoldings)}
     </div>
   );
 }
