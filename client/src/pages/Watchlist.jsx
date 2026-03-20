@@ -24,7 +24,65 @@ export default function Watchlist() {
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
-  // ── Guest gate ────────────────────────────────────────────────
+  // ── ALL HOOKS MUST BE BEFORE ANY RETURN ──────────────────────
+  useEffect(function() {
+    if (!token) return;
+    var loadWatchlist = async function() {
+      try {
+        var res = await axios.get(BASE + '/watchlist', {
+          headers: { Authorization: 'Bearer ' + token }
+        });
+        setWatchlist(res.data);
+        if (res.data.length > 0) fetchPrices(res.data);
+      } catch (err) {
+        console.log('Watchlist fetch error:', err);
+      }
+    };
+    loadWatchlist();
+  // eslint-disable-next-line
+  }, []);
+
+  var fetchPrices = async function(symbols) {
+    setPriceLoading(true);
+    try {
+      var res = await axios.post(BASE + '/market/quotes', { symbols });
+      var priceMap = {};
+      res.data.forEach(function(d) { priceMap[d.symbol] = d; });
+      setPrices(priceMap);
+    } catch (err) {
+      console.log('Price fetch error:', err);
+    }
+    setPriceLoading(false);
+  };
+
+  var addStock = async function(symbol) {
+    setLoading(true);
+    try {
+      var res = await axios.post(BASE + '/watchlist/add',
+        { symbol },
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      setWatchlist(res.data);
+      fetchPrices(res.data);
+    } catch (err) {
+      console.log('Add error:', err);
+    }
+    setLoading(false);
+  };
+
+  var removeStock = async function(symbol) {
+    try {
+      var res = await axios.post(BASE + '/watchlist/remove',
+        { symbol },
+        { headers: { Authorization: 'Bearer ' + token } }
+      );
+      setWatchlist(res.data);
+    } catch (err) {
+      console.log('Remove error:', err);
+    }
+  };
+
+  // ── GUEST GATE — after all hooks ──────────────────────────────
   if (!token) {
     return (
       <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
@@ -37,16 +95,16 @@ export default function Watchlist() {
             Create a free account to save your favourite stocks and track them in one place.
           </p>
           <button
-            onClick={() => navigate('/login')}
+            onClick={function() { navigate('/login'); }}
             className="w-full bg-green-400 text-gray-950 font-bold py-3 rounded-lg text-sm hover:bg-green-300 transition-colors mb-3"
           >
             Login or Sign Up — It's Free
           </button>
           <button
-            onClick={() => navigate(-1)}
+            onClick={function() { navigate(-1); }}
             className="w-full text-gray-500 text-sm py-2 rounded-lg border border-gray-800 hover:border-gray-600 hover:text-gray-300 transition-colors font-mono"
           >
-            ← Go back
+            Go back
           </button>
           <p className="text-gray-600 text-xs mt-4">
             Markets, News, Crypto and Tools are free without an account.
@@ -56,67 +114,10 @@ export default function Watchlist() {
     );
   }
 
-  // ── Load watchlist ────────────────────────────────────────────
-  useEffect(() => {
-    const loadWatchlist = async () => {
-      try {
-        const { data } = await axios.get(BASE + '/watchlist', {
-          headers: { Authorization: 'Bearer ' + token }
-        });
-        setWatchlist(data);
-        if (data.length > 0) fetchPrices(data);
-      } catch (err) {
-        console.log('Watchlist fetch error:', err);
-      }
-    };
-    loadWatchlist();
-  // eslint-disable-next-line
-  }, []);
-
-  const fetchPrices = async (symbols) => {
-    setPriceLoading(true);
-    try {
-      const { data } = await axios.post(BASE + '/market/quotes', { symbols });
-      const priceMap = {};
-      data.forEach(d => { priceMap[d.symbol] = d; });
-      setPrices(priceMap);
-    } catch (err) {
-      console.log('Price fetch error:', err);
-    }
-    setPriceLoading(false);
-  };
-
-  const addStock = async (symbol) => {
-    setLoading(true);
-    try {
-      const { data } = await axios.post(BASE + '/watchlist/add',
-        { symbol },
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      setWatchlist(data);
-      fetchPrices(data);
-    } catch (err) {
-      console.log('Add error:', err);
-    }
-    setLoading(false);
-  };
-
-  const removeStock = async (symbol) => {
-    try {
-      const { data } = await axios.post(BASE + '/watchlist/remove',
-        { symbol },
-        { headers: { Authorization: 'Bearer ' + token } }
-      );
-      setWatchlist(data);
-    } catch (err) {
-      console.log('Remove error:', err);
-    }
-  };
-
-  const filtered = DEFAULT_STOCKS.filter(s =>
-    s.sym.toLowerCase().includes(search.toLowerCase()) ||
-    s.name.toLowerCase().includes(search.toLowerCase())
-  );
+  var filtered = DEFAULT_STOCKS.filter(function(s) {
+    return s.sym.toLowerCase().includes(search.toLowerCase()) ||
+           s.name.toLowerCase().includes(search.toLowerCase());
+  });
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
@@ -127,10 +128,10 @@ export default function Watchlist() {
           <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
             <h2 className="text-white font-semibold">Watching</h2>
             <button
-              onClick={() => fetchPrices(watchlist)}
+              onClick={function() { fetchPrices(watchlist); }}
               className="text-green-400 text-xs font-mono hover:underline"
             >
-              {priceLoading ? 'Refreshing...' : '↻ Refresh Prices'}
+              {priceLoading ? 'Refreshing...' : 'Refresh Prices'}
             </button>
           </div>
           <table className="w-full">
@@ -143,8 +144,8 @@ export default function Watchlist() {
               </tr>
             </thead>
             <tbody>
-              {watchlist.map(sym => {
-                const p = prices[sym];
+              {watchlist.map(function(sym) {
+                var p = prices[sym];
                 return (
                   <tr key={sym} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-4 font-mono font-bold text-white">{sym}</td>
@@ -158,7 +159,7 @@ export default function Watchlist() {
                     </td>
                     <td className="px-5 py-4 text-right">
                       <button
-                        onClick={() => removeStock(sym)}
+                        onClick={function() { removeStock(sym); }}
                         className="text-red-400 text-xs hover:text-red-300 font-mono"
                       >
                         Remove
@@ -179,30 +180,32 @@ export default function Watchlist() {
             type="text"
             placeholder="Search by name or symbol..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={function(e) { setSearch(e.target.value); }}
             className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white text-sm w-full outline-none focus:border-green-400 transition-colors"
           />
         </div>
         <div className="divide-y divide-gray-800">
-          {filtered.map(stock => (
-            <div key={stock.sym} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors">
-              <div>
-                <span className="font-mono font-bold text-white text-sm">{stock.sym}</span>
-                <span className="text-gray-400 text-xs ml-3">{stock.name}</span>
+          {filtered.map(function(stock) {
+            return (
+              <div key={stock.sym} className="px-5 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors">
+                <div>
+                  <span className="font-mono font-bold text-white text-sm">{stock.sym}</span>
+                  <span className="text-gray-400 text-xs ml-3">{stock.name}</span>
+                </div>
+                {watchlist.includes(stock.sym) ? (
+                  <span className="text-green-400 text-xs font-mono">Added</span>
+                ) : (
+                  <button
+                    onClick={function() { addStock(stock.sym); }}
+                    disabled={loading}
+                    className="text-xs bg-green-400/10 text-green-400 border border-green-400/30 px-3 py-1 rounded font-mono hover:bg-green-400/20 transition-colors"
+                  >
+                    + Add
+                  </button>
+                )}
               </div>
-              {watchlist.includes(stock.sym) ? (
-                <span className="text-green-400 text-xs font-mono">✓ Added</span>
-              ) : (
-                <button
-                  onClick={() => addStock(stock.sym)}
-                  disabled={loading}
-                  className="text-xs bg-green-400/10 text-green-400 border border-green-400/30 px-3 py-1 rounded font-mono hover:bg-green-400/20 transition-colors"
-                >
-                  + Add
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
