@@ -4,17 +4,9 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 
 var API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-function timeAgo(iso) {
-  var diff = Math.floor((Date.now() - new Date(iso)) / 60000);
-  if (diff < 1) return 'just now';
-  if (diff < 60) return diff + 'm ago';
-  return Math.floor(diff / 60) + 'h ago';
-}
-
 export default function Markets() {
   var [gainers,     setGainers]     = useState([]);
   var [losers,      setLosers]      = useState([]);
-  var [news,        setNews]        = useState([]);
   var [commodities, setCommodities] = useState(null);
   var [status,      setStatus]      = useState(null);
   var [chartData,   setChartData]   = useState([]);
@@ -30,7 +22,6 @@ export default function Markets() {
   var socketRef = useRef(null);
 
   useEffect(function() {
-    // Dynamically import socket.io to avoid init issues
     var io = require('socket.io-client');
     var socket = io(API, {
       transports: ['polling', 'websocket'],
@@ -40,12 +31,7 @@ export default function Markets() {
     });
     socketRef.current = socket;
 
-    socket.on('connect', function() {
-      console.log('Socket connected:', socket.id);
-    });
-
     socket.on('price-update', function(d) {
-      console.log('Price update received - NIFTY:', d.NIFTY);
       if (d.NIFTY)      setNifty(Number(d.NIFTY));
       if (d.SENSEX)     setSensex(Number(d.SENSEX));
       if (d.BANK_NIFTY) setBankNifty(Number(d.BANK_NIFTY));
@@ -56,31 +42,20 @@ export default function Markets() {
       if (d.NIFTY_IT_CHANGE   !== undefined) setITChg(Number(d.NIFTY_IT_CHANGE));
     });
 
-    socket.on('disconnect', function() {
-      console.log('Socket disconnected');
-    });
-
-    socket.on('connect_error', function(err) {
-      console.log('Socket error:', err.message);
-    });
-
-    // Load all REST data
     var load = async function() {
       var BASE = API + '/api/market';
       var results = await Promise.allSettled([
         axios.get(BASE + '/gainers'),
         axios.get(BASE + '/losers'),
-        axios.get(BASE + '/news'),
         axios.get(BASE + '/commodities'),
         axios.get(BASE + '/status'),
         axios.get(BASE + '/chart/NIFTY%2050'),
       ]);
       if (results[0].status === 'fulfilled') setGainers(results[0].value.data);
       if (results[1].status === 'fulfilled') setLosers(results[1].value.data);
-      if (results[2].status === 'fulfilled') setNews(results[2].value.data);
-      if (results[3].status === 'fulfilled') setCommodities(results[3].value.data);
-      if (results[4].status === 'fulfilled') setStatus(results[4].value.data);
-      if (results[5].status === 'fulfilled') setChartData(results[5].value.data);
+      if (results[2].status === 'fulfilled') setCommodities(results[2].value.data);
+      if (results[3].status === 'fulfilled') setStatus(results[3].value.data);
+      if (results[4].status === 'fulfilled') setChartData(results[4].value.data);
     };
 
     load();
@@ -97,23 +72,16 @@ export default function Markets() {
   var IndexCard = function(props) {
     var change = Number(props.change);
     var value  = Number(props.value);
-    var absoluteChange = value > 0 ? (value * change / (100 + change)).toFixed(2) : 0;
-
+    var abs = value > 0 ? (value * Math.abs(change) / 100).toFixed(2) : 0;
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
         <div className="text-gray-400 text-xs font-mono mb-1">{props.label} - LIVE</div>
         <div className="text-white text-xl font-bold font-mono">
-          {value > 0
-            ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 })
-            : 'Loading...'}
+          {value > 0 ? value.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : 'Loading...'}
         </div>
         <div className={'text-xs font-mono mt-1 ' + (change >= 0 ? 'text-green-400' : 'text-red-400')}>
           {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-          {value > 0 && (
-            <span className="ml-2 text-gray-400">
-              ({change >= 0 ? '+' : ''}{Number(absoluteChange).toLocaleString('en-IN', { maximumFractionDigits: 2 })} )
-            </span>
-          )}
+          {value > 0 && <span className="ml-2 text-gray-500">({change >= 0 ? '+' : '-'}Rs.{abs})</span>}
         </div>
       </div>
     );
@@ -146,17 +114,9 @@ export default function Markets() {
           <div className="text-white font-semibold mb-3 text-sm">NIFTY 50 - Intraday Chart</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={chartData}>
-              <XAxis
-                dataKey="time"
-                tick={{ fill: '#6b7280', fontSize: 10 }}
-                interval={10}
-              />
-              <YAxis
-                domain={['auto', 'auto']}
-                tick={{ fill: '#6b7280', fontSize: 10 }}
-                width={75}
-                tickFormatter={function(v) { return v.toLocaleString('en-IN'); }}
-              />
+              <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 10 }} interval={10} />
+              <YAxis domain={['auto', 'auto']} tick={{ fill: '#6b7280', fontSize: 10 }} width={75}
+                tickFormatter={function(v) { return v.toLocaleString('en-IN'); }} />
               <Tooltip
                 contentStyle={{ background: '#111419', border: '1px solid #374151', borderRadius: 8 }}
                 labelStyle={{ color: '#9ca3af', fontSize: 11 }}
@@ -171,14 +131,10 @@ export default function Markets() {
       <div className="flex gap-1 mb-4 border-b border-gray-800">
         {tabs.map(function(t) {
           return (
-            <button
-              key={t}
-              onClick={function() { setActiveTab(t); }}
+            <button key={t} onClick={function() { setActiveTab(t); }}
               className={
                 'px-4 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
-                (activeTab === t
-                  ? 'text-green-400 border-green-400'
-                  : 'text-gray-500 border-transparent hover:text-white')
+                (activeTab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')
               }
             >{t}</button>
           );
@@ -187,7 +143,6 @@ export default function Markets() {
 
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
               <span className="text-white font-semibold text-sm">Top Gainers</span>
@@ -237,7 +192,6 @@ export default function Markets() {
               })
             )}
           </div>
-
         </div>
       )}
 
@@ -292,23 +246,6 @@ export default function Markets() {
               })}
             </tbody>
           </table>
-        </div>
-      )}
-
-      {activeTab === 'news' && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          {news.length === 0 ? (
-            <div className="px-5 py-8 text-gray-500 text-xs text-center font-mono">Loading news...</div>
-          ) : (
-            news.map(function(n, i) {
-              return (
-                <div key={i} className="px-5 py-4 border-b border-gray-800 last:border-0 hover:bg-gray-800/30 cursor-pointer transition-colors">
-                  <div className="text-white text-sm font-medium mb-1">{n.title}</div>
-                  <div className="text-gray-500 text-xs font-mono">{n.source} - {timeAgo(n.time)}</div>
-                </div>
-              );
-            })
-          )}
         </div>
       )}
 

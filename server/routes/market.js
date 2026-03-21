@@ -2,7 +2,7 @@ const express = require('express');
 const axios   = require('axios');
 const router  = express.Router();
 
-// ── IN-MEMORY CACHE ───────────────────────────────────────────────
+// ── CACHE ─────────────────────────────────────────────────────────
 const cache = {};
 const getCached = async function(key, fn, ttl) {
   const now = Date.now();
@@ -12,7 +12,7 @@ const getCached = async function(key, fn, ttl) {
   return data;
 };
 
-// ── NSE COOKIE SESSION ────────────────────────────────────────────
+// ── NSE COOKIE ────────────────────────────────────────────────────
 let nseCookie  = '';
 let cookieTime = 0;
 
@@ -32,7 +32,7 @@ const getNSECookie = async function() {
       cookieTime = Date.now();
     }
   } catch (e) {
-    console.log('NSE cookie error:', e.message);
+    // Suppress noisy cookie errors
   }
   return nseCookie;
 };
@@ -109,16 +109,7 @@ router.get('/losers', async function(req, res) {
   } catch (err) { res.json(getFallbackLosers()); }
 });
 
-// ── DEBUG ─────────────────────────────────────────────────────────
-router.get('/debug-gainers', async function(req, res) {
-  try {
-    const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
-    const first  = result.data.NIFTY && result.data.NIFTY.data ? result.data.NIFTY.data[0] : {};
-    res.json({ keys: Object.keys(first), sample: first });
-  } catch (err) { res.json({ error: err.message }); }
-});
-
-// ── STOCK QUOTE ───────────────────────────────────────────────────
+// ── SINGLE QUOTE ──────────────────────────────────────────────────
 router.get('/quote/:symbol', async function(req, res) {
   try {
     const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + req.params.symbol);
@@ -127,7 +118,7 @@ router.get('/quote/:symbol', async function(req, res) {
   } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
-// ── MULTIPLE QUOTES ───────────────────────────────────────────────
+// ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols;
@@ -136,7 +127,9 @@ router.post('/quotes', async function(req, res) {
         const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + symbol);
         const p = result.data.priceInfo;
         return { symbol, price: p.lastPrice.toFixed(2), change: p.change.toFixed(2), changePct: p.pChange.toFixed(2) + '%' };
-      } catch (e) { return { symbol, error: true, price: '0', change: '0', changePct: '0%' }; }
+      } catch (e) {
+        return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+      }
     }));
     res.json(results);
   } catch (err) { res.status(500).json({ error: 'Failed' }); }
@@ -160,7 +153,7 @@ router.get('/chart/:symbol', async function(req, res) {
   }
 });
 
-// ── CRYPTO ────────────────────────────────────────────────────────
+// ── CRYPTO (CoinGecko — specific IDs) ────────────────────────────
 router.get('/crypto', async function(req, res) {
   try {
     const data = await getCached('crypto', async function() {
@@ -200,7 +193,7 @@ router.get('/crypto', async function(req, res) {
   }
 });
 
-// ── MUTUAL FUNDS ──────────────────────────────────────────────────
+// ── MUTUAL FUNDS (mfapi.in → AMFI) ───────────────────────────────
 router.get('/mutualfunds', async function(req, res) {
   try {
     const data = await getCached('mf', async function() {
@@ -213,10 +206,10 @@ router.get('/mutualfunds', async function(req, res) {
         { code: '119533', name: 'ICICI Pru Bluechip Fund'     },
       ];
       return await Promise.all(funds.map(async function(f) {
-        const result  = await axios.get('https://api.mfapi.in/mf/' + f.code, { timeout: 8000 });
-        const latest  = result.data.data && result.data.data[0];
-        const prev    = result.data.data && result.data.data[1];
-        const change  = latest && prev
+        const result = await axios.get('https://api.mfapi.in/mf/' + f.code, { timeout: 8000 });
+        const latest = result.data.data && result.data.data[0];
+        const prev   = result.data.data && result.data.data[1];
+        const change = latest && prev
           ? ((parseFloat(latest.nav) - parseFloat(prev.nav)) / parseFloat(prev.nav) * 100).toFixed(2)
           : '0.00';
         return {
@@ -250,7 +243,7 @@ router.get('/commodities', async function(req, res) {
   });
 });
 
-// ── NEWS (paginated, live, date-aware) ────────────────────────────
+// ── NEWS (fallback only — actual news served from browser via NewsAPI) ──
 router.get('/news', async function(req, res) {
   try {
     const KEY = process.env.NEWS_API_KEY;
@@ -268,19 +261,11 @@ router.get('/news', async function(req, res) {
       return (result.data.articles || [])
         .filter(function(a) { return a.title && a.title !== '[Removed]' && a.url; })
         .map(function(a) {
-          return {
-            title:       a.title,
-            source:      a.source.name,
-            url:         a.url,
-            image:       a.urlToImage,
-            time:        a.publishedAt,
-            description: a.description,
-          };
+          return { title: a.title, source: a.source.name, url: a.url, image: a.urlToImage, time: a.publishedAt, description: a.description };
         });
     }, 600);
     res.json(data);
   } catch (err) {
-    console.log('News fallback:', err.message);
     res.json(getFallbackNews());
   }
 });
@@ -301,7 +286,7 @@ router.get('/status', function(req, res) {
   });
 });
 
-// ── FALLBACK DATA ─────────────────────────────────────────────────
+// ── FALLBACKS ─────────────────────────────────────────────────────
 function getFallbackGainers() {
   return [
     { symbol: 'ETERNAL',    ltp: 234.55,  netPrice: 5.63, tradedQuantity: 49176321 },
@@ -340,21 +325,21 @@ function getFallbackCrypto() {
 
 function getFallbackNews() {
   return [
-    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',            source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 30  * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.'     },
-    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18540 Cr',           source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.' },
-    { title: 'Nifty eyes 23500 resistance; FII inflows of Rs.4200 Cr',          source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 90  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.'   },
-    { title: 'Bitcoin surges past $85K on spot ETF inflow uptick',              source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.'      },
-    { title: 'SEBI tightens F and O rules; new lot sizes from April',           source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 150 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.'  },
-    { title: 'Gold hits Rs.71240 per 10g on safe-haven demand',                source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.'        },
-    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',     source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 210 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.'   },
-    { title: 'Sensex gains 400 pts; IT stocks lead rally',                     source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Broad market rally on positive global cues.'        },
-    { title: 'Adani Ports Q3: Net profit rises 19% to Rs.2100 Cr',             source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 270 * 60000).toISOString(), description: 'Port volumes grow steadily in Q3 FY25.'            },
-    { title: 'SBI reports record quarterly profit of Rs.16891 Cr',             source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'State Bank of India beats analyst estimates.'        },
-    { title: 'Crude oil falls to $78 as US inventories rise',                  source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 330 * 60000).toISOString(), description: 'Oil prices decline on rising US crude stocks.'       },
-    { title: 'HDFC Bank Q3: NII up 24%, deposits grow 26%',                   source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 360 * 60000).toISOString(), description: 'HDFC Bank posts steady growth in Q3 FY25.'          },
-    { title: 'Infosys raises FY25 revenue guidance to 4.5-5%',                source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 390 * 60000).toISOString(), description: 'IT major upgrades outlook on deal momentum.'         },
-    { title: 'Hyundai India IPO oversubscribed 2.4x on strong retail demand', source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 420 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.'       },
-    { title: 'NSE introduces new circuit breaker rules for F&O segment',       source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 450 * 60000).toISOString(), description: 'New risk management framework for derivatives.'      },
+    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',         source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 30  * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.'     },
+    { title: 'Reliance Q3 net profit surges 18% YoY to Rs.18540 Cr',        source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 60  * 60000).toISOString(), description: 'Reliance Industries posts strong quarterly results.' },
+    { title: 'Nifty eyes 23500 resistance; FII inflows of Rs.4200 Cr',       source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 90  * 60000).toISOString(), description: 'Foreign institutional investors continue buying.'   },
+    { title: 'Bitcoin surges past $85K on spot ETF inflow uptick',           source: 'CoinDesk India',    url: '#', image: null, time: new Date(Date.now() - 120 * 60000).toISOString(), description: 'Crypto markets rally on institutional demand.'      },
+    { title: 'SEBI tightens F and O rules; new lot sizes from April',        source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 150 * 60000).toISOString(), description: 'Market regulator announces new derivatives rules.'  },
+    { title: 'Gold hits Rs.71240 per 10g on safe-haven demand',             source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 180 * 60000).toISOString(), description: 'Precious metals gain on global uncertainty.'        },
+    { title: 'Tata Motors Q3 results: PAT up 22%, revenue beats estimates',  source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 210 * 60000).toISOString(), description: 'Tata Motors posts better than expected earnings.'   },
+    { title: 'Sensex gains 400 pts; IT stocks lead broad market rally',      source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 240 * 60000).toISOString(), description: 'Broad market rally on positive global cues.'        },
+    { title: 'Adani Ports Q3: Net profit rises 19% to Rs.2100 Cr',          source: 'Moneycontrol',      url: '#', image: null, time: new Date(Date.now() - 270 * 60000).toISOString(), description: 'Port volumes grow steadily in Q3 FY25.'            },
+    { title: 'SBI reports record quarterly profit of Rs.16891 Cr',          source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 300 * 60000).toISOString(), description: 'State Bank of India beats analyst estimates.'        },
+    { title: 'Crude oil falls to $78 as US inventories rise sharply',       source: 'Reuters India',     url: '#', image: null, time: new Date(Date.now() - 330 * 60000).toISOString(), description: 'Oil prices decline on rising US crude stocks.'       },
+    { title: 'HDFC Bank Q3: NII up 24%, deposits grow 26%',                source: 'NDTV Profit',       url: '#', image: null, time: new Date(Date.now() - 360 * 60000).toISOString(), description: 'HDFC Bank posts steady growth in Q3 FY25.'          },
+    { title: 'Infosys raises FY25 revenue guidance to 4.5-5%',             source: 'Livemint',          url: '#', image: null, time: new Date(Date.now() - 390 * 60000).toISOString(), description: 'IT major upgrades outlook on deal momentum.'         },
+    { title: 'Hyundai India IPO oversubscribed 2.4x on retail demand',     source: 'Mint',              url: '#', image: null, time: new Date(Date.now() - 420 * 60000).toISOString(), description: 'Strong investor interest in Hyundai listing.'       },
+    { title: 'NSE introduces new circuit breaker rules for F&O segment',   source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 450 * 60000).toISOString(), description: 'New risk management framework for derivatives.'      },
   ];
 }
 
