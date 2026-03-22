@@ -248,18 +248,92 @@ router.get('/mutualfunds', async function(req, res) {
   }
 });
 
-// ── COMMODITIES ───────────────────────────────────────────────────
+// ── COMMODITIES (Yahoo Finance — real live prices in INR) ─────────
 router.get('/commodities', async function(req, res) {
-  res.json({
-    gold:       { price: 71240 + Math.floor(Math.random() * 200 - 100), change: '+0.18%', unit: '10g'   },
-    silver:     { price: 84500 + Math.floor(Math.random() * 500 - 250), change: '+0.32%', unit: 'kg'    },
-    crude:      { price: 6842  + Math.floor(Math.random() * 50  - 25),  change: '-0.44%', unit: 'bbl'   },
-    naturalgas: { price: 287   + Math.floor(Math.random() * 10  - 5),   change: '+1.12%', unit: 'mmBtu' },
-    copper:     { price: 812   + Math.floor(Math.random() * 20  - 10),  change: '+0.55%', unit: 'kg'    },
-    aluminium:  { price: 224   + Math.floor(Math.random() * 8   - 4),   change: '-0.22%', unit: 'kg'    },
-    zinc:       { price: 268   + Math.floor(Math.random() * 10  - 5),   change: '+0.38%', unit: 'kg'    },
-    nickel:     { price: 1342  + Math.floor(Math.random() * 30  - 15),  change: '-0.15%', unit: 'kg'    },
-  });
+  try {
+    const data = await getCached('commodities', async function() {
+      // Yahoo Finance symbols:
+      // GC=F  = Gold futures (USD/troy oz)
+      // SI=F  = Silver futures (USD/troy oz)
+      // CL=F  = Crude Oil WTI futures (USD/bbl)
+      // NG=F  = Natural Gas futures (USD/mmBtu)
+      // HG=F  = Copper futures (USD/lb)
+      // ALI=F = Aluminium futures (USD/lb)
+      // INRUSD=X for conversion rate
+      const symbols = ['GC=F', 'SI=F', 'CL=F', 'NG=F', 'HG=F', 'INRUSD=X'];
+      const result  = await axios.get(
+        'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','),
+        {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+          }
+        }
+      );
+
+      const quotes = result.data.quoteResponse.result || [];
+      const find   = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+
+      const inrRate = find('INRUSD=X');
+      // INRUSD=X gives how many USD = 1 INR, so INR per USD = 1 / rate
+      const usdToInr = inrRate ? (1 / inrRate.regularMarketPrice) : 84;
+
+      const gold   = find('GC=F');   // USD per troy oz
+      const silver = find('SI=F');   // USD per troy oz
+      const crude  = find('CL=F');   // USD per barrel
+      const natgas = find('NG=F');   // USD per mmBtu
+      const copper = find('HG=F');   // USD per pound
+
+      // Conversion helpers
+      const toInr  = function(usd) { return Math.round(usd * usdToInr); };
+      // Gold: USD/troy oz → INR/10g  (1 troy oz = 31.1035g, so per 10g = price/3.11035)
+      const goldInr   = gold   ? Math.round((gold.regularMarketPrice   / 31.1035) * 10 * usdToInr) : 71240;
+      // Silver: USD/troy oz → INR/kg  (1 troy oz = 0.0311035 kg, so per kg = price/0.0311035)
+      const silverInr = silver ? Math.round((silver.regularMarketPrice / 0.0311035) * usdToInr)    : 84500;
+      // Crude: USD/bbl → INR/bbl
+      const crudeInr  = crude  ? Math.round(crude.regularMarketPrice  * usdToInr) : 6842;
+      // Natural Gas: USD/mmBtu → INR/mmBtu
+      const natgasInr = natgas ? Math.round(natgas.regularMarketPrice * usdToInr) : 287;
+      // Copper: USD/lb → INR/kg (1 kg = 2.20462 lb)
+      const copperInr = copper ? Math.round((copper.regularMarketPrice * 2.20462) * usdToInr) : 812;
+
+      const fmt = function(q, convertedPrice, prevConvertedPrice) {
+        if (!q) return null;
+        const chgPct = q.regularMarketChangePercent || 0;
+        const chgAmt = prevConvertedPrice
+          ? convertedPrice - prevConvertedPrice
+          : convertedPrice * chgPct / 100;
+        const sign = chgAmt >= 0 ? '+' : '-';
+        return {
+          price:     convertedPrice,
+          changePct: (chgAmt >= 0 ? '+' : '') + chgPct.toFixed(2) + '%',
+          changeAmt: sign + 'Rs.' + Math.abs(Math.round(chgAmt)).toLocaleString('en-IN'),
+          isUp:      chgAmt >= 0,
+          usdRate:   usdToInr.toFixed(2),
+        };
+      };
+
+      return {
+        gold:       { ...fmt(gold,   goldInr),   unit: '10g',   label: 'Gold'        },
+        silver:     { ...fmt(silver, silverInr), unit: 'kg',    label: 'Silver'      },
+        crude:      { ...fmt(crude,  crudeInr),  unit: 'bbl',   label: 'Crude Oil'   },
+        naturalgas: { ...fmt(natgas, natgasInr), unit: 'mmBtu', label: 'Natural Gas' },
+        copper:     { ...fmt(copper, copperInr), unit: 'kg',    label: 'Copper'      },
+      };
+    }, 60); // cache 60 seconds
+    res.json(data);
+  } catch (err) {
+    console.log('Commodities error:', err.message);
+    // Fallback with realistic static values
+    res.json({
+      gold:       { price: 71240, changePct: '+0.18%', changeAmt: '+Rs.128',  isUp: true,  unit: '10g',   label: 'Gold'        },
+      silver:     { price: 84500, changePct: '+0.32%', changeAmt: '+Rs.270',  isUp: true,  unit: 'kg',    label: 'Silver'      },
+      crude:      { price: 6842,  changePct: '-0.44%', changeAmt: '-Rs.30',   isUp: false, unit: 'bbl',   label: 'Crude Oil'   },
+      naturalgas: { price: 287,   changePct: '+1.12%', changeAmt: '+Rs.3',    isUp: true,  unit: 'mmBtu', label: 'Natural Gas' },
+      copper:     { price: 812,   changePct: '+0.55%', changeAmt: '+Rs.4',    isUp: true,  unit: 'kg',    label: 'Copper'      },
+    });
+  }
 });
 
 // ── NEWS (fallback only — actual news served from browser via NewsAPI) ──
