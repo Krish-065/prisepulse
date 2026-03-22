@@ -17,22 +17,27 @@ let nseCookie  = '';
 let cookieTime = 0;
 
 const getNSECookie = async function() {
-  if (nseCookie && Date.now() - cookieTime < 25 * 60 * 1000) return nseCookie;
+  if (nseCookie && Date.now() - cookieTime < 10 * 60 * 1000) return nseCookie;
   try {
     const res = await axios.get('https://www.nseindia.com', {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        'Accept':     'text/html,application/xhtml+xml',
+        'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection':      'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
       },
-      timeout: 8000
+      timeout: 10000
     });
     const cookies = res.headers['set-cookie'];
     if (cookies) {
       nseCookie  = cookies.map(function(c) { return c.split(';')[0]; }).join('; ');
       cookieTime = Date.now();
+      console.log('[NSE] Cookie refreshed successfully');
     }
   } catch (e) {
-    // Suppress noisy cookie errors
+    console.log('[NSE] Cookie refresh failed:', e.message);
   }
   return nseCookie;
 };
@@ -119,66 +124,46 @@ router.get('/quote/:symbol', async function(req, res) {
 });
 
 // ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
-// ── MULTIPLE QUOTES (Watchlist / Portfolio) — Alpha Vantage ──────
-// Alpha Vantage: designed for server-side, never blocks server IPs
-// Free tier: 25 req/day — we cache each symbol for 5 min to stay safe
-// NSE symbols: append .BSE (BSE) or use direct symbol (Alpha Vantage supports both)
-const quoteCache = {};
-
+// ── MULTIPLE QUOTES (Watchlist / Portfolio) — NSE with cookie ─────
+// Uses same NSE cookie approach as the working broadcast in index.js
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols || [];
     if (symbols.length === 0) return res.json([]);
 
-    const KEY = process.env.ALPHA_VANTAGE_KEY;
-    const now = Date.now();
-    const CACHE_MS = 5 * 60 * 1000; // 5 minutes per symbol
-
-    const results = await Promise.all(symbols.map(async function(symbol) {
-      // Serve from cache if fresh
-      if (quoteCache[symbol] && now - quoteCache[symbol].time < CACHE_MS) {
-        return quoteCache[symbol].data;
-      }
+    // Fetch quotes one at a time with delay to avoid NSE rate limiting
+    const results = [];
+    for (var i = 0; i < symbols.length; i++) {
+      const symbol = symbols[i];
       try {
-        // Alpha Vantage: BSE/NSE symbol format e.g. RELIANCE.BSE
-        const result = await axios.get(
-          'https://www.alphavantage.co/query' +
-          '?function=GLOBAL_QUOTE' +
-          '&symbol=' + symbol + '.BSE' +
-          '&apikey=' + KEY,
-          { timeout: 10000, headers: { 'Accept': 'application/json' } }
+        const result = await nseGet(
+          'https://www.nseindia.com/api/quote-equity?symbol=' + encodeURIComponent(symbol)
         );
-        const q = result.data['Global Quote'];
-        if (!q || !q['05. price']) throw new Error('No data from Alpha Vantage');
-
-        const price     = parseFloat(q['05. price']);
-        const change    = parseFloat(q['09. change']);
-        const changePct = parseFloat(q['10. change percent'].replace('%', ''));
-
-        const data = {
+        const p = result.data.priceInfo;
+        if (!p || !p.lastPrice) throw new Error('No price data');
+        results.push({
           symbol,
-          price:     price.toFixed(2),
-          change:    change.toFixed(2),
-          changePct: changePct.toFixed(2) + '%',
+          price:     p.lastPrice.toFixed(2),
+          change:    (p.change || 0).toFixed(2),
+          changePct: (p.pChange || 0).toFixed(2) + '%',
           error:     false,
-        };
-        quoteCache[symbol] = { data, time: now };
-        console.log('[Quote]', symbol, '=', price);
-        return data;
+        });
+        console.log('[Quote]', symbol, '=', p.lastPrice);
       } catch (e) {
         console.log('[Quote] Failed', symbol, ':', e.message);
-        // Return stale cache if available, better than error
-        if (quoteCache[symbol]) return quoteCache[symbol].data;
-        return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+        results.push({ symbol, error: true, price: '0', change: '0', changePct: '0%' });
       }
-    }));
-
+      // Small delay between requests to avoid NSE blocking
+      if (i < symbols.length - 1) {
+        await new Promise(function(r) { setTimeout(r, 500); });
+      }
+    }
     res.json(results);
   } catch (err) {
     console.log('[Quotes] Error:', err.message);
-    res.json((req.body.symbols || []).map(s => ({
-      symbol: s, error: true, price: '0', change: '0', changePct: '0%'
-    })));
+    res.json((req.body.symbols || []).map(function(s) {
+      return { symbol: s, error: true, price: '0', change: '0', changePct: '0%' };
+    }));
   }
 });
 
