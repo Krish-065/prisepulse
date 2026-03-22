@@ -130,7 +130,7 @@ export default function Markets() {
         }>
           <div className="flex items-center gap-2">
             <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (status.isOpen ? 'bg-green-400 animate-pulse' : 'bg-gray-500')}></span>
-            {status.status} -- {status.message} -- IST {status.time}
+            {status.status} -- {status.message}    Current Time-- IST {status.time}
           </div>
           {lastTick && (
             <span className="text-gray-600 text-xs">
