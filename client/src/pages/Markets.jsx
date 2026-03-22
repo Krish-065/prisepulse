@@ -87,15 +87,23 @@ export default function Markets() {
     fetchIndices();
     fetchAll();
 
-    // Poll indices every 10 seconds (same cadence as the old WebSocket broadcast)
+    // Poll indices every 10 seconds
     tickRef.current = setInterval(fetchIndices, 10000);
 
     // Refresh gainers/losers/chart every 60 seconds
     var slowInterval = setInterval(fetchAll, 60000);
 
+    // Refresh commodities every 60 seconds independently
+    var commInterval = setInterval(function() {
+      axios.get(API + '/api/market/commodities', { timeout: 12000 })
+        .then(function(res) { setCommodities(res.data); })
+        .catch(function(err) { console.log('Commodities refresh error:', err.message); });
+    }, 60000);
+
     return function() {
       clearInterval(tickRef.current);
       clearInterval(slowInterval);
+      clearInterval(commInterval);
     };
   }, []);
 
@@ -304,26 +312,46 @@ export default function Markets() {
 
       {/* Commodities */}
       {activeTab === 'commodities' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {commodities ? (
-            [
-              { key: 'gold',   label: 'Gold',      icon: 'GOLD',  unit: 'per 10g' },
-              { key: 'silver', label: 'Silver',    icon: 'SLVR',  unit: 'per kg'  },
-              { key: 'crude',  label: 'Crude Oil', icon: 'CRUDE', unit: 'per bbl' },
-            ].map(function(c) {
-              var d = commodities[c.key];
-              return (
-                <div key={c.key} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                  <div className="text-green-400 font-mono font-bold text-xs mb-2 bg-green-400/10 inline-block px-2 py-1 rounded">{c.icon}</div>
-                  <div className="text-gray-400 text-xs font-mono mb-1 mt-2">{c.label} — {c.unit}</div>
-                  <div className="text-white text-2xl font-bold font-mono">Rs.{d.price.toLocaleString('en-IN')}</div>
-                  <div className={'text-xs font-mono mt-1 ' + (String(d.change).startsWith('+') ? 'text-green-400' : 'text-red-400')}>{d.change}</div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="col-span-3 text-gray-500 text-xs text-center font-mono py-8">Loading commodities...</div>
-          )}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-gray-500 text-xs font-mono">Live prices via Yahoo Finance · converted to INR · refreshes every 60s</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {commodities ? (
+              [
+                { key: 'gold',       icon: 'GOLD',  },
+                { key: 'silver',     icon: 'SLVR',  },
+                { key: 'crude',      icon: 'CRUDE', },
+                { key: 'naturalgas', icon: 'NGAS',  },
+                { key: 'copper',     icon: 'COPR',  },
+              ].map(function(c) {
+                var d = commodities[c.key];
+                if (!d) return null;
+                return (
+                  <div key={c.key} className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="text-green-400 font-mono font-bold text-xs bg-green-400/10 px-2 py-1 rounded">{c.icon}</div>
+                      <div className="text-gray-600 text-xs font-mono">{d.unit}</div>
+                    </div>
+                    <div className="text-gray-400 text-xs font-mono mb-1">{d.label}</div>
+                    <div className="text-white text-2xl font-bold font-mono mb-2">
+                      Rs.{Number(d.price).toLocaleString('en-IN')}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={'text-sm font-mono font-bold ' + (d.isUp ? 'text-green-400' : 'text-red-400')}>
+                        {d.changePct}
+                      </span>
+                      <span className={'text-xs font-mono ' + (d.isUp ? 'text-green-400/70' : 'text-red-400/70')}>
+                        {d.changeAmt}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="col-span-3 text-gray-500 text-xs text-center font-mono py-8">Loading commodities...</div>
+            )}
+          </div>
         </div>
       )}
 
