@@ -119,55 +119,66 @@ router.get('/quote/:symbol', async function(req, res) {
 });
 
 // ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
-// ── MULTIPLE QUOTES (Watchlist / Portfolio) — stooq.com ──────────
-// stooq.com: free, no API key, no rate limit, works from server IPs
-// NSE symbol format: RELIANCE.NS (same as Yahoo but stooq serves it reliably)
+// ── MULTIPLE QUOTES (Watchlist / Portfolio) — Alpha Vantage ──────
+// Alpha Vantage: designed for server-side, never blocks server IPs
+// Free tier: 25 req/day — we cache each symbol for 5 min to stay safe
+// NSE symbols: append .BSE (BSE) or use direct symbol (Alpha Vantage supports both)
+const quoteCache = {};
+
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols || [];
     if (symbols.length === 0) return res.json([]);
 
+    const KEY = process.env.ALPHA_VANTAGE_KEY;
+    const now = Date.now();
+    const CACHE_MS = 5 * 60 * 1000; // 5 minutes per symbol
+
     const results = await Promise.all(symbols.map(async function(symbol) {
+      // Serve from cache if fresh
+      if (quoteCache[symbol] && now - quoteCache[symbol].time < CACHE_MS) {
+        return quoteCache[symbol].data;
+      }
       try {
-        // stooq format for NSE: lowercase symbol + .ns
-        const stooqSym = symbol.toLowerCase().replace('&', '') + '.ns';
+        // Alpha Vantage: BSE/NSE symbol format e.g. RELIANCE.BSE
         const result = await axios.get(
-          'https://stooq.com/q/l/?s=' + stooqSym + '&f=sd2t2ohlcvn&h&e=csv',
-          {
-            timeout: 8000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            }
-          }
+          'https://www.alphavantage.co/query' +
+          '?function=GLOBAL_QUOTE' +
+          '&symbol=' + symbol + '.BSE' +
+          '&apikey=' + KEY,
+          { timeout: 10000, headers: { 'Accept': 'application/json' } }
         );
-        // Parse CSV response: Symbol,Date,Time,Open,High,Low,Close,Volume,Name
-        const lines = result.data.trim().split('\n');
-        if (lines.length < 2) throw new Error('No data');
-        const parts  = lines[1].split(',');
-        const close  = parseFloat(parts[6]);
-        const open   = parseFloat(parts[3]);
-        if (!close || close === 0) throw new Error('Invalid price');
-        const change    = parseFloat((close - open).toFixed(2));
-        const changePct = parseFloat(((change / open) * 100).toFixed(2));
-        return {
+        const q = result.data['Global Quote'];
+        if (!q || !q['05. price']) throw new Error('No data from Alpha Vantage');
+
+        const price     = parseFloat(q['05. price']);
+        const change    = parseFloat(q['09. change']);
+        const changePct = parseFloat(q['10. change percent'].replace('%', ''));
+
+        const data = {
           symbol,
-          price:     close.toFixed(2),
+          price:     price.toFixed(2),
           change:    change.toFixed(2),
           changePct: changePct.toFixed(2) + '%',
           error:     false,
         };
+        quoteCache[symbol] = { data, time: now };
+        console.log('[Quote]', symbol, '=', price);
+        return data;
       } catch (e) {
-        console.log('[Quote] Failed for', symbol, ':', e.message);
+        console.log('[Quote] Failed', symbol, ':', e.message);
+        // Return stale cache if available, better than error
+        if (quoteCache[symbol]) return quoteCache[symbol].data;
         return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
       }
     }));
 
-    console.log('[Quotes] Fetched', results.filter(r => !r.error).length, '/', symbols.length, 'from stooq');
     res.json(results);
   } catch (err) {
     console.log('[Quotes] Error:', err.message);
-    const symbols = req.body.symbols || [];
-    res.json(symbols.map(s => ({ symbol: s, error: true, price: '0', change: '0', changePct: '0%' })));
+    res.json((req.body.symbols || []).map(s => ({
+      symbol: s, error: true, price: '0', change: '0', changePct: '0%'
+    })));
   }
 });
 

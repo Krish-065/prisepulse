@@ -157,10 +157,14 @@ export default function Portfolio() {
   // ── FETCH FUNCTIONS DEFINED BEFORE useEffect ─────────────────
   const fetchStockPricesP = useCallback(async (symbols) => {
     try {
-      const { data } = await axios.post(BASE + '/market/quotes', { symbols }, { timeout: 15000 });
+      const { data } = await axios.post(
+        BASE + '/market/quotes',
+        { symbols },
+        { timeout: 20000 }
+      );
       const map = {};
-      (data || []).forEach(d => { map[d.symbol] = d; });
-      setPrices(map);
+      (data || []).forEach(d => { if (!d.error) map[d.symbol] = d; });
+      setPrices(prev => ({ ...prev, ...map })); // merge keeps old prices visible while refreshing
     } catch (err) { console.log('Price error:', err.message); }
   }, []);
 
