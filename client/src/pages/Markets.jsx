@@ -24,28 +24,34 @@ export default function Markets() {
 
   // ── FETCH INDICES (replaces WebSocket) ──────────────────────────
   var fetchIndices = function() {
-    axios.get(API + '/api/market/indices', { timeout: 8000 })
+    var symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
+    var url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(',');
+
+    axios.get(url, { timeout: 10000 })
       .then(function(res) {
-        var data = res.data || [];
-        var find = function(name) { return data.find(function(i) { return i.index === name; }); };
-        var n  = find('NIFTY 50');
-        var s = find('S&P BSE SENSEX') || find('SENSEX') || find('BSE SENSEX');
-        var b  = find('NIFTY BANK');
-        var it = find('NIFTY IT');
+        var quotes = res.data.quoteResponse.result || [];
+        var find = function(sym) {
+          return quotes.find(function(q) { return q.symbol === sym; });
+        };
+        var n  = find('^NSEI');
+        var s  = find('^BSESN');
+        var b  = find('^NSEBANK');
+        var it = find('NIFTY_IT.NS');
+
         setIndices({
-          nifty:     n  ? n.last  : 0,
-          sensex:    s  ? s.last  : 0,
-          bankNifty: b  ? b.last  : 0,
-          niftyIT:   it ? it.last : 0,
-          niftyChg:  n  ? n.pChange  : 0,
-          sensexChg: s  ? s.pChange  : 0,
-          bankChg:   b  ? b.pChange  : 0,
-          itChg:     it ? it.pChange : 0,
+          nifty:     n  ? n.regularMarketPrice  : 0,
+          sensex:    s  ? s.regularMarketPrice  : 0,
+          bankNifty: b  ? b.regularMarketPrice  : 0,
+          niftyIT:   it ? it.regularMarketPrice : 0,
+          niftyChg:  n  ? n.regularMarketChangePercent  : 0,
+          sensexChg: s  ? s.regularMarketChangePercent  : 0,
+          bankChg:   b  ? b.regularMarketChangePercent  : 0,
+          itChg:     it ? it.regularMarketChangePercent : 0,
         });
         setLastTick(new Date());
       })
       .catch(function(err) {
-        console.log('Indices fetch failed:', err.message);
+        console.log('Yahoo Finance fetch failed:', err.message);
       });
   };
 
