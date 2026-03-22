@@ -197,6 +197,9 @@ export default function Portfolio() {
   useEffect(() => {
     if (!token) return;
     fetchHoldingsP();
+    // Auto-refresh prices every 30 seconds
+    const interval = setInterval(fetchHoldingsP, 30000);
+    return () => clearInterval(interval);
   }, [fetchHoldingsP, token]);
 
   useEffect(() => {
