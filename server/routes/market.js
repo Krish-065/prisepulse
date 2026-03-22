@@ -26,7 +26,6 @@ const getNSECookie = async function() {
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'gzip, deflate, br',
         'Connection':      'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
       },
       timeout: 10000
     });
@@ -34,7 +33,7 @@ const getNSECookie = async function() {
     if (cookies) {
       nseCookie  = cookies.map(function(c) { return c.split(';')[0]; }).join('; ');
       cookieTime = Date.now();
-      console.log('[NSE] Cookie refreshed successfully');
+      console.log('[NSE] Cookie refreshed');
     }
   } catch (e) {
     console.log('[NSE] Cookie refresh failed:', e.message);
@@ -66,24 +65,43 @@ const normalizeStock = function(s) {
 };
 
 // ── INDICES ───────────────────────────────────────────────────────
+// ── INDICES (Yahoo Finance — includes SENSEX, no NSE IP block) ────
 router.get('/indices', async function(req, res) {
   try {
     const data = await getCached('indices', async function() {
-      const result = await nseGet('https://www.nseindia.com/api/allIndices');
-      const wanted = ['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 100'];
-      return result.data.data
-        .filter(function(i) { return wanted.includes(i.index); })
-        .map(function(i) {
-          return { index: i.index, last: i.last, change: i.variation, pChange: i.percentChange };
-        });
-    }, 30);
+      const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
+      const result  = await axios.get(
+        'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
+        {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+            'Referer':    'https://finance.yahoo.com',
+          }
+        }
+      );
+      const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+      const find   = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+      const n  = find('^NSEI');
+      const s  = find('^BSESN');
+      const b  = find('^NSEBANK');
+      const it = find('NIFTY_IT.NS');
+      return [
+        { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0 },
+        { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0 },
+        { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0 },
+        { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0 },
+      ];
+    }, 15);
     res.json(data);
   } catch (err) {
+    console.log('[Indices] Yahoo error:', err.message);
     res.json([
-      { index: 'NIFTY 50',         last: 23464.35, change: 178.45,  pChange: 0.77  },
-      { index: 'NIFTY BANK',       last: 54430.80, change: 321.10,  pChange: 0.59  },
-      { index: 'NIFTY IT',         last: 28826.30, change: -95.40,  pChange: -0.33 },
-      { index: 'NIFTY MIDCAP 100', last: 52140.30, change: 420.15,  pChange: 0.81  },
+      { index: 'NIFTY 50',   last: 23114.5,  pChange: 0.49  },
+      { index: 'SENSEX',     last: 76012,    pChange: 0.62  },
+      { index: 'NIFTY BANK', last: 53427.05, pChange: -0.04 },
+      { index: 'NIFTY IT',   last: 29199.6,  pChange: 2.17  },
     ]);
   }
 });
@@ -124,46 +142,38 @@ router.get('/quote/:symbol', async function(req, res) {
 });
 
 // ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
-// ── MULTIPLE QUOTES (Watchlist / Portfolio) — NSE with cookie ─────
-// Uses same NSE cookie approach as the working broadcast in index.js
+// ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
+const quoteCache = {};
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols || [];
     if (symbols.length === 0) return res.json([]);
-
-    // Fetch quotes one at a time with delay to avoid NSE rate limiting
+    const now = Date.now();
+    const CACHE_MS = 5 * 60 * 1000;
     const results = [];
     for (var i = 0; i < symbols.length; i++) {
       const symbol = symbols[i];
+      if (quoteCache[symbol] && now - quoteCache[symbol].time < CACHE_MS) {
+        results.push(quoteCache[symbol].data); continue;
+      }
       try {
-        const result = await nseGet(
-          'https://www.nseindia.com/api/quote-equity?symbol=' + encodeURIComponent(symbol)
-        );
+        const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + encodeURIComponent(symbol));
         const p = result.data.priceInfo;
-        if (!p || !p.lastPrice) throw new Error('No price data');
-        results.push({
-          symbol,
-          price:     p.lastPrice.toFixed(2),
-          change:    (p.change || 0).toFixed(2),
-          changePct: (p.pChange || 0).toFixed(2) + '%',
-          error:     false,
-        });
+        if (!p || !p.lastPrice) throw new Error('No price');
+        const data = { symbol, price: p.lastPrice.toFixed(2), change: (p.change||0).toFixed(2), changePct: (p.pChange||0).toFixed(2) + '%', error: false };
+        quoteCache[symbol] = { data, time: now };
         console.log('[Quote]', symbol, '=', p.lastPrice);
+        results.push(data);
       } catch (e) {
         console.log('[Quote] Failed', symbol, ':', e.message);
+        if (quoteCache[symbol]) { results.push(quoteCache[symbol].data); continue; }
         results.push({ symbol, error: true, price: '0', change: '0', changePct: '0%' });
       }
-      // Small delay between requests to avoid NSE blocking
-      if (i < symbols.length - 1) {
-        await new Promise(function(r) { setTimeout(r, 500); });
-      }
+      if (i < symbols.length - 1) await new Promise(function(r) { setTimeout(r, 500); });
     }
     res.json(results);
   } catch (err) {
-    console.log('[Quotes] Error:', err.message);
-    res.json((req.body.symbols || []).map(function(s) {
-      return { symbol: s, error: true, price: '0', change: '0', changePct: '0%' };
-    }));
+    res.json((req.body.symbols||[]).map(function(s) { return { symbol: s, error: true, price: '0', change: '0', changePct: '0%' }; }));
   }
 });
 
