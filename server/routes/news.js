@@ -23,12 +23,12 @@ router.get('/', async function(req, res) {
       return res.json(newsCache);
     }
 
-    // Strictly financial keywords — no crime, sports, politics, entertainment
-    // domains= locks results to trusted financial news outlets only
+    // Financial keywords only — sortBy=publishedAt ensures newest articles first
+    // NewsAPI free tier = last 24 hours only, so results are always fresh
+    // No domains= filter because many Indian financial sites aren't in NewsAPI's free index
     const result = await axios.get(
       'https://newsapi.org/v2/everything' +
-      '?q=(stock+OR+sensex+OR+nifty+OR+crypto+OR+bitcoin+OR+ethereum+OR+"mutual+fund"+OR+RBI+OR+IPO+OR+earnings+OR+commodity+OR+"crude+oil"+OR+gold+OR+silver+OR+"share+market"+OR+inflation+OR+rupee+OR+"stock+market"+OR+economy+OR+SEBI+OR+NSE+OR+BSE+OR+"interest+rate"+OR+"market+cap"+OR+dividend+OR+FII+OR+DII)' +
-      '&domains=economictimes.indiatimes.com,livemint.com,moneycontrol.com,business-standard.com,financialexpress.com,reuters.com,bloomberg.com,coindesk.com,cointelegraph.com,ndtvprofit.com,thehindubusinessline.com' +
+      '?q=(sensex+OR+nifty+OR+"stock+market"+OR+crypto+OR+bitcoin+OR+ethereum+OR+"mutual+fund"+OR+RBI+OR+IPO+OR+"crude+oil"+OR+gold+OR+silver+OR+inflation+OR+rupee+OR+SEBI+OR+NSE+OR+BSE+OR+"interest+rate"+OR+dividend+OR+FII+OR+"share+market"+OR+cointelegraph+OR+coindesk)' +
       '&sortBy=publishedAt' +
       '&pageSize=100' +
       '&language=en' +
