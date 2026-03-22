@@ -273,19 +273,13 @@ router.get('/news', async function(req, res) {
 // ── MARKET STATUS ─────────────────────────────────────────────────
  
 router.get('/status', function(req, res) {
-  // Force IST conversion correctly
-  var now  = new Date();
-  var ist  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  var day  = ist.getDay(); // 0=Sun, 1=Mon ... 6=Sat
-  var hrs  = ist.getHours();
-  var mins = ist.getMinutes();
-  var totalMins = hrs * 60 + mins;
- 
-  // NSE hours: Pre-open 9:00-9:15, Market 9:15-15:30, Mon-Fri only
+  var now       = new Date();
+  var ist       = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  var day       = ist.getDay();
+  var totalMins = ist.getHours() * 60 + ist.getMinutes();
   var isWeekday = day >= 1 && day <= 5;
-  var isOpen    = isWeekday && totalMins >= 555 && totalMins < 930;  // 9:15 to 15:30
-  var isPre     = isWeekday && totalMins >= 540 && totalMins < 555;  // 9:00 to 9:15
- 
+  var isOpen    = isWeekday && totalMins >= 555 && totalMins < 930;
+  var isPre     = isWeekday && totalMins >= 540 && totalMins < 555;
   res.json({
     isOpen,
     isPreOpen: isPre,
