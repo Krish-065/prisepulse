@@ -128,51 +128,74 @@ router.get('/losers', async function(req, res) {
   } catch (err) { res.json(getFallbackLosers()); }
 });
 
-// ── SINGLE QUOTE ──────────────────────────────────────────────────
-router.get('/quote/:symbol', async function(req, res) {
-  try {
-    const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + req.params.symbol);
-    const p = result.data.priceInfo;
-    res.json({ symbol: req.params.symbol, price: p.lastPrice, open: p.open, close: p.previousClose, change: p.change, changePct: p.pChange });
-  } catch (err) { res.status(500).json({ error: 'Failed' }); }
-});
-
-// ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
 // ── MULTIPLE QUOTES (Watchlist / Portfolio) — Yahoo Finance ───────
 router.post('/quotes', async function(req, res) {
   try {
     const symbols = req.body.symbols || [];
     if (symbols.length === 0) return res.json([]);
 
-    // Convert NSE symbols to Yahoo Finance format (append .NS)
-    const yahooSymbols = symbols.map(function(s) { return s + '.NS'; });
+    // Yahoo Finance: NSE stocks use .NS suffix (e.g. TATAMOTORS.NS)
+    // Special cases: M&M → MM.NS, BAJAJ-AUTO → BAJAJ-AUTO.NS
+    const toYahoo = function(s) {
+      if (s === 'M&M') return 'M-M.NS';
+      return s + '.NS';
+    };
 
-    const result = await axios.get(
-      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(','),
-      {
-        timeout: 12000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-          'Accept':     'application/json',
+    const yahooSymbols = symbols.map(toYahoo);
+
+    // Try query2 first (more reliable from server IPs), fall back to query1
+    var result;
+    try {
+      result = await axios.get(
+        'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + yahooSymbols.join(','),
+        {
+          timeout: 12000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+            'Referer':    'https://finance.yahoo.com',
+          }
         }
-      }
-    );
+      );
+    } catch (e) {
+      result = await axios.get(
+        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + yahooSymbols.join(','),
+        {
+          timeout: 12000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+            'Referer':    'https://finance.yahoo.com',
+          }
+        }
+      );
+    }
 
-    const quotes = result.data.quoteResponse.result || [];
+    const quotes  = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
     const results = symbols.map(function(symbol) {
-      const q = quotes.find(function(q) { return q.symbol === symbol + '.NS'; });
-      if (!q) return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+      const q = quotes.find(function(q) {
+        return q.symbol === toYahoo(symbol);
+      });
+      if (!q || !q.regularMarketPrice) {
+        return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+      }
       return {
         symbol,
         price:     q.regularMarketPrice.toFixed(2),
-        change:    q.regularMarketChange.toFixed(2),
-        changePct: q.regularMarketChangePercent.toFixed(2) + '%',
+        change:    (q.regularMarketChange || 0).toFixed(2),
+        changePct: (q.regularMarketChangePercent || 0).toFixed(2) + '%',
       };
     });
+
+    console.log('[Quotes] Fetched', quotes.length, '/', symbols.length, 'symbols from Yahoo');
     res.json(results);
   } catch (err) {
-    console.log('Quotes error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch quotes' });
+    console.log('[Quotes] Yahoo Finance error:', err.message);
+    // Return error entries so frontend shows — instead of hanging on Loading...
+    const symbols = req.body.symbols || [];
+    res.json(symbols.map(function(s) {
+      return { symbol: s, error: true, price: '0', change: '0', changePct: '0%' };
+    }));
   }
 });
 
