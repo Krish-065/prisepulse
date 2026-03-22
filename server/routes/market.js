@@ -138,20 +138,42 @@ router.get('/quote/:symbol', async function(req, res) {
 });
 
 // ── MULTIPLE QUOTES (Watchlist / Portfolio) ───────────────────────
+// ── MULTIPLE QUOTES (Watchlist / Portfolio) — Yahoo Finance ───────
 router.post('/quotes', async function(req, res) {
   try {
-    const symbols = req.body.symbols;
-    const results = await Promise.all(symbols.map(async function(symbol) {
-      try {
-        const result = await nseGet('https://www.nseindia.com/api/quote-equity?symbol=' + symbol);
-        const p = result.data.priceInfo;
-        return { symbol, price: p.lastPrice.toFixed(2), change: p.change.toFixed(2), changePct: p.pChange.toFixed(2) + '%' };
-      } catch (e) {
-        return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+    const symbols = req.body.symbols || [];
+    if (symbols.length === 0) return res.json([]);
+
+    // Convert NSE symbols to Yahoo Finance format (append .NS)
+    const yahooSymbols = symbols.map(function(s) { return s + '.NS'; });
+
+    const result = await axios.get(
+      'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + yahooSymbols.join(','),
+      {
+        timeout: 12000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Accept':     'application/json',
+        }
       }
-    }));
+    );
+
+    const quotes = result.data.quoteResponse.result || [];
+    const results = symbols.map(function(symbol) {
+      const q = quotes.find(function(q) { return q.symbol === symbol + '.NS'; });
+      if (!q) return { symbol, error: true, price: '0', change: '0', changePct: '0%' };
+      return {
+        symbol,
+        price:     q.regularMarketPrice.toFixed(2),
+        change:    q.regularMarketChange.toFixed(2),
+        changePct: q.regularMarketChangePercent.toFixed(2) + '%',
+      };
+    });
     res.json(results);
-  } catch (err) { res.status(500).json({ error: 'Failed' }); }
+  } catch (err) {
+    console.log('Quotes error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch quotes' });
+  }
 });
 
 // ── INTRADAY CHART ────────────────────────────────────────────────

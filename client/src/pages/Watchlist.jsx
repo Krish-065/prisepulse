@@ -216,6 +216,19 @@ export default function Watchlist() {
       } catch (err) { console.log('Watchlist load error:', err); }
     };
     load();
+
+    // Auto-refresh prices every 30 seconds
+    const interval = setInterval(async () => {
+      try {
+        const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
+        const data = res.data;
+        if (data.symbols     && data.symbols.length     > 0) fetchStockPrices(data.symbols);
+        if (data.cryptos     && data.cryptos.length     > 0) fetchCryptoPrices(data.cryptos);
+        if (data.commodities && data.commodities.length > 0) fetchCommPrices();
+      } catch (err) { console.log('Auto-refresh error:', err); }
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [token, fetchStockPrices, fetchCryptoPrices, fetchCommPrices]);
 
   useEffect(() => {
@@ -549,8 +562,11 @@ export default function Watchlist() {
                     </div>
                     {p ? (
                       <div>
-                        <div className="text-white text-2xl font-bold font-mono">Rs.{p.price.toLocaleString('en-IN')}</div>
-                        <div className={'text-sm font-mono mt-1 ' + (p.change.startsWith('+') ? 'text-green-400' : 'text-red-400')}>{p.change}</div>
+                        <div className="text-white text-2xl font-bold font-mono">Rs.{Number(p.price).toLocaleString('en-IN')}</div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={'text-sm font-mono font-bold ' + (p.isUp ? 'text-green-400' : 'text-red-400')}>{p.changePct}</span>
+                          <span className={'text-xs font-mono ' + (p.isUp ? 'text-green-400/70' : 'text-red-400/70')}>{p.changeAmt}</span>
+                        </div>
                       </div>
                     ) : <div className="text-gray-600 text-sm font-mono">Loading...</div>}
                   </div>
