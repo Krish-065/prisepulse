@@ -5,10 +5,10 @@ const express = require('express');
 const router  = express.Router();
 const axios   = require('axios');
 
-// Cache — 15 min so we stay well within 100 req/day free limit
+// 15-min cache — stays within 100 req/day free limit comfortably
 let newsCache     = null;
 let newsCacheTime = 0;
-const CACHE_TTL   = 15 * 60 * 1000; // 15 minutes
+const CACHE_TTL   = 15 * 60 * 1000;
 
 router.get('/', async function(req, res) {
   try {
@@ -23,11 +23,12 @@ router.get('/', async function(req, res) {
       return res.json(newsCache);
     }
 
-    // Broad query — covers stocks, crypto, economy, IPO, earnings, RBI, mutual funds
-    // Using OR so NewsAPI finds articles matching ANY of these terms = more results
+    // Strictly financial keywords — no crime, sports, politics, entertainment
+    // domains= locks results to trusted financial news outlets only
     const result = await axios.get(
       'https://newsapi.org/v2/everything' +
-      '?q=(stock OR market OR crypto OR bitcoin OR economy OR finance OR RBI OR sensex OR nifty OR IPO OR earnings OR "mutual fund" OR rupee OR inflation)' +
+      '?q=(stock+OR+sensex+OR+nifty+OR+crypto+OR+bitcoin+OR+ethereum+OR+"mutual+fund"+OR+RBI+OR+IPO+OR+earnings+OR+commodity+OR+"crude+oil"+OR+gold+OR+silver+OR+"share+market"+OR+inflation+OR+rupee+OR+"stock+market"+OR+economy+OR+SEBI+OR+NSE+OR+BSE+OR+"interest+rate"+OR+"market+cap"+OR+dividend+OR+FII+OR+DII)' +
+      '&domains=economictimes.indiatimes.com,livemint.com,moneycontrol.com,business-standard.com,financialexpress.com,reuters.com,bloomberg.com,coindesk.com,cointelegraph.com,ndtvprofit.com,thehindubusinessline.com' +
       '&sortBy=publishedAt' +
       '&pageSize=100' +
       '&language=en' +
@@ -37,7 +38,6 @@ router.get('/', async function(req, res) {
 
     const articles = (result.data.articles || [])
       .filter(function(a) {
-        // Remove deleted/removed articles and ones with no URL
         return a.title &&
                a.title !== '[Removed]' &&
                a.url &&
@@ -55,7 +55,6 @@ router.get('/', async function(req, res) {
         };
       });
 
-    // Update cache
     newsCache     = articles;
     newsCacheTime = Date.now();
 
@@ -64,9 +63,8 @@ router.get('/', async function(req, res) {
 
   } catch (err) {
     console.log('[News] Error:', err.message);
-    // Serve stale cache on error — better than empty page
     if (newsCache && newsCache.length > 0) {
-      console.log('[News] Serving', newsCache.length, 'cached articles');
+      console.log('[News] Serving', newsCache.length, 'stale cached articles');
       return res.json(newsCache);
     }
     res.status(500).json({ error: 'Failed to fetch news: ' + err.message });
