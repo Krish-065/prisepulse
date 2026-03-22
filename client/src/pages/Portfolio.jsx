@@ -156,32 +156,12 @@ export default function Portfolio() {
 
   // ── FETCH FUNCTIONS DEFINED BEFORE useEffect ─────────────────
   const fetchStockPricesP = useCallback(async (symbols) => {
-    if (!symbols || symbols.length === 0) return;
     try {
-      // Fetch directly from browser → Yahoo Finance (bypasses Render IP block)
-      const toYahoo = (s) => s === 'M&M' ? 'M-M.NS' : s + '.NS';
-      const yahooSyms = symbols.map(toYahoo).join(',');
-      const res = await axios.get(
-        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + yahooSyms,
-        {
-          timeout: 12000,
-          headers: { 'Accept': 'application/json' }
-        }
-      );
-      const quotes = (res.data.quoteResponse && res.data.quoteResponse.result) || [];
+      const { data } = await axios.post(BASE + '/market/quotes', { symbols }, { timeout: 15000 });
       const map = {};
-      quotes.forEach(q => {
-        const sym = q.symbol.replace('.NS', '').replace('M-M', 'M&M');
-        map[sym] = {
-          symbol:    sym,
-          price:     q.regularMarketPrice ? q.regularMarketPrice.toFixed(2) : '0',
-          change:    q.regularMarketChange ? q.regularMarketChange.toFixed(2) : '0',
-          changePct: q.regularMarketChangePercent ? q.regularMarketChangePercent.toFixed(2) + '%' : '0%',
-          error:     !q.regularMarketPrice,
-        };
-      });
+      (data || []).forEach(d => { map[d.symbol] = d; });
       setPrices(map);
-    } catch (err) { console.log('Yahoo Finance stock error:', err.message); }
+    } catch (err) { console.log('Price error:', err.message); }
   }, []);
 
   const fetchCryptoPricesP = useCallback(async (holdings) => {
@@ -217,6 +197,8 @@ export default function Portfolio() {
   useEffect(() => {
     if (!token) return;
     fetchHoldingsP();
+    const interval = setInterval(fetchHoldingsP, 30000);
+    return () => clearInterval(interval);
   }, [fetchHoldingsP, token]);
 
   useEffect(() => {
