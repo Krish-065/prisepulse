@@ -29,7 +29,7 @@ export default function Markets() {
         var data = res.data || [];
         var find = function(name) { return data.find(function(i) { return i.index === name; }); };
         var n  = find('NIFTY 50');
-        var s  = find('SENSEX') || find('S&P BSE SENSEX');
+        var s = find('S&P BSE SENSEX') || find('SENSEX') || find('BSE SENSEX');
         var b  = find('NIFTY BANK');
         var it = find('NIFTY IT');
         setIndices({
