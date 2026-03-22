@@ -271,20 +271,31 @@ router.get('/news', async function(req, res) {
 });
 
 // ── MARKET STATUS ─────────────────────────────────────────────────
+ 
 router.get('/status', function(req, res) {
-  const ist  = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const day  = ist.getDay();
-  const mins = ist.getHours() * 60 + ist.getMinutes();
-  const isOpen = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
-  const isPre  = day >= 1 && day <= 5 && mins >= 540 && mins < 555;
+  // Force IST conversion correctly
+  var now  = new Date();
+  var ist  = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  var day  = ist.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  var hrs  = ist.getHours();
+  var mins = ist.getMinutes();
+  var totalMins = hrs * 60 + mins;
+ 
+  // NSE hours: Pre-open 9:00-9:15, Market 9:15-15:30, Mon-Fri only
+  var isWeekday = day >= 1 && day <= 5;
+  var isOpen    = isWeekday && totalMins >= 555 && totalMins < 930;  // 9:15 to 15:30
+  var isPre     = isWeekday && totalMins >= 540 && totalMins < 555;  // 9:00 to 9:15
+ 
   res.json({
     isOpen,
     isPreOpen: isPre,
     status:    isOpen ? 'Market Open' : isPre ? 'Pre-Open Session' : 'Market Closed',
-    message:   isOpen ? 'NSE and BSE trading live' : 'Opens Mon-Fri 9:15 AM IST',
-    time:      ist.toLocaleTimeString('en-IN'),
+    message:   isOpen ? 'NSE and BSE trading live' : 'Opens Mon–Fri 9:15 AM IST',
+    time:      ist.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    day:       ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day],
   });
 });
+ 
 
 // ── FALLBACKS ─────────────────────────────────────────────────────
 function getFallbackGainers() {
