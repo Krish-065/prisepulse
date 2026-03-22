@@ -61,24 +61,43 @@ const normalizeStock = function(s) {
 };
 
 // ── INDICES ───────────────────────────────────────────────────────
+// ── INDICES (Yahoo Finance — no IP blocking, no API key needed) ───
 router.get('/indices', async function(req, res) {
   try {
     const data = await getCached('indices', async function() {
-      const result = await nseGet('https://www.nseindia.com/api/allIndices');
-      const wanted = ['NIFTY 50', 'NIFTY BANK', 'NIFTY IT', 'NIFTY MIDCAP 100'];
-      return result.data.data
-        .filter(function(i) { return wanted.includes(i.index); })
-        .map(function(i) {
-          return { index: i.index, last: i.last, change: i.variation, pChange: i.percentChange };
-        });
-    }, 30);
+      // Yahoo Finance symbols for Indian indices
+      const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
+      const result  = await axios.get(
+        'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','),
+        {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+          }
+        }
+      );
+      const quotes = result.data.quoteResponse.result || [];
+      const find   = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+      const n  = find('^NSEI');
+      const s  = find('^BSESN');
+      const b  = find('^NSEBANK');
+      const it = find('NIFTY_IT.NS');
+      return [
+        { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0 },
+        { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0 },
+        { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0 },
+        { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0 },
+      ];
+    }, 15); // cache 15 seconds — Yahoo updates every ~15s
     res.json(data);
   } catch (err) {
+    console.log('Yahoo indices error:', err.message);
     res.json([
-      { index: 'NIFTY 50',         last: 23464.35, change: 178.45,  pChange: 0.77  },
-      { index: 'NIFTY BANK',       last: 54430.80, change: 321.10,  pChange: 0.59  },
-      { index: 'NIFTY IT',         last: 28826.30, change: -95.40,  pChange: -0.33 },
-      { index: 'NIFTY MIDCAP 100', last: 52140.30, change: 420.15,  pChange: 0.81  },
+      { index: 'NIFTY 50',   last: 23114.5,  pChange: 0.49  },
+      { index: 'SENSEX',     last: 76012,    pChange: 0.62  },
+      { index: 'NIFTY BANK', last: 53427.05, pChange: -0.04 },
+      { index: 'NIFTY IT',   last: 29199.6,  pChange: 2.17  },
     ]);
   }
 });
@@ -271,15 +290,13 @@ router.get('/news', async function(req, res) {
 });
 
 // ── MARKET STATUS ─────────────────────────────────────────────────
- 
 router.get('/status', function(req, res) {
-  var now       = new Date();
-  var ist       = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  var day       = ist.getDay();
-  var totalMins = ist.getHours() * 60 + ist.getMinutes();
-  var isWeekday = day >= 1 && day <= 5;
-  var isOpen    = isWeekday && totalMins >= 555 && totalMins < 930;
-  var isPre     = isWeekday && totalMins >= 540 && totalMins < 555;
+  const ist       = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const day       = ist.getDay();
+  const totalMins = ist.getHours() * 60 + ist.getMinutes();
+  const isWeekday = day >= 1 && day <= 5;
+  const isOpen    = isWeekday && totalMins >= 555 && totalMins < 930;
+  const isPre     = isWeekday && totalMins >= 540 && totalMins < 555;
   res.json({
     isOpen,
     isPreOpen: isPre,
@@ -289,7 +306,6 @@ router.get('/status', function(req, res) {
     day:       ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][day],
   });
 });
- 
 
 // ── FALLBACKS ─────────────────────────────────────────────────────
 function getFallbackGainers() {

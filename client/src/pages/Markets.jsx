@@ -19,39 +19,48 @@ export default function Markets() {
     nifty: 0, sensex: 0, bankNifty: 0, niftyIT: 0,
     niftyChg: 0, sensexChg: 0, bankChg: 0, itChg: 0,
   });
-  var [lastTick, setLastTick] = useState(null);
+  var [lastTick,  setLastTick]  = useState(null);
+  var [clockTime, setClockTime] = useState('');
   var tickRef = useRef(null);
 
-  // ── FETCH INDICES (replaces WebSocket) ──────────────────────────
+  // Live IST clock — ticks every second in the browser, no backend needed
+  useEffect(function() {
+    var updateClock = function() {
+      var ist = new Date().toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit', minute: '2-digit', second: '2-digit'
+      });
+      setClockTime(ist);
+    };
+    updateClock();
+    var clock = setInterval(updateClock, 1000);
+    return function() { clearInterval(clock); };
+  }, []);
+
+  // ── FETCH INDICES via backend (backend calls Yahoo Finance — no IP block) ──
   var fetchIndices = function() {
-    var symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
-    var url = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(',');
-
-    axios.get(url, { timeout: 10000 })
+    axios.get(API + '/api/market/indices', { timeout: 12000 })
       .then(function(res) {
-        var quotes = res.data.quoteResponse.result || [];
-        var find = function(sym) {
-          return quotes.find(function(q) { return q.symbol === sym; });
-        };
-        var n  = find('^NSEI');
-        var s  = find('^BSESN');
-        var b  = find('^NSEBANK');
-        var it = find('NIFTY_IT.NS');
-
+        var data = res.data || [];
+        var find = function(name) { return data.find(function(i) { return i.index === name; }); };
+        var n  = find('NIFTY 50');
+        var s  = find('SENSEX');
+        var b  = find('NIFTY BANK');
+        var it = find('NIFTY IT');
         setIndices({
-          nifty:     n  ? n.regularMarketPrice  : 0,
-          sensex:    s  ? s.regularMarketPrice  : 0,
-          bankNifty: b  ? b.regularMarketPrice  : 0,
-          niftyIT:   it ? it.regularMarketPrice : 0,
-          niftyChg:  n  ? n.regularMarketChangePercent  : 0,
-          sensexChg: s  ? s.regularMarketChangePercent  : 0,
-          bankChg:   b  ? b.regularMarketChangePercent  : 0,
-          itChg:     it ? it.regularMarketChangePercent : 0,
+          nifty:     n  ? n.last     : 0,
+          sensex:    s  ? s.last     : 0,
+          bankNifty: b  ? b.last     : 0,
+          niftyIT:   it ? it.last    : 0,
+          niftyChg:  n  ? n.pChange  : 0,
+          sensexChg: s  ? s.pChange  : 0,
+          bankChg:   b  ? b.pChange  : 0,
+          itChg:     it ? it.pChange : 0,
         });
         setLastTick(new Date());
       })
       .catch(function(err) {
-        console.log('Yahoo Finance fetch failed:', err.message);
+        console.log('Indices fetch failed:', err.message);
       });
   };
 
@@ -130,11 +139,11 @@ export default function Markets() {
         }>
           <div className="flex items-center gap-2">
             <span className={'w-2 h-2 rounded-full flex-shrink-0 ' + (status.isOpen ? 'bg-green-400 animate-pulse' : 'bg-gray-500')}></span>
-            {status.status} -- {status.message}    Current Time-- IST {status.time}
+            {status.status} -- {status.message} -- IST {clockTime}
           </div>
           {lastTick && (
             <span className="text-gray-600 text-xs">
-              Updated {lastTick.toLocaleTimeString('en-IN')}
+              Prices updated {lastTick.toLocaleTimeString('en-IN')}
             </span>
           )}
         </div>
