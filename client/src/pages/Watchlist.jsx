@@ -178,13 +178,37 @@ export default function Watchlist() {
   const token     = localStorage.getItem('token');
 
   const fetchStockPrices = useCallback(async (symbols) => {
+    if (!symbols || symbols.length === 0) return;
     setPriceLoading(true);
     try {
-      const res = await axios.post(BASE + '/market/quotes', { symbols });
+      // Fetch directly from browser → Yahoo Finance (bypasses Render IP block)
+      // NSE symbols need .NS suffix: TATAMOTORS → TATAMOTORS.NS
+      const toYahoo = (s) => s === 'M&M' ? 'M-M.NS' : s + '.NS';
+      const yahooSyms = symbols.map(toYahoo).join(',');
+      const res = await axios.get(
+        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + yahooSyms,
+        {
+          timeout: 12000,
+          headers: { 'Accept': 'application/json' }
+        }
+      );
+      const quotes = (res.data.quoteResponse && res.data.quoteResponse.result) || [];
       const map = {};
-      res.data.forEach(d => { map[d.symbol] = d; });
+      quotes.forEach(q => {
+        // Strip .NS to get back original symbol
+        const sym = q.symbol.replace('.NS', '').replace('M-M', 'M&M');
+        map[sym] = {
+          symbol:    sym,
+          price:     q.regularMarketPrice ? q.regularMarketPrice.toFixed(2) : '0',
+          change:    q.regularMarketChange ? q.regularMarketChange.toFixed(2) : '0',
+          changePct: q.regularMarketChangePercent ? q.regularMarketChangePercent.toFixed(2) + '%' : '0%',
+          error:     !q.regularMarketPrice,
+        };
+      });
       setPrices(map);
-    } catch (err) { console.log('Stock price error:', err); }
+    } catch (err) {
+      console.log('Yahoo Finance stock error:', err.message);
+    }
     setPriceLoading(false);
   }, []);
 
@@ -216,19 +240,6 @@ export default function Watchlist() {
       } catch (err) { console.log('Watchlist load error:', err); }
     };
     load();
-
-    // Auto-refresh prices every 30 seconds
-    const interval = setInterval(async () => {
-      try {
-        const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
-        const data = res.data;
-        if (data.symbols     && data.symbols.length     > 0) fetchStockPrices(data.symbols);
-        if (data.cryptos     && data.cryptos.length     > 0) fetchCryptoPrices(data.cryptos);
-        if (data.commodities && data.commodities.length > 0) fetchCommPrices();
-      } catch (err) { console.log('Auto-refresh error:', err); }
-    }, 30000);
-
-    return () => clearInterval(interval);
   }, [token, fetchStockPrices, fetchCryptoPrices, fetchCommPrices]);
 
   useEffect(() => {
@@ -562,11 +573,8 @@ export default function Watchlist() {
                     </div>
                     {p ? (
                       <div>
-                        <div className="text-white text-2xl font-bold font-mono">Rs.{Number(p.price).toLocaleString('en-IN')}</div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={'text-sm font-mono font-bold ' + (p.isUp ? 'text-green-400' : 'text-red-400')}>{p.changePct}</span>
-                          <span className={'text-xs font-mono ' + (p.isUp ? 'text-green-400/70' : 'text-red-400/70')}>{p.changeAmt}</span>
-                        </div>
+                        <div className="text-white text-2xl font-bold font-mono">Rs.{p.price.toLocaleString('en-IN')}</div>
+                        <div className={'text-sm font-mono mt-1 ' + (p.change.startsWith('+') ? 'text-green-400' : 'text-red-400')}>{p.change}</div>
                       </div>
                     ) : <div className="text-gray-600 text-sm font-mono">Loading...</div>}
                   </div>
