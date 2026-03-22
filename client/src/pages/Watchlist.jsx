@@ -181,11 +181,17 @@ export default function Watchlist() {
     if (!symbols || symbols.length === 0) return;
     setPriceLoading(true);
     try {
-      const res = await axios.post(BASE + '/market/quotes', { symbols }, { timeout: 15000 });
+      const res = await axios.post(
+        BASE + '/market/quotes',
+        { symbols },
+        { timeout: 20000 }
+      );
       const map = {};
-      (res.data || []).forEach(d => { map[d.symbol] = d; });
-      setPrices(map);
-    } catch (err) { console.log('Stock price error:', err.message); }
+      (res.data || []).forEach(d => { if (!d.error) map[d.symbol] = d; });
+      setPrices(prev => ({ ...prev, ...map })); // merge — keep old prices while new ones load
+    } catch (err) {
+      console.log('Stock price error:', err.message);
+    }
     setPriceLoading(false);
   }, []);
 
@@ -217,7 +223,6 @@ export default function Watchlist() {
       } catch (err) { console.log('Watchlist load error:', err); }
     };
     load();
-    // Auto-refresh prices every 30 seconds
     const interval = setInterval(async () => {
       try {
         const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
