@@ -37,42 +37,74 @@ export default function Markets() {
     return function() { clearInterval(clock); };
   }, []);
 
-  // ── FETCH INDICES browser-side from NSE ────────────────────────
-  // NSE API works fine from browser. Render server IPs get blocked by both NSE and Yahoo.
-  // By fetching from the browser, each user's own IP is used — never blocked.
+  // ── FETCH INDICES — NSE via CORS proxy ─────────────────────────
+  // NSE blocks Render server IPs AND has CORS on browser direct requests.
+  // Solution: route browser requests through allorigins.win CORS proxy → NSE.
+  // Strategy: try 3 sources in order, use first that returns valid data
+  // 1. Yahoo Finance browser-side (no CORS issues, reliable)
+  // 2. NSE via corsproxy.io
+  // 3. Backend Yahoo route (fallback)
   var fetchIndices = function() {
-    axios.get('https://www.nseindia.com/api/allIndices', {
-      timeout: 10000,
-      headers: {
-        'Accept': 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.nseindia.com/',
-      },
-      withCredentials: false,
+
+    // Source 1: Yahoo Finance directly from browser - works without CORS issues
+    axios.get(
+      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5ENSEI,%5EBSESN,%5ENSEBANK,NIFTY_IT.NS',
+      {
+        timeout: 8000,
+        headers: { 'Accept': 'application/json' },
+      }
+    )
+    .then(function(res) {
+      var quotes = res.data && res.data.quoteResponse && res.data.quoteResponse.result
+        ? res.data.quoteResponse.result : [];
+      if (quotes.length === 0) throw new Error('Empty response');
+      var find = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+      var n  = find('^NSEI');
+      var s  = find('^BSESN');
+      var b  = find('^NSEBANK');
+      var it = find('NIFTY_IT.NS');
+      if (!n && !s) throw new Error('No data');
+      setIndices({
+        nifty:     n  ? n.regularMarketPrice             : 0,
+        sensex:    s  ? s.regularMarketPrice             : 0,
+        bankNifty: b  ? b.regularMarketPrice             : 0,
+        niftyIT:   it ? it.regularMarketPrice            : 0,
+        niftyChg:  n  ? n.regularMarketChangePercent     : 0,
+        sensexChg: s  ? s.regularMarketChangePercent     : 0,
+        bankChg:   b  ? b.regularMarketChangePercent     : 0,
+        itChg:     it ? it.regularMarketChangePercent    : 0,
+      });
+      setLastTick(new Date());
     })
+    .catch(function() {
+      // Source 2: NSE via corsproxy.io (different proxy, more reliable than allorigins)
+      axios.get(
+        'https://corsproxy.io/?' + encodeURIComponent('https://www.nseindia.com/api/allIndices'),
+        { timeout: 10000, headers: { 'Accept': 'application/json' } }
+      )
       .then(function(res) {
         var data = res.data && res.data.data ? res.data.data : [];
+        if (data.length === 0) throw new Error('Empty NSE data');
         var find = function(name) { return data.find(function(i) { return i.index === name; }); };
         var n  = find('NIFTY 50');
         var s  = find('SENSEX') || find('S&P BSE SENSEX');
         var b  = find('NIFTY BANK');
         var it = find('NIFTY IT');
-        if (n || s || b || it) {
-          setIndices({
-            nifty:     n  ? n.last           : 0,
-            sensex:    s  ? s.last           : 0,
-            bankNifty: b  ? b.last           : 0,
-            niftyIT:   it ? it.last          : 0,
-            niftyChg:  n  ? n.percentChange  : 0,
-            sensexChg: s  ? s.percentChange  : 0,
-            bankChg:   b  ? b.percentChange  : 0,
-            itChg:     it ? it.percentChange : 0,
-          });
-          setLastTick(new Date());
-        }
+        if (!n && !s) throw new Error('Indices not found');
+        setIndices({
+          nifty:     n  ? parseFloat(n.last)           : 0,
+          sensex:    s  ? parseFloat(s.last)           : 0,
+          bankNifty: b  ? parseFloat(b.last)           : 0,
+          niftyIT:   it ? parseFloat(it.last)          : 0,
+          niftyChg:  n  ? parseFloat(n.percentChange)  : 0,
+          sensexChg: s  ? parseFloat(s.percentChange)  : 0,
+          bankChg:   b  ? parseFloat(b.percentChange)  : 0,
+          itChg:     it ? parseFloat(it.percentChange) : 0,
+        });
+        setLastTick(new Date());
       })
       .catch(function() {
-        // NSE blocked browser-side too (CORS) — fall back to backend Yahoo route
+        // Source 3: Backend Yahoo route (last resort)
         axios.get(API + '/api/market/indices', { timeout: 12000 })
           .then(function(res) {
             var data = res.data || [];
@@ -82,19 +114,20 @@ export default function Markets() {
             var b  = find('NIFTY BANK');
             var it = find('NIFTY IT');
             setIndices({
-              nifty:     n  ? n.last    : 0,
-              sensex:    s  ? s.last    : 0,
-              bankNifty: b  ? b.last    : 0,
-              niftyIT:   it ? it.last   : 0,
-              niftyChg:  n  ? n.pChange : 0,
-              sensexChg: s  ? s.pChange : 0,
-              bankChg:   b  ? b.pChange : 0,
-              itChg:     it ? it.pChange: 0,
+              nifty:     n  ? n.last     : 0,
+              sensex:    s  ? s.last     : 0,
+              bankNifty: b  ? b.last     : 0,
+              niftyIT:   it ? it.last    : 0,
+              niftyChg:  n  ? n.pChange  : 0,
+              sensexChg: s  ? s.pChange  : 0,
+              bankChg:   b  ? b.pChange  : 0,
+              itChg:     it ? it.pChange : 0,
             });
             setLastTick(new Date());
           })
-          .catch(function() { console.log('Both NSE and Yahoo indices failed'); });
+          .catch(function() { console.log('All index sources failed'); });
       });
+    });
   };
 
   // ── FETCH EVERYTHING ELSE ───────────────────────────────────────
