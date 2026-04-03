@@ -65,72 +65,75 @@ const normalizeStock = function(s) {
 };
 
 // ── INDICES ───────────────────────────────────────────────────────
-// Primary: NSE allIndices. Fallback: Yahoo Finance v8.
-// NOTE: NSE returns SENSEX as "S&P BSE SENSEX", not "SENSEX"
+// NSE allIndices  → NIFTY 50, BANK NIFTY, NIFTY IT  (NSE-only indices)
+// Yahoo ^BSESN   → SENSEX  (BSE index, NSE API never has it)
+// Both fetched in parallel; each fails independently.
 router.get('/indices', async function(req, res) {
-  // Prevent browser/CDN caching so the 10s poll always gets fresh data
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
   try {
     const data = await getCached('indices', async function() {
 
-      // ── Primary: NSE allIndices ──────────────────────────────────
-      try {
-        const result = await nseGet('https://www.nseindia.com/api/allIndices');
-        const list   = (result.data && result.data.data) || [];
-        const find   = function(name) { return list.find(function(i) { return i.index === name; }); };
+      // Run NSE + Yahoo in parallel
+      const [nseResult, yahooResult] = await Promise.allSettled([
+        nseGet('https://www.nseindia.com/api/allIndices'),
+        axios.get(
+          'https://query2.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
+          {
+            timeout: 10000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+              'Accept':     'application/json',
+              'Referer':    'https://finance.yahoo.com',
+            }
+          }
+        )
+      ]);
 
-        const n  = find('NIFTY 50');
-        // NSE spells SENSEX as "S&P BSE SENSEX"
-        const s  = find('S&P BSE SENSEX');
-        const b  = find('NIFTY BANK');
-        const it = find('NIFTY IT');
+      // ── NIFTY 50, BANK NIFTY, NIFTY IT from NSE ──
+      let nifty50 = 0, niftyChg = 0;
+      let bankNifty = 0, bankChg = 0;
+      let niftyIT = 0, itChg = 0;
 
-        if (n && n.last > 0) {
-          console.log('[Indices] NSE OK — NIFTY:', n.last, '| SENSEX:', s ? s.last : 'not found');
-          return [
-            { index: 'NIFTY 50',   last: n  ? n.last          : 0, pChange: n  ? n.percentChange  : 0 },
-            { index: 'SENSEX',     last: s  ? s.last          : 0, pChange: s  ? s.percentChange  : 0 },
-            { index: 'NIFTY BANK', last: b  ? b.last          : 0, pChange: b  ? b.percentChange  : 0 },
-            { index: 'NIFTY IT',   last: it ? it.last         : 0, pChange: it ? it.percentChange : 0 },
-          ];
-        }
-      } catch (nseErr) {
-        console.log('[Indices] NSE failed:', nseErr.message, '— trying Yahoo...');
+      if (nseResult.status === 'fulfilled') {
+        const list = (nseResult.value.data && nseResult.value.data.data) || [];
+        const nFind = function(name) { return list.find(function(i) { return i.index === name; }); };
+        const n  = nFind('NIFTY 50');
+        const b  = nFind('NIFTY BANK');
+        const it = nFind('NIFTY IT');
+        if (n)  { nifty50   = n.last;  niftyChg = n.percentChange; }
+        if (b)  { bankNifty = b.last;  bankChg  = b.percentChange; }
+        if (it) { niftyIT   = it.last; itChg    = it.percentChange; }
+        console.log('[Indices] NSE OK — NIFTY 50:', nifty50);
+      } else {
+        console.log('[Indices] NSE failed:', nseResult.reason && nseResult.reason.message);
       }
 
-      // ── Fallback: Yahoo Finance ───────────────────────────────────
-      const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
-      const result  = await axios.get(
-        'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
-        {
-          timeout: 10000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            'Accept':     'application/json',
-            'Referer':    'https://finance.yahoo.com',
-          }
+      // ── SENSEX from Yahoo ^BSESN ──
+      let sensex = 0, sensexChg = 0;
+
+      if (yahooResult.status === 'fulfilled') {
+        const quotes = (yahooResult.value.data.quoteResponse && yahooResult.value.data.quoteResponse.result) || [];
+        const s = quotes.find(function(q) { return q.symbol === '^BSESN'; });
+        if (s && s.regularMarketPrice) {
+          sensex    = s.regularMarketPrice;
+          sensexChg = s.regularMarketChangePercent || 0;
+          console.log('[Indices] Yahoo SENSEX OK:', sensex);
         }
-      );
-      const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
-      const yFind  = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
-      const n  = yFind('^NSEI');
-      const s  = yFind('^BSESN');
-      const b  = yFind('^NSEBANK');
-      const it = yFind('NIFTY_IT.NS');
-      if (!n || !n.regularMarketPrice) throw new Error('Yahoo returned empty quotes');
-      console.log('[Indices] Yahoo OK — NIFTY:', n.regularMarketPrice, '| SENSEX:', s ? s.regularMarketPrice : 'not found');
+      } else {
+        console.log('[Indices] Yahoo SENSEX failed:', yahooResult.reason && yahooResult.reason.message);
+      }
+
       return [
-        { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0 },
-        { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0 },
-        { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0 },
-        { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0 },
+        { index: 'NIFTY 50',   last: nifty50,   pChange: niftyChg  },
+        { index: 'SENSEX',     last: sensex,     pChange: sensexChg },
+        { index: 'NIFTY BANK', last: bankNifty,  pChange: bankChg   },
+        { index: 'NIFTY IT',   last: niftyIT,    pChange: itChg     },
       ];
     }, 8);
     res.json(data);
   } catch (err) {
-    console.log('[Indices] All sources failed:', err.message);
-    // Return zeros so UI shows "Loading..." rather than stale hardcoded prices
+    console.log('[Indices] Fatal error:', err.message);
     res.json([
       { index: 'NIFTY 50',   last: 0, pChange: 0 },
       { index: 'SENSEX',     last: 0, pChange: 0 },
@@ -142,7 +145,6 @@ router.get('/indices', async function(req, res) {
 
 // ── GAINERS ───────────────────────────────────────────────────────
 router.get('/gainers', async function(req, res) {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const data = await getCached('gainers', async function() {
       const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=gainers');
@@ -156,7 +158,6 @@ router.get('/gainers', async function(req, res) {
 
 // ── LOSERS ────────────────────────────────────────────────────────
 router.get('/losers', async function(req, res) {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   try {
     const data = await getCached('losers', async function() {
       const result = await nseGet('https://www.nseindia.com/api/live-analysis-variations?index=loosers');
