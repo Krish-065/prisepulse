@@ -384,5 +384,65 @@ function getFallbackNews() {
     { title: 'NSE introduces new circuit breaker rules for F&O segment',   source: 'Economic Times',    url: '#', image: null, time: new Date(Date.now() - 450 * 60000).toISOString(), description: 'New risk management framework for derivatives.'      },
   ];
 }
-
+router.get('/fiidii', function(req, res) {
+  // In production, scrape from NSDL or SEBI portal.
+  // This provides static monthly data as a baseline.
+  res.json([
+    { month: 'Oct 2024', fii: -94017, dii: 107254 },
+    { month: 'Nov 2024', fii: -45974, dii:  65780 },
+    { month: 'Dec 2024', fii: -16042, dii:  42180 },
+    { month: 'Jan 2025', fii: -78027, dii:  84120 },
+    { month: 'Feb 2025', fii: -34574, dii:  48920 },
+    { month: 'Mar 2025', fii:  18420, dii:  22340 },
+  ]);
+});
+ 
+// ── SECTOR PERFORMANCE ────────────────────────────────────────────────────────
+router.get('/sectors', async function(req, res) {
+  try {
+    // Fetch NIFTY sectoral indices from Yahoo Finance
+    var sectorSymbols = [
+      { sym: 'NIFTY_IT.NS',     label: 'IT'        },
+      { sym: 'NIFTY_AUTO.NS',   label: 'Auto'      },
+      { sym: 'NIFTY_BANK.NS',   label: 'Banking'   },
+      { sym: 'NIFTY_FMCG.NS',   label: 'FMCG'      },
+      { sym: 'NIFTY_PHARMA.NS', label: 'Pharma'    },
+      { sym: 'NIFTY_METAL.NS',  label: 'Metal'     },
+      { sym: 'NIFTY_REALTY.NS', label: 'Realty'    },
+      { sym: 'NIFTY_ENERGY.NS', label: 'Energy'    },
+    ];
+    var syms = sectorSymbols.map(function(s) { return s.sym; }).join(',');
+    var result = await axios.get(
+      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(syms),
+      { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } }
+    );
+    var quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+    var data = sectorSymbols.map(function(s) {
+      var q = quotes.find(function(x) { return x.symbol === s.sym; });
+      return {
+        name:  s.label,
+        chg:   q ? parseFloat(q.regularMarketChangePercent.toFixed(2)) : 0,
+        price: q ? q.regularMarketPrice : 0,
+      };
+    });
+    res.json(data);
+  } catch (err) {
+    // Fallback static data
+    res.json([
+      { name: 'IT',      chg:  2.17  },
+      { name: 'Auto',    chg:  1.44  },
+      { name: 'Metal',   chg:  1.38  },
+      { name: 'Telecom', chg:  1.12  },
+      { name: 'Infra',   chg:  0.88  },
+      { name: 'FMCG',    chg:  0.14  },
+      { name: 'Banking', chg: -0.04  },
+      { name: 'Energy',  chg: -0.31  },
+      { name: 'Pharma',  chg: -0.82  },
+      { name: 'NBFC',    chg: -1.30  },
+      { name: 'Realty',  chg: -1.84  },
+      { name: 'Media',   chg: -2.12  },
+    ]);
+  }
+});
+ 
 module.exports = router;
