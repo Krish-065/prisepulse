@@ -214,18 +214,13 @@ export default function Watchlist() {
     if (!token) return;
     const load = async () => {
       try {
-        const currentToken = localStorage.getItem('token');
-        if (!currentToken) { navigate('/login'); return; }
-        const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + currentToken }, timeout: 15000 });
+        const res  = await axios.get(BASE + '/watchlist', { headers: { Authorization: 'Bearer ' + token } });
         const data = res.data;
         setWatchlist(data);
         if (data.symbols     && data.symbols.length     > 0) fetchStockPrices(data.symbols);
         if (data.cryptos     && data.cryptos.length     > 0) fetchCryptoPrices(data.cryptos);
         if (data.commodities && data.commodities.length > 0) fetchCommPrices();
-      } catch (err) {
-        console.error('[Watchlist] load error:', err.response?.status, err.message);
-        if (err.response?.status === 401) { localStorage.removeItem('token'); localStorage.removeItem('user'); navigate('/login'); }
-      }
+      } catch (err) { console.log('Watchlist load error:', err); }
     };
     load();
     const interval = setInterval(async () => {
@@ -280,40 +275,18 @@ export default function Watchlist() {
     const symbol = sym.toUpperCase().trim();
     if (!symbol) return;
     if ((watchlist.symbols || []).includes(symbol)) {
-      setAddError(symbol + ' is already in your watchlist');
+      setAddError(symbol + ' already in watchlist');
       setTimeout(() => setAddError(''), 3000);
       setSearch(''); setShowDrop(false); return;
     }
     setAdding(symbol); setAddError(''); setSearch(''); setShowDrop(false);
     try {
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) { navigate('/login'); return; }
-      const res = await axios.post(
-        BASE + '/watchlist/add',
-        { symbol },
-        { headers: { Authorization: 'Bearer ' + currentToken }, timeout: 15000 }
-      );
+      const res = await axios.post(BASE + '/watchlist/add', { symbol }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchStockPrices(res.data.symbols);
     } catch (err) {
-      console.error('[Watchlist] addStock error:', err.response?.status, err.response?.data, err.message);
-      if (err.response?.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        navigate('/login');
-        return;
-      }
-      const serverMsg = err.response?.data?.error || err.response?.data?.message;
-      if (serverMsg) {
-        setAddError('Server error: ' + serverMsg);
-      } else if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
-        setAddError('Request timed out. The server may be waking up — try again in 10 seconds.');
-      } else if (!err.response) {
-        setAddError('Cannot reach server. Check your internet or try again.');
-      } else {
-        setAddError('Failed to add ' + symbol + ' (HTTP ' + err.response.status + '). Open console for details.');
-      }
-      setTimeout(() => setAddError(''), 6000);
+      setAddError('Could not add ' + symbol + '. Check if it is a valid NSE symbol.');
+      setTimeout(() => setAddError(''), 4000);
     }
     setAdding('');
   };
@@ -328,19 +301,10 @@ export default function Watchlist() {
   const addCrypto = async (id) => {
     if ((watchlist.cryptos || []).includes(id)) return;
     try {
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) { navigate('/login'); return; }
-      const res = await axios.post(
-        BASE + '/watchlist/crypto/add',
-        { id },
-        { headers: { Authorization: 'Bearer ' + currentToken }, timeout: 15000 }
-      );
+      const res = await axios.post(BASE + '/watchlist/crypto/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchCryptoPrices(res.data.cryptos);
-    } catch (err) {
-      console.error('[Watchlist] addCrypto error:', err.response?.status, err.message);
-      if (err.response?.status === 401) { localStorage.removeItem('token'); navigate('/login'); }
-    }
+    } catch (err) { console.log('Crypto add error:', err); }
   };
 
   const removeCrypto = async (id) => {
@@ -353,19 +317,10 @@ export default function Watchlist() {
   const addCommodity = async (id) => {
     if ((watchlist.commodities || []).includes(id)) return;
     try {
-      const currentToken = localStorage.getItem('token');
-      if (!currentToken) { navigate('/login'); return; }
-      const res = await axios.post(
-        BASE + '/watchlist/commodity/add',
-        { id },
-        { headers: { Authorization: 'Bearer ' + currentToken }, timeout: 15000 }
-      );
+      const res = await axios.post(BASE + '/watchlist/commodity/add', { id }, { headers: { Authorization: 'Bearer ' + token } });
       setWatchlist(res.data);
       fetchCommPrices();
-    } catch (err) {
-      console.error('[Watchlist] addCommodity error:', err.response?.status, err.message);
-      if (err.response?.status === 401) { localStorage.removeItem('token'); navigate('/login'); }
-    }
+    } catch (err) { console.log('Commodity add error:', err); }
   };
 
   const removeCommodity = async (id) => {
