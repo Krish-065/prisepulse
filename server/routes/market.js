@@ -65,10 +65,35 @@ const normalizeStock = function(s) {
 };
 
 // ── INDICES ───────────────────────────────────────────────────────
-// ── INDICES (Yahoo Finance — includes SENSEX, no NSE IP block) ────
+// Primary: NSE allIndices API. Fallback: Yahoo Finance v8.
 router.get('/indices', async function(req, res) {
   try {
     const data = await getCached('indices', async function() {
+
+      // --- Primary: NSE allIndices ---
+      try {
+        const result = await nseGet('https://www.nseindia.com/api/allIndices');
+        const list   = (result.data && result.data.data) || [];
+        const find   = function(name) { return list.find(function(i) { return i.index === name; }); };
+        const n  = find('NIFTY 50');
+        const s  = find('SENSEX');
+        const b  = find('NIFTY BANK');
+        const it = find('NIFTY IT');
+        // Only return if we got at least NIFTY values
+        if (n && n.last > 0) {
+          console.log('[Indices] NSE OK — NIFTY:', n.last);
+          return [
+            { index: 'NIFTY 50',   last: n  ? n.last  : 0, pChange: n  ? n.percentChange  : 0 },
+            { index: 'SENSEX',     last: s  ? s.last  : 0, pChange: s  ? s.percentChange  : 0 },
+            { index: 'NIFTY BANK', last: b  ? b.last  : 0, pChange: b  ? b.percentChange  : 0 },
+            { index: 'NIFTY IT',   last: it ? it.last : 0, pChange: it ? it.percentChange : 0 },
+          ];
+        }
+      } catch (nseErr) {
+        console.log('[Indices] NSE failed:', nseErr.message, '— trying Yahoo...');
+      }
+
+      // --- Fallback: Yahoo Finance ---
       const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
       const result  = await axios.get(
         'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
@@ -87,21 +112,23 @@ router.get('/indices', async function(req, res) {
       const s  = find('^BSESN');
       const b  = find('^NSEBANK');
       const it = find('NIFTY_IT.NS');
+      if (!n || !n.regularMarketPrice) throw new Error('Yahoo returned empty quotes');
+      console.log('[Indices] Yahoo OK — NIFTY:', n.regularMarketPrice);
       return [
         { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0 },
         { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0 },
         { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0 },
         { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0 },
       ];
-    }, 15);
+    }, 8);
     res.json(data);
   } catch (err) {
-    console.log('[Indices] Yahoo error:', err.message);
+    console.log('[Indices] All sources failed:', err.message, '— serving static fallback');
     res.json([
-      { index: 'NIFTY 50',   last: 23114.5,  pChange: 0.49  },
-      { index: 'SENSEX',     last: 76012,    pChange: 0.62  },
-      { index: 'NIFTY BANK', last: 53427.05, pChange: -0.04 },
-      { index: 'NIFTY IT',   last: 29199.6,  pChange: 2.17  },
+      { index: 'NIFTY 50',   last: 0, pChange: 0 },
+      { index: 'SENSEX',     last: 0, pChange: 0 },
+      { index: 'NIFTY BANK', last: 0, pChange: 0 },
+      { index: 'NIFTY IT',   last: 0, pChange: 0 },
     ]);
   }
 });
@@ -273,15 +300,30 @@ router.get('/mutualfunds', async function(req, res) {
 
 // ── COMMODITIES ───────────────────────────────────────────────────
 router.get('/commodities', async function(req, res) {
+  const makeComm = function(label, basePrice, spread, unit, baseChangePct) {
+    const noise  = (Math.random() * spread * 2 - spread);
+    const price  = Math.round(basePrice + noise);
+    const pct    = (baseChangePct + (Math.random() * 0.2 - 0.1));
+    const isUp   = pct >= 0;
+    const change = Math.abs(price * pct / 100).toFixed(2);
+    return {
+      label,
+      price,
+      unit,
+      isUp,
+      changePct:  (isUp ? '+' : '-') + Math.abs(pct).toFixed(2) + '%',
+      changeAmt:  (isUp ? '+' : '-') + '₹' + change,
+    };
+  };
   res.json({
-    gold:       { price: 71240 + Math.floor(Math.random() * 200 - 100), change: '+0.18%', unit: '10g'   },
-    silver:     { price: 84500 + Math.floor(Math.random() * 500 - 250), change: '+0.32%', unit: 'kg'    },
-    crude:      { price: 6842  + Math.floor(Math.random() * 50  - 25),  change: '-0.44%', unit: 'bbl'   },
-    naturalgas: { price: 287   + Math.floor(Math.random() * 10  - 5),   change: '+1.12%', unit: 'mmBtu' },
-    copper:     { price: 812   + Math.floor(Math.random() * 20  - 10),  change: '+0.55%', unit: 'kg'    },
-    aluminium:  { price: 224   + Math.floor(Math.random() * 8   - 4),   change: '-0.22%', unit: 'kg'    },
-    zinc:       { price: 268   + Math.floor(Math.random() * 10  - 5),   change: '+0.38%', unit: 'kg'    },
-    nickel:     { price: 1342  + Math.floor(Math.random() * 30  - 15),  change: '-0.15%', unit: 'kg'    },
+    gold:       makeComm('Gold',        71240, 150,  '10g',    0.18),
+    silver:     makeComm('Silver',      84500, 400,  'kg',     0.32),
+    crude:      makeComm('Crude Oil',   6842,  40,   'bbl',   -0.44),
+    naturalgas: makeComm('Natural Gas', 287,   8,    'mmBtu',  1.12),
+    copper:     makeComm('Copper',      812,   15,   'kg',     0.55),
+    aluminium:  makeComm('Aluminium',   224,   6,    'kg',    -0.22),
+    zinc:       makeComm('Zinc',        268,   8,    'kg',     0.38),
+    nickel:     makeComm('Nickel',      1342,  25,   'kg',    -0.15),
   });
 });
 
