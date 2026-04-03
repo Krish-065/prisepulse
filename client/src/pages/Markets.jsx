@@ -38,61 +38,29 @@ export default function Markets() {
     return function() { clearInterval(c); };
   }, []);
 
-  // Fetch indices directly from Yahoo Finance in the browser.
-  // Browser requests to Yahoo Finance work fine — only server-to-server gets blocked.
-  // This is the same pattern used for crypto (CoinGecko browser-side).
+  // Yahoo Finance blocks CORS from browsers — always use the backend proxy instead.
   var fetchIndices = function() {
-    axios.get(
-      'https://query1.finance.yahoo.com/v8/finance/quote' +
-      '?symbols=%5ENSEI,%5EBSESN,%5ENSEBANK,NIFTY_IT.NS',
-      { timeout: 10000, headers: { 'Accept': 'application/json' } }
-    )
-    .then(function(res) {
-      var quotes = (res.data &&
-                    res.data.quoteResponse &&
-                    res.data.quoteResponse.result) || [];
-      if (quotes.length === 0) throw new Error('empty');
-      var find = function(sym) {
-        return quotes.find(function(q) { return q.symbol === sym; });
-      };
-      var n  = find('^NSEI');
-      var s  = find('^BSESN');
-      var b  = find('^NSEBANK');
-      var it = find('NIFTY_IT.NS');
-      if (n && n.regularMarketPrice) setNifty(n.regularMarketPrice);
-      if (s && s.regularMarketPrice) setSensex(s.regularMarketPrice);
-      if (b && b.regularMarketPrice) setBankNifty(b.regularMarketPrice);
-      if (it && it.regularMarketPrice) setNiftyIT(it.regularMarketPrice);
-      if (n) setNiftyChg(n.regularMarketChangePercent || 0);
-      if (s) setSensexChg(s.regularMarketChangePercent || 0);
-      if (b) setBankChg(b.regularMarketChangePercent || 0);
-      if (it) setITChg(it.regularMarketChangePercent || 0);
-      setLastTick(new Date());
-    })
-    .catch(function() {
-      // Fallback to backend route
-      axios.get(API + '/api/market/indices', { timeout: 12000 })
-        .then(function(res) {
-          var data = res.data || [];
-          var find = function(name) {
-            return data.find(function(i) { return i.index === name; });
-          };
-          var n  = find('NIFTY 50');
-          var s  = find('SENSEX');
-          var b  = find('NIFTY BANK');
-          var it = find('NIFTY IT');
-          if (n && n.last > 0) setNifty(n.last);
-          if (s && s.last > 0) setSensex(s.last);
-          if (b && b.last > 0) setBankNifty(b.last);
-          if (it && it.last > 0) setNiftyIT(it.last);
-          if (n) setNiftyChg(n.pChange || 0);
-          if (s) setSensexChg(s.pChange || 0);
-          if (b) setBankChg(b.pChange || 0);
-          if (it) setITChg(it.pChange || 0);
-          setLastTick(new Date());
-        })
-        .catch(function() { console.log('All index sources failed'); });
-    });
+    axios.get(API + '/api/market/indices', { timeout: 12000 })
+      .then(function(res) {
+        var data = res.data || [];
+        var find = function(name) {
+          return data.find(function(i) { return i.index === name; });
+        };
+        var n  = find('NIFTY 50');
+        var s  = find('SENSEX');
+        var b  = find('NIFTY BANK');
+        var it = find('NIFTY IT');
+        if (n && n.last > 0) setNifty(n.last);
+        if (s && s.last > 0) setSensex(s.last);
+        if (b && b.last > 0) setBankNifty(b.last);
+        if (it && it.last > 0) setNiftyIT(it.last);
+        if (n) setNiftyChg(n.pChange || 0);
+        if (s) setSensexChg(s.pChange || 0);
+        if (b) setBankChg(b.pChange || 0);
+        if (it) setITChg(it.pChange || 0);
+        setLastTick(new Date());
+      })
+      .catch(function(err) { console.log('Indices fetch failed:', err.message); });
   };
 
   var fetchAll = function() {
