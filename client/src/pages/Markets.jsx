@@ -38,7 +38,7 @@ export default function Markets() {
     return function() { clearInterval(c); };
   }, []);
 
-  // Yahoo Finance blocks CORS from browsers — always use the backend proxy instead.
+  // Yahoo Finance blocks CORS from browsers — go straight to the backend proxy.
   var fetchIndices = function() {
     axios.get(API + '/api/market/indices', { timeout: 12000 })
       .then(function(res) {
@@ -50,14 +50,14 @@ export default function Markets() {
         var s  = find('SENSEX');
         var b  = find('NIFTY BANK');
         var it = find('NIFTY IT');
-        if (n && n.last > 0) setNifty(n.last);
-        if (s && s.last > 0) setSensex(s.last);
-        if (b && b.last > 0) setBankNifty(b.last);
+        if (n  && n.last  > 0) setNifty(n.last);
+        if (s  && s.last  > 0) setSensex(s.last);
+        if (b  && b.last  > 0) setBankNifty(b.last);
         if (it && it.last > 0) setNiftyIT(it.last);
-        if (n) setNiftyChg(n.pChange || 0);
-        if (s) setSensexChg(s.pChange || 0);
-        if (b) setBankChg(b.pChange || 0);
-        if (it) setITChg(it.pChange || 0);
+        if (n)  setNiftyChg(n.pChange   || 0);
+        if (s)  setSensexChg(s.pChange  || 0);
+        if (b)  setBankChg(b.pChange    || 0);
+        if (it) setITChg(it.pChange     || 0);
         setLastTick(new Date());
       })
       .catch(function(err) { console.log('Indices fetch failed:', err.message); });
