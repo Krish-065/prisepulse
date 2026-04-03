@@ -4,10 +4,6 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 
 var API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// WebSocket (socket.io) is unreliable on Render free tier — it drops persistent
-// connections. Replaced with HTTP polling every 10 seconds. Same data, same speed,
-// 100% reliable on any free host.
-
 export default function Markets() {
   var [gainers,     setGainers]     = useState([]);
   var [losers,      setLosers]      = useState([]);
@@ -15,122 +11,90 @@ export default function Markets() {
   var [status,      setStatus]      = useState(null);
   var [chartData,   setChartData]   = useState([]);
   var [activeTab,   setActiveTab]   = useState('overview');
-  var [indices,     setIndices]     = useState({
-    nifty: 0, sensex: 0, bankNifty: 0, niftyIT: 0,
-    niftyChg: 0, sensexChg: 0, bankChg: 0, itChg: 0,
-  });
+
+  var [nifty,     setNifty]     = useState(0);
+  var [sensex,    setSensex]    = useState(0);
+  var [bankNifty, setBankNifty] = useState(0);
+  var [niftyIT,   setNiftyIT]   = useState(0);
+  var [niftyChg,  setNiftyChg]  = useState(0);
+  var [sensexChg, setSensexChg] = useState(0);
+  var [bankChg,   setBankChg]   = useState(0);
+  var [itChg,     setITChg]     = useState(0);
   var [lastTick,  setLastTick]  = useState(null);
   var [clockTime, setClockTime] = useState('');
+
   var tickRef = useRef(null);
 
-  // Live IST clock — ticks every second in the browser, no backend needed
+  // Live IST clock ticking every second in browser
   useEffect(function() {
     var updateClock = function() {
-      var ist = new Date().toLocaleTimeString('en-IN', {
+      setClockTime(new Date().toLocaleTimeString('en-IN', {
         timeZone: 'Asia/Kolkata',
         hour: '2-digit', minute: '2-digit', second: '2-digit'
-      });
-      setClockTime(ist);
+      }));
     };
     updateClock();
-    var clock = setInterval(updateClock, 1000);
-    return function() { clearInterval(clock); };
+    var c = setInterval(updateClock, 1000);
+    return function() { clearInterval(c); };
   }, []);
 
-  // ── FETCH INDICES — NSE via CORS proxy ─────────────────────────
-  // NSE blocks Render server IPs AND has CORS on browser direct requests.
-  // Solution: route browser requests through allorigins.win CORS proxy → NSE.
-  // Strategy: try 3 sources in order, use first that returns valid data
-  // 1. Yahoo Finance browser-side (no CORS issues, reliable)
-  // 2. NSE via corsproxy.io
-  // 3. Backend Yahoo route (fallback)
+  // Fetch indices directly from Yahoo Finance in the browser.
+  // Browser requests to Yahoo Finance work fine — only server-to-server gets blocked.
+  // This is the same pattern used for crypto (CoinGecko browser-side).
   var fetchIndices = function() {
-
-    // Source 1: Yahoo Finance directly from browser - works without CORS issues
     axios.get(
-      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5ENSEI,%5EBSESN,%5ENSEBANK,NIFTY_IT.NS',
-      {
-        timeout: 8000,
-        headers: { 'Accept': 'application/json' },
-      }
+      'https://query1.finance.yahoo.com/v8/finance/quote' +
+      '?symbols=%5ENSEI,%5EBSESN,%5ENSEBANK,NIFTY_IT.NS',
+      { timeout: 10000, headers: { 'Accept': 'application/json' } }
     )
     .then(function(res) {
-      var quotes = res.data && res.data.quoteResponse && res.data.quoteResponse.result
-        ? res.data.quoteResponse.result : [];
-      if (quotes.length === 0) throw new Error('Empty response');
-      var find = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+      var quotes = (res.data &&
+                    res.data.quoteResponse &&
+                    res.data.quoteResponse.result) || [];
+      if (quotes.length === 0) throw new Error('empty');
+      var find = function(sym) {
+        return quotes.find(function(q) { return q.symbol === sym; });
+      };
       var n  = find('^NSEI');
       var s  = find('^BSESN');
       var b  = find('^NSEBANK');
       var it = find('NIFTY_IT.NS');
-      if (!n && !s) throw new Error('No data');
-      setIndices({
-        nifty:     n  ? n.regularMarketPrice             : 0,
-        sensex:    s  ? s.regularMarketPrice             : 0,
-        bankNifty: b  ? b.regularMarketPrice             : 0,
-        niftyIT:   it ? it.regularMarketPrice            : 0,
-        niftyChg:  n  ? n.regularMarketChangePercent     : 0,
-        sensexChg: s  ? s.regularMarketChangePercent     : 0,
-        bankChg:   b  ? b.regularMarketChangePercent     : 0,
-        itChg:     it ? it.regularMarketChangePercent    : 0,
-      });
+      if (n && n.regularMarketPrice) setNifty(n.regularMarketPrice);
+      if (s && s.regularMarketPrice) setSensex(s.regularMarketPrice);
+      if (b && b.regularMarketPrice) setBankNifty(b.regularMarketPrice);
+      if (it && it.regularMarketPrice) setNiftyIT(it.regularMarketPrice);
+      if (n) setNiftyChg(n.regularMarketChangePercent || 0);
+      if (s) setSensexChg(s.regularMarketChangePercent || 0);
+      if (b) setBankChg(b.regularMarketChangePercent || 0);
+      if (it) setITChg(it.regularMarketChangePercent || 0);
       setLastTick(new Date());
     })
     .catch(function() {
-      // Source 2: NSE via corsproxy.io (different proxy, more reliable than allorigins)
-      axios.get(
-        'https://corsproxy.io/?' + encodeURIComponent('https://www.nseindia.com/api/allIndices'),
-        { timeout: 10000, headers: { 'Accept': 'application/json' } }
-      )
-      .then(function(res) {
-        var data = res.data && res.data.data ? res.data.data : [];
-        if (data.length === 0) throw new Error('Empty NSE data');
-        var find = function(name) { return data.find(function(i) { return i.index === name; }); };
-        var n  = find('NIFTY 50');
-        var s  = find('SENSEX') || find('S&P BSE SENSEX');
-        var b  = find('NIFTY BANK');
-        var it = find('NIFTY IT');
-        if (!n && !s) throw new Error('Indices not found');
-        setIndices({
-          nifty:     n  ? parseFloat(n.last)           : 0,
-          sensex:    s  ? parseFloat(s.last)           : 0,
-          bankNifty: b  ? parseFloat(b.last)           : 0,
-          niftyIT:   it ? parseFloat(it.last)          : 0,
-          niftyChg:  n  ? parseFloat(n.percentChange)  : 0,
-          sensexChg: s  ? parseFloat(s.percentChange)  : 0,
-          bankChg:   b  ? parseFloat(b.percentChange)  : 0,
-          itChg:     it ? parseFloat(it.percentChange) : 0,
-        });
-        setLastTick(new Date());
-      })
-      .catch(function() {
-        // Source 3: Backend Yahoo route (last resort)
-        axios.get(API + '/api/market/indices', { timeout: 12000 })
-          .then(function(res) {
-            var data = res.data || [];
-            var find = function(name) { return data.find(function(i) { return i.index === name; }); };
-            var n  = find('NIFTY 50');
-            var s  = find('SENSEX');
-            var b  = find('NIFTY BANK');
-            var it = find('NIFTY IT');
-            setIndices({
-              nifty:     n  ? n.last     : 0,
-              sensex:    s  ? s.last     : 0,
-              bankNifty: b  ? b.last     : 0,
-              niftyIT:   it ? it.last    : 0,
-              niftyChg:  n  ? n.pChange  : 0,
-              sensexChg: s  ? s.pChange  : 0,
-              bankChg:   b  ? b.pChange  : 0,
-              itChg:     it ? it.pChange : 0,
-            });
-            setLastTick(new Date());
-          })
-          .catch(function() { console.log('All index sources failed'); });
-      });
+      // Fallback to backend route
+      axios.get(API + '/api/market/indices', { timeout: 12000 })
+        .then(function(res) {
+          var data = res.data || [];
+          var find = function(name) {
+            return data.find(function(i) { return i.index === name; });
+          };
+          var n  = find('NIFTY 50');
+          var s  = find('SENSEX');
+          var b  = find('NIFTY BANK');
+          var it = find('NIFTY IT');
+          if (n && n.last > 0) setNifty(n.last);
+          if (s && s.last > 0) setSensex(s.last);
+          if (b && b.last > 0) setBankNifty(b.last);
+          if (it && it.last > 0) setNiftyIT(it.last);
+          if (n) setNiftyChg(n.pChange || 0);
+          if (s) setSensexChg(s.pChange || 0);
+          if (b) setBankChg(b.pChange || 0);
+          if (it) setITChg(it.pChange || 0);
+          setLastTick(new Date());
+        })
+        .catch(function() { console.log('All index sources failed'); });
     });
   };
 
-  // ── FETCH EVERYTHING ELSE ───────────────────────────────────────
   var fetchAll = function() {
     var BASE = API + '/api/market';
     Promise.allSettled([
@@ -149,23 +113,15 @@ export default function Markets() {
   };
 
   useEffect(function() {
-    // Initial load
     fetchIndices();
     fetchAll();
-
-    // Poll indices every 10 seconds
     tickRef.current = setInterval(fetchIndices, 10000);
-
-    // Refresh gainers/losers/chart every 60 seconds
     var slowInterval = setInterval(fetchAll, 60000);
-
-    // Refresh commodities every 60 seconds independently
     var commInterval = setInterval(function() {
       axios.get(API + '/api/market/commodities', { timeout: 12000 })
         .then(function(res) { setCommodities(res.data); })
-        .catch(function(err) { console.log('Commodities refresh error:', err.message); });
+        .catch(function() {});
     }, 60000);
-
     return function() {
       clearInterval(tickRef.current);
       clearInterval(slowInterval);
@@ -203,7 +159,6 @@ export default function Markets() {
   return (
     <div className="p-4 max-w-7xl mx-auto">
 
-      {/* Market Status */}
       {status && (
         <div className={
           'flex items-center justify-between gap-2 px-4 py-2 rounded-lg mb-4 text-xs font-mono ' +
@@ -223,15 +178,13 @@ export default function Markets() {
         </div>
       )}
 
-      {/* Index Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <IndexCard label="NIFTY 50"   value={indices.nifty}     change={indices.niftyChg}  />
-        <IndexCard label="SENSEX"     value={indices.sensex}    change={indices.sensexChg} />
-        <IndexCard label="BANK NIFTY" value={indices.bankNifty} change={indices.bankChg}   />
-        <IndexCard label="NIFTY IT"   value={indices.niftyIT}   change={indices.itChg}     />
+        <IndexCard label="NIFTY 50"   value={nifty}     change={niftyChg}  />
+        <IndexCard label="SENSEX"     value={sensex}    change={sensexChg} />
+        <IndexCard label="BANK NIFTY" value={bankNifty} change={bankChg}   />
+        <IndexCard label="NIFTY IT"   value={niftyIT}   change={itChg}     />
       </div>
 
-      {/* Intraday Chart */}
       {chartData.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
           <div className="text-white font-semibold mb-3 text-sm">NIFTY 50 — Intraday Chart</div>
@@ -251,7 +204,6 @@ export default function Markets() {
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-800">
         {tabs.map(function(t) {
           return (
@@ -265,7 +217,6 @@ export default function Markets() {
         })}
       </div>
 
-      {/* Overview */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -292,7 +243,6 @@ export default function Markets() {
               })
             )}
           </div>
-
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
               <span className="text-white font-semibold text-sm">Top Losers</span>
@@ -320,7 +270,6 @@ export default function Markets() {
         </div>
       )}
 
-      {/* Gainers Table */}
       {activeTab === 'gainers' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <table className="w-full">
@@ -348,7 +297,6 @@ export default function Markets() {
         </div>
       )}
 
-      {/* Losers Table */}
       {activeTab === 'losers' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
           <table className="w-full">
@@ -376,48 +324,38 @@ export default function Markets() {
         </div>
       )}
 
-      {/* Commodities */}
       {activeTab === 'commodities' && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-gray-500 text-xs font-mono">Live prices via Yahoo Finance · converted to INR · refreshes every 60s</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {commodities ? (
-              [
-                { key: 'gold',       icon: 'GOLD',  },
-                { key: 'silver',     icon: 'SLVR',  },
-                { key: 'crude',      icon: 'CRUDE', },
-                { key: 'naturalgas', icon: 'NGAS',  },
-                { key: 'copper',     icon: 'COPR',  },
-              ].map(function(c) {
-                var d = commodities[c.key];
-                if (!d) return null;
-                return (
-                  <div key={c.key} className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition-colors">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="text-green-400 font-mono font-bold text-xs bg-green-400/10 px-2 py-1 rounded">{c.icon}</div>
-                      <div className="text-gray-600 text-xs font-mono">{d.unit}</div>
-                    </div>
-                    <div className="text-gray-400 text-xs font-mono mb-1">{d.label}</div>
-                    <div className="text-white text-2xl font-bold font-mono mb-2">
-                      Rs.{Number(d.price).toLocaleString('en-IN')}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={'text-sm font-mono font-bold ' + (d.isUp ? 'text-green-400' : 'text-red-400')}>
-                        {d.changePct}
-                      </span>
-                      <span className={'text-xs font-mono ' + (d.isUp ? 'text-green-400/70' : 'text-red-400/70')}>
-                        {d.changeAmt}
-                      </span>
-                    </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {commodities ? (
+            [
+              { key: 'gold',       icon: 'GOLD'  },
+              { key: 'silver',     icon: 'SLVR'  },
+              { key: 'crude',      icon: 'CRUDE' },
+              { key: 'naturalgas', icon: 'NGAS'  },
+              { key: 'copper',     icon: 'COPR'  },
+            ].map(function(c) {
+              var d = commodities[c.key];
+              if (!d) return null;
+              return (
+                <div key={c.key} className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-green-400 font-mono font-bold text-xs bg-green-400/10 px-2 py-1 rounded">{c.icon}</div>
+                    <div className="text-gray-600 text-xs font-mono">{d.unit}</div>
                   </div>
-                );
-              })
-            ) : (
-              <div className="col-span-3 text-gray-500 text-xs text-center font-mono py-8">Loading commodities...</div>
-            )}
-          </div>
+                  <div className="text-gray-400 text-xs font-mono mb-1">{d.label}</div>
+                  <div className="text-white text-2xl font-bold font-mono mb-2">
+                    Rs.{Number(d.price).toLocaleString('en-IN')}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={'text-sm font-mono font-bold ' + (d.isUp ? 'text-green-400' : 'text-red-400')}>{d.changePct}</span>
+                    <span className={'text-xs font-mono ' + (d.isUp ? 'text-green-400/70' : 'text-red-400/70')}>{d.changeAmt}</span>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-3 text-gray-500 text-xs text-center font-mono py-8">Loading commodities...</div>
+          )}
         </div>
       )}
 
