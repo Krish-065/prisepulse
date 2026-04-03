@@ -64,39 +64,40 @@ const normalizeStock = function(s) {
   };
 };
 
+// ── SENSEX last-known fallback (survives server restarts within session) ──
+let lastSensex = { last: 0, pChange: 0 };
+
 // ── INDICES ───────────────────────────────────────────────────────
-// NSE allIndices  → NIFTY 50, BANK NIFTY, NIFTY IT  (NSE-only indices)
-// Yahoo ^BSESN   → SENSEX  (BSE index, NSE API never has it)
-// Both fetched in parallel; each fails independently.
+// NSE allIndices → NIFTY 50, BANK NIFTY, NIFTY IT
+// Stooq CSV     → SENSEX  (Yahoo blocks Render IPs; Stooq works from any server)
 router.get('/indices', async function(req, res) {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   res.set('Pragma', 'no-cache');
   try {
     const data = await getCached('indices', async function() {
 
-      // Run NSE + Yahoo in parallel
-      const [nseResult, yahooResult] = await Promise.allSettled([
+      // Run NSE + Stooq in parallel
+      const [nseResult, stooqResult] = await Promise.allSettled([
         nseGet('https://www.nseindia.com/api/allIndices'),
         axios.get(
-          'https://query2.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
+          'https://stooq.com/q/l/?s=%5Ebsesn&f=sd2t2ohlcv&h&e=csv',
           {
             timeout: 10000,
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-              'Accept':     'application/json',
-              'Referer':    'https://finance.yahoo.com',
+              'Accept': 'text/plain,text/csv,*/*',
             }
           }
         )
       ]);
 
-      // ── NIFTY 50, BANK NIFTY, NIFTY IT from NSE ──
+      // ── NIFTY 50, BANK NIFTY, NIFTY IT from NSE ──────────────────
       let nifty50 = 0, niftyChg = 0;
       let bankNifty = 0, bankChg = 0;
       let niftyIT = 0, itChg = 0;
 
       if (nseResult.status === 'fulfilled') {
-        const list = (nseResult.value.data && nseResult.value.data.data) || [];
+        const list  = (nseResult.value.data && nseResult.value.data.data) || [];
         const nFind = function(name) { return list.find(function(i) { return i.index === name; }); };
         const n  = nFind('NIFTY 50');
         const b  = nFind('NIFTY BANK');
@@ -109,19 +110,33 @@ router.get('/indices', async function(req, res) {
         console.log('[Indices] NSE failed:', nseResult.reason && nseResult.reason.message);
       }
 
-      // ── SENSEX from Yahoo ^BSESN ──
-      let sensex = 0, sensexChg = 0;
+      // ── SENSEX from Stooq CSV ─────────────────────────────────────
+      // Response format (header + data row):
+      //   Symbol,Date,Time,Open,High,Low,Close,Volume
+      //   ^BSESN,2026-04-03,10:30:00,75800,76500,75700,76200,0
+      let sensex = lastSensex.last, sensexChg = lastSensex.pChange;
 
-      if (yahooResult.status === 'fulfilled') {
-        const quotes = (yahooResult.value.data.quoteResponse && yahooResult.value.data.quoteResponse.result) || [];
-        const s = quotes.find(function(q) { return q.symbol === '^BSESN'; });
-        if (s && s.regularMarketPrice) {
-          sensex    = s.regularMarketPrice;
-          sensexChg = s.regularMarketChangePercent || 0;
-          console.log('[Indices] Yahoo SENSEX OK:', sensex);
+      if (stooqResult.status === 'fulfilled') {
+        try {
+          const lines = stooqResult.value.data.trim().split('\n');
+          if (lines.length >= 2) {
+            const vals  = lines[1].split(',');
+            const close = parseFloat(vals[6]); // Close
+            const open  = parseFloat(vals[3]); // Open
+            if (close > 10000) {              // sanity check — SENSEX is always >10k
+              const pct = open > 0 ? ((close - open) / open * 100) : 0;
+              sensex    = close;
+              sensexChg = parseFloat(pct.toFixed(2));
+              lastSensex = { last: sensex, pChange: sensexChg };
+              console.log('[Indices] Stooq SENSEX OK:', sensex, '| change:', sensexChg + '%');
+            }
+          }
+        } catch (parseErr) {
+          console.log('[Indices] Stooq parse error:', parseErr.message);
         }
       } else {
-        console.log('[Indices] Yahoo SENSEX failed:', yahooResult.reason && yahooResult.reason.message);
+        console.log('[Indices] Stooq SENSEX failed:', stooqResult.reason && stooqResult.reason.message,
+          lastSensex.last > 0 ? '— using last known: ' + lastSensex.last : '');
       }
 
       return [
@@ -136,7 +151,7 @@ router.get('/indices', async function(req, res) {
     console.log('[Indices] Fatal error:', err.message);
     res.json([
       { index: 'NIFTY 50',   last: 0, pChange: 0 },
-      { index: 'SENSEX',     last: 0, pChange: 0 },
+      { index: 'SENSEX',     last: lastSensex.last, pChange: lastSensex.pChange },
       { index: 'NIFTY BANK', last: 0, pChange: 0 },
       { index: 'NIFTY IT',   last: 0, pChange: 0 },
     ]);
