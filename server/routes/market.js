@@ -444,8 +444,7 @@ router.get('/sectors', async function(req, res) {
     ]);
   }
 });
-// ── ADD THIS ROUTE TO server/routes/market.js ─────────────────────────────
-// Paste this BEFORE the `module.exports = router;` line
+
 // This fixes CORS issues for portfolio stock prices — browser calls backend,
 // backend calls Yahoo Finance (no CORS block server-to-server)
 
@@ -482,4 +481,92 @@ router.get('/quotes', async function(req, res) {
     res.status(500).json({ error: 'Failed to fetch quotes' });
   }
 });
+
+// These proxy Yahoo Finance and CoinGecko through your backend so CORS is not an issue.
+
+// ── STOCK QUOTES PROXY (Yahoo Finance via backend) ────────────────────────────
+router.get('/quotes', async function(req, res) {
+  try {
+    var symbols = req.query.symbols; // e.g. "RELIANCE.NS,TCS.NS"
+    if (!symbols) return res.status(400).json({ error: 'symbols param required' });
+
+    var data = await getCached('quotes_' + symbols, async function() {
+      var result = await axios.get(
+        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(symbols),
+        {
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Referer': 'https://finance.yahoo.com',
+          }
+        }
+      );
+      var quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+      var map = {};
+      quotes.forEach(function(q) {
+        var sym = q.symbol.replace('.NS', '').replace('.BO', '');
+        map[sym] = {
+          price:  q.regularMarketPrice          || 0,
+          change: q.regularMarketChangePercent   || 0,
+          high:   q.regularMarketDayHigh         || 0,
+          low:    q.regularMarketDayLow          || 0,
+          open:   q.regularMarketOpen            || 0,
+          prev:   q.regularMarketPreviousClose   || 0,
+          name:   q.longName || q.shortName      || sym,
+        };
+      });
+      return map;
+    }, 15); // 15 second cache — keeps it fresh but avoids hammering Yahoo
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json(data);
+  } catch (err) {
+    console.log('[Quotes] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch quotes: ' + err.message });
+  }
+});
+
+// ── CRYPTO PRICES PROXY (CoinGecko via backend) ───────────────────────────────
+router.get('/crypto-prices', async function(req, res) {
+  try {
+    var ids = req.query.ids; // e.g. "bitcoin,ethereum,solana"
+    if (!ids) return res.status(400).json({ error: 'ids param required' });
+
+    var data = await getCached('crypto_' + ids, async function() {
+      var result = await axios.get(
+        'https://api.coingecko.com/api/v3/coins/markets' +
+        '?vs_currency=inr' +
+        '&ids=' + ids +
+        '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
+        {
+          timeout: 15000,
+          headers: { 'Accept': 'application/json' }
+        }
+      );
+      var map = {};
+      result.data.forEach(function(c) {
+        var obj = {
+          id:        c.id,
+          symbol:    c.symbol.toUpperCase(),
+          name:      c.name,
+          price:     c.current_price,
+          change24h: c.price_change_percentage_24h
+            ? c.price_change_percentage_24h.toFixed(2) : '0',
+        };
+        map[c.id]                   = obj;
+        map[c.symbol.toUpperCase()] = obj;
+        map[c.symbol.toLowerCase()] = obj;
+      });
+      return map;
+    }, 60); // 60 second cache — CoinGecko free tier is very rate-limited on server IPs
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.json(data);
+  } catch (err) {
+    console.log('[CryptoPrices] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch crypto prices: ' + err.message });
+  }
+});
+
 module.exports = router;
