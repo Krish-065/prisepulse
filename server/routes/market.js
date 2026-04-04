@@ -444,5 +444,42 @@ router.get('/sectors', async function(req, res) {
     ]);
   }
 });
- 
+// ── ADD THIS ROUTE TO server/routes/market.js ─────────────────────────────
+// Paste this BEFORE the `module.exports = router;` line
+// This fixes CORS issues for portfolio stock prices — browser calls backend,
+// backend calls Yahoo Finance (no CORS block server-to-server)
+
+router.get('/quotes', async function(req, res) {
+  try {
+    var symbols = req.query.symbols;
+    if (!symbols) return res.json([]);
+
+    var result = await axios.get(
+      'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(symbols),
+      {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Referer': 'https://finance.yahoo.com',
+        }
+      }
+    );
+
+    var quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+    var data = quotes.map(function(q) {
+      return {
+        symbol: q.symbol.replace('.NS', '').replace('.BO', ''),
+        price:  q.regularMarketPrice || 0,
+        change: q.regularMarketChangePercent || 0,
+        name:   q.shortName || q.longName || '',
+      };
+    });
+
+    res.json(data);
+  } catch (err) {
+    console.log('[Quotes] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch quotes' });
+  }
+});
 module.exports = router;
