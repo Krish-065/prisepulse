@@ -66,11 +66,14 @@ const normalizeStock = function(s) {
 
 // ── INDICES ───────────────────────────────────────────────────────
 // ── INDICES (Yahoo Finance — includes SENSEX, no NSE IP block) ────
+// ADD THIS to server/routes/market.js BEFORE module.exports = router;
+// Replaces the existing /indices route — delete the old one and use this.
+
 router.get('/indices', async function(req, res) {
   try {
-    const data = await getCached('indices', async function() {
-      const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
-      const result  = await axios.get(
+    var data = await getCached('indices', async function() {
+      var symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
+      var result  = await axios.get(
         'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
         {
           timeout: 10000,
@@ -81,27 +84,28 @@ router.get('/indices', async function(req, res) {
           }
         }
       );
-      const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
-      const find   = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
-      const n  = find('^NSEI');
-      const s  = find('^BSESN');
-      const b  = find('^NSEBANK');
-      const it = find('NIFTY_IT.NS');
+      var quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+      var find   = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
+      var n  = find('^NSEI');
+      var s  = find('^BSESN');
+      var b  = find('^NSEBANK');
+      var it = find('NIFTY_IT.NS');
       return [
-        { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0 },
-        { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0 },
-        { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0 },
-        { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0 },
+        { index: 'NIFTY 50',   last: n  ? n.regularMarketPrice  : 0, pChange: n  ? n.regularMarketChangePercent  : 0, change: n  ? n.regularMarketChange  : 0 },
+        { index: 'SENSEX',     last: s  ? s.regularMarketPrice  : 0, pChange: s  ? s.regularMarketChangePercent  : 0, change: s  ? s.regularMarketChange  : 0 },
+        { index: 'NIFTY BANK', last: b  ? b.regularMarketPrice  : 0, pChange: b  ? b.regularMarketChangePercent  : 0, change: b  ? b.regularMarketChange  : 0 },
+        { index: 'NIFTY IT',   last: it ? it.regularMarketPrice : 0, pChange: it ? it.regularMarketChangePercent : 0, change: it ? it.regularMarketChange : 0 },
       ];
-    }, 15);
+    }, 15); // 15 second cache
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    console.log('[Indices] Yahoo error:', err.message);
+    console.log('[Indices] Error:', err.message);
     res.json([
-      { index: 'NIFTY 50',   last: 23114.5,  pChange: 0.49  },
-      { index: 'SENSEX',     last: 76012,    pChange: 0.62  },
-      { index: 'NIFTY BANK', last: 53427.05, pChange: -0.04 },
-      { index: 'NIFTY IT',   last: 29199.6,  pChange: 2.17  },
+      { index: 'NIFTY 50',   last: 23114.5,  pChange: 0.49,  change: 113.26  },
+      { index: 'SENSEX',     last: 76012,    pChange: 0.62,  change: 471.27  },
+      { index: 'NIFTY BANK', last: 53427.05, pChange: -0.04, change: -21.37  },
+      { index: 'NIFTY IT',   last: 29199.6,  pChange: 2.17,  change: 633.63  },
     ]);
   }
 });
