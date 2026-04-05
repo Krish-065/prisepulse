@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 var API = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
-// FII/DII data — updated monthly from NSDL/SEBI reports
 var FII_DII_DATA = [
   { month: 'Oct',  fii: -94017, dii: 107254 },
   { month: 'Nov',  fii: -45974, dii: 65780  },
@@ -15,18 +14,18 @@ var FII_DII_DATA = [
 ];
 
 var SECTOR_HEAT = [
-  { name: 'IT',        chg: 2.17,  weight: 'high'   },
-  { name: 'Auto',      chg: 1.44,  weight: 'high'   },
-  { name: 'Metal',     chg: 1.38,  weight: 'medium' },
-  { name: 'Telecom',   chg: 1.12,  weight: 'high'   },
-  { name: 'Infra',     chg: 0.88,  weight: 'medium' },
-  { name: 'FMCG',      chg: 0.14,  weight: 'high'   },
-  { name: 'Banking',   chg: -0.04, weight: 'high'   },
-  { name: 'Energy',    chg: -0.31, weight: 'high'   },
-  { name: 'Pharma',    chg: -0.82, weight: 'medium' },
-  { name: 'NBFC',      chg: -1.30, weight: 'medium' },
-  { name: 'Realty',    chg: -1.84, weight: 'low'    },
-  { name: 'Media',     chg: -2.12, weight: 'low'    },
+  { name: 'IT',      chg:  2.17, weight: 'high'   },
+  { name: 'Auto',    chg:  1.44, weight: 'high'   },
+  { name: 'Metal',   chg:  1.38, weight: 'medium' },
+  { name: 'Telecom', chg:  1.12, weight: 'high'   },
+  { name: 'Infra',   chg:  0.88, weight: 'medium' },
+  { name: 'FMCG',    chg:  0.14, weight: 'high'   },
+  { name: 'Banking', chg: -0.04, weight: 'high'   },
+  { name: 'Energy',  chg: -0.31, weight: 'high'   },
+  { name: 'Pharma',  chg: -0.82, weight: 'medium' },
+  { name: 'NBFC',    chg: -1.30, weight: 'medium' },
+  { name: 'Realty',  chg: -1.84, weight: 'low'    },
+  { name: 'Media',   chg: -2.12, weight: 'low'    },
 ];
 
 export default function Markets() {
@@ -50,53 +49,46 @@ export default function Markets() {
 
   var tickRef = useRef(null);
 
+  // Live IST clock
   useEffect(function() {
-    var updateClock = function() {
+    var update = function() {
       setClockTime(new Date().toLocaleTimeString('en-IN', {
         timeZone: 'Asia/Kolkata',
         hour: '2-digit', minute: '2-digit', second: '2-digit'
       }));
     };
-    updateClock();
-    var c = setInterval(updateClock, 1000);
+    update();
+    var c = setInterval(update, 1000);
     return function() { clearInterval(c); };
   }, []);
 
+  // ── KEY FIX: fetch indices ONLY from backend — never from browser directly ──
+  // Yahoo Finance blocks browser requests with CORS in production.
+  // Your Render backend has no such restriction.
   var fetchIndices = function() {
-    axios.get(
-      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5ENSEI,%5EBSESN,%5ENSEBANK,NIFTY_IT.NS',
-      { timeout: 10000, headers: { Accept: 'application/json' } }
-    ).then(function(res) {
-      var quotes = (res.data && res.data.quoteResponse && res.data.quoteResponse.result) || [];
-      if (quotes.length === 0) throw new Error('empty');
-      var find = function(sym) { return quotes.find(function(q) { return q.symbol === sym; }); };
-      var n = find('^NSEI'), s = find('^BSESN'), b = find('^NSEBANK'), it = find('NIFTY_IT.NS');
-      if (n  && n.regularMarketPrice)  setNifty(n.regularMarketPrice);
-      if (s  && s.regularMarketPrice)  setSensex(s.regularMarketPrice);
-      if (b  && b.regularMarketPrice)  setBankNifty(b.regularMarketPrice);
-      if (it && it.regularMarketPrice) setNiftyIT(it.regularMarketPrice);
-      if (n)  setNiftyChg(n.regularMarketChangePercent   || 0);
-      if (s)  setSensexChg(s.regularMarketChangePercent  || 0);
-      if (b)  setBankChg(b.regularMarketChangePercent    || 0);
-      if (it) setITChg(it.regularMarketChangePercent     || 0);
-      setLastTick(new Date());
-    }).catch(function() {
-      axios.get(API + '/api/market/indices', { timeout: 12000 })
-        .then(function(res) {
-          var data = res.data || [];
-          var find = function(name) { return data.find(function(i) { return i.index === name; }); };
-          var n = find('NIFTY 50'), s = find('SENSEX'), b = find('NIFTY BANK'), it = find('NIFTY IT');
-          if (n  && n.last > 0)  setNifty(n.last);
-          if (s  && s.last > 0)  setSensex(s.last);
-          if (b  && b.last > 0)  setBankNifty(b.last);
-          if (it && it.last > 0) setNiftyIT(it.last);
-          if (n)  setNiftyChg(n.pChange  || 0);
-          if (s)  setSensexChg(s.pChange || 0);
-          if (b)  setBankChg(b.pChange   || 0);
-          if (it) setITChg(it.pChange    || 0);
-          setLastTick(new Date());
-        }).catch(function() {});
-    });
+    axios.get(API + '/api/market/indices', { timeout: 12000 })
+      .then(function(res) {
+        var data = res.data || [];
+        var find = function(name) {
+          return data.find(function(i) { return i.index === name; });
+        };
+        var n  = find('NIFTY 50');
+        var s  = find('SENSEX');
+        var b  = find('NIFTY BANK');
+        var it = find('NIFTY IT');
+        if (n  && n.last > 0)  setNifty(n.last);
+        if (s  && s.last > 0)  setSensex(s.last);
+        if (b  && b.last > 0)  setBankNifty(b.last);
+        if (it && it.last > 0) setNiftyIT(it.last);
+        if (n)  setNiftyChg(n.pChange  || 0);
+        if (s)  setSensexChg(s.pChange || 0);
+        if (b)  setBankChg(b.pChange   || 0);
+        if (it) setITChg(it.pChange    || 0);
+        setLastTick(new Date());
+      })
+      .catch(function(err) {
+        console.log('[Markets] Indices fetch failed:', err.message);
+      });
   };
 
   var fetchAll = function() {
@@ -119,7 +111,8 @@ export default function Markets() {
   useEffect(function() {
     fetchIndices();
     fetchAll();
-    tickRef.current = setInterval(fetchIndices, 10000);
+    // Refresh indices every 15 seconds via backend
+    tickRef.current = setInterval(fetchIndices, 15000);
     var slowInterval = setInterval(fetchAll, 60000);
     return function() {
       clearInterval(tickRef.current);
@@ -135,7 +128,7 @@ export default function Markets() {
     var abs    = value > 0 ? (value * Math.abs(change) / 100).toFixed(2) : 0;
     var up     = change >= 0;
     return (
-      <div className={'bg-gray-900 border rounded-xl p-4 transition-all hover:border-gray-600 ' + (up ? 'border-gray-800' : 'border-gray-800')}>
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-600 transition-all">
         <div className="flex items-center justify-between mb-1">
           <span className="text-gray-400 text-xs font-mono">{props.label}</span>
           <span className={'text-xs font-mono px-1.5 py-0.5 rounded ' + (up ? 'bg-green-400/10 text-green-400' : 'bg-red-400/10 text-red-400')}>
@@ -150,11 +143,7 @@ export default function Markets() {
         </div>
         <div className={'text-xs font-mono mt-1 flex items-center gap-2 ' + (up ? 'text-green-400' : 'text-red-400')}>
           <span>{up ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%</span>
-          {value > 0 && (
-            <span className="text-gray-600">
-              ({up ? '+' : '-'}₹{abs})
-            </span>
-          )}
+          {value > 0 && <span className="text-gray-600">({up ? '+' : '-'}₹{abs})</span>}
         </div>
       </div>
     );
@@ -178,7 +167,7 @@ export default function Markets() {
             <span className="text-gray-500 hidden sm:inline">{status.message}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-mono">{clockTime} IST</span>
+            <span>{clockTime} IST</span>
             {lastTick && (
               <span className="text-gray-600">
                 Updated {lastTick.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
@@ -190,13 +179,13 @@ export default function Markets() {
 
       {/* Index Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        <IndexCard label="NIFTY 50"   value={nifty}     change={niftyChg} />
+        <IndexCard label="NIFTY 50"   value={nifty}     change={niftyChg}  />
         <IndexCard label="SENSEX"     value={sensex}    change={sensexChg} />
-        <IndexCard label="BANK NIFTY" value={bankNifty} change={bankChg} />
-        <IndexCard label="NIFTY IT"   value={niftyIT}   change={itChg} />
+        <IndexCard label="BANK NIFTY" value={bankNifty} change={bankChg}   />
+        <IndexCard label="NIFTY IT"   value={niftyIT}   change={itChg}     />
       </div>
 
-      {/* Chart */}
+      {/* Intraday Chart */}
       {chartData.length > 0 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4">
           <div className="flex items-center justify-between mb-3">
@@ -243,7 +232,7 @@ export default function Markets() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[
-            { title: 'Top Gainers', data: gainers.slice(0, 5), tabLink: 'gainers', isGainer: true },
+            { title: 'Top Gainers', data: gainers.slice(0, 5), tabLink: 'gainers', isGainer: true  },
             { title: 'Top Losers',  data: losers.slice(0, 5),  tabLink: 'losers',  isGainer: false },
           ].map(function(panel) {
             return (
@@ -355,7 +344,7 @@ export default function Markets() {
             [
               { key: 'gold',       icon: '🥇', label: 'Gold',        unit: 'per 10g'   },
               { key: 'silver',     icon: '🥈', label: 'Silver',      unit: 'per kg'    },
-              { key: 'crude',      icon: '🛢', label: 'Crude Oil',   unit: 'per bbl'   },
+              { key: 'crude',      icon: '🛢',  label: 'Crude Oil',   unit: 'per bbl'   },
               { key: 'naturalgas', icon: '🔥', label: 'Natural Gas', unit: 'per mmBtu' },
               { key: 'copper',     icon: '🔩', label: 'Copper',      unit: 'per kg'    },
               { key: 'aluminium',  icon: '⚙',  label: 'Aluminium',   unit: 'per kg'    },
@@ -364,7 +353,7 @@ export default function Markets() {
             ].map(function(c) {
               var d = commodities[c.key];
               if (!d) return null;
-              var up = typeof d.isUp !== 'undefined' ? d.isUp : (d.change || '').includes('+');
+              var up = typeof d.isUp !== 'undefined' ? d.isUp : (String(d.change || '')).includes('+');
               return (
                 <div key={c.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-colors">
                   <div className="flex items-center justify-between mb-2">
@@ -403,13 +392,10 @@ export default function Markets() {
               var intensity = Math.min(Math.abs(s.chg) / 3, 1);
               var heightClass = s.weight === 'high' ? 'h-28' : s.weight === 'medium' ? 'h-20' : 'h-16';
               return (
-                <div
-                  key={i}
+                <div key={i}
                   className={'rounded-xl flex flex-col items-center justify-center cursor-default transition-all hover:scale-105 ' + heightClass}
                   style={{
-                    background: up
-                      ? `rgba(74, 222, 128, ${0.08 + intensity * 0.22})`
-                      : `rgba(248, 113, 113, ${0.08 + intensity * 0.22})`,
+                    background: up ? `rgba(74,222,128,${0.08 + intensity * 0.22})` : `rgba(248,113,113,${0.08 + intensity * 0.22})`,
                     border: `1px solid ${up ? `rgba(74,222,128,${0.1 + intensity * 0.3})` : `rgba(248,113,113,${0.1 + intensity * 0.3})`}`
                   }}
                 >
@@ -432,10 +418,10 @@ export default function Markets() {
         <div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'FII Buy (Today)',    value: '₹3,421 Cr',  color: 'text-green-400', sub: 'Provisional' },
-              { label: 'FII Sell (Today)',   value: '₹2,890 Cr',  color: 'text-red-400',   sub: 'Provisional' },
-              { label: 'DII Buy (Today)',    value: '₹4,210 Cr',  color: 'text-green-400', sub: 'Provisional' },
-              { label: 'DII Sell (Today)',   value: '₹2,140 Cr',  color: 'text-red-400',   sub: 'Provisional' },
+              { label: 'FII Buy (Today)',  value: '₹3,421 Cr', color: 'text-green-400', sub: 'Provisional' },
+              { label: 'FII Sell (Today)', value: '₹2,890 Cr', color: 'text-red-400',   sub: 'Provisional' },
+              { label: 'DII Buy (Today)',  value: '₹4,210 Cr', color: 'text-green-400', sub: 'Provisional' },
+              { label: 'DII Sell (Today)', value: '₹2,140 Cr', color: 'text-red-400',   sub: 'Provisional' },
             ].map(function(c, i) {
               return (
                 <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
@@ -459,11 +445,11 @@ export default function Markets() {
               <AreaChart data={FII_DII_DATA} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="fiiGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.15}/>
+                    <stop offset="5%"  stopColor="#60a5fa" stopOpacity={0.15}/>
                     <stop offset="95%" stopColor="#60a5fa" stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="diiGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4ade80" stopOpacity={0.15}/>
+                    <stop offset="5%"  stopColor="#4ade80" stopOpacity={0.15}/>
                     <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
                   </linearGradient>
                 </defs>
@@ -502,7 +488,7 @@ export default function Markets() {
                       <td className={'px-4 py-3 text-right font-mono text-sm font-bold ' + (row.fii >= 0 ? 'text-green-400' : 'text-red-400')}>
                         {row.fii >= 0 ? '+' : ''}{row.fii.toLocaleString('en-IN')}
                       </td>
-                      <td className={'px-4 py-3 text-right font-mono text-sm font-bold ' + (row.dii >= 0 ? 'text-green-400' : 'text-red-400')}>
+                      <td className={'px-4 py-3 text-right font-mono text-sm font-bold text-green-400'}>
                         +{row.dii.toLocaleString('en-IN')}
                       </td>
                       <td className={'px-4 py-3 text-right font-mono text-sm ' + (combined >= 0 ? 'text-green-400' : 'text-red-400')}>
