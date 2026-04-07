@@ -94,13 +94,8 @@ const fetchFromNSE = async function() {
   // Fetch SENSEX via Yahoo Finance because BSE Sensex is not always reliable in NSE allIndices
   let sensexLast = 0, sensexPct = 0, sensexChg = 0;
   try {
-    const yr = await axios.get(
-      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
-      { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com/' } }
-    );
-    const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
-    const ys = yq.find(q => q.symbol === '^BSESN');
-
+    const yr = await fetchYahooQuote(['^BSESN']);
+    const ys = yr.find(q => q.symbol === '^BSESN');
     if (ys && ys.regularMarketPrice && ys.regularMarketPrice > 0) {
       sensexLast = parseFloat(ys.regularMarketPrice.toFixed(2));
       sensexPct  = parseFloat((ys.regularMarketChangePercent || 0).toFixed(2));
@@ -120,6 +115,20 @@ const fetchFromNSE = async function() {
     console.log('[NSE] SENSEX from NSE allIndices fallback:', sensexLast);
   }
 
+  if ((!sensexLast || sensexLast === 0)) {
+    try {
+      const ydata = await fetchFromYahoo();
+      if (ydata && ydata[1] && ydata[1].last > 0) {
+        sensexLast = ydata[1].last;
+        sensexPct  = ydata[1].pChange;
+        sensexChg  = ydata[1].change;
+        console.log('[NSE] SENSEX from fetchFromYahoo fallback:', sensexLast);
+      }
+    } catch (e) {
+      console.log('[NSE] fetchFromYahoo fallback failed:', e.message);
+    }
+  }
+
   if (!sensexLast || sensexLast === 0) {
     sensexLast = 74742.5;
     sensexPct  = -0.28;
@@ -135,6 +144,33 @@ const fetchFromNSE = async function() {
   ];
   console.log('[NSE] NIFTY:', result[0].last, '| SENSEX:', result[1].last, '| BANK NIFTY:', result[2].last);
   return result;
+};
+
+const fetchYahooQuote = async function(symbols) {
+  const urls = [
+    'https://query1.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','),
+    'https://query2.finance.yahoo.com/v7/finance/quote?symbols=' + symbols.join(','),
+    'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
+    'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
+  ];
+  for (let i = 0; i < urls.length; i++) {
+    try {
+      const result = await axios.get(urls[i], {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Referer': 'https://finance.yahoo.com/',
+        }
+      });
+      const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
+      if (!quotes.length) continue;
+      return quotes;
+    } catch (e) {
+      console.log('[Yahoo] quote URL', i, 'failed:', e.message);
+    }
+  }
+  throw new Error('Yahoo quote failed');
 };
 
 const fetchFromYahoo = async function() {
