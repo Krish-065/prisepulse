@@ -428,14 +428,14 @@ export default function Portfolio() {
       </div>
 
       {/* Add Form */}
-      {showForm && (
+       {showForm && (
         <div className="bg-gray-900 border border-green-400/30 rounded-xl p-5 mb-5">
           <h3 className="text-white font-semibold mb-4 text-sm flex items-center gap-2">
             <span>{tab === 'stocks' ? '📈' : tab === 'crypto' ? '₿' : '🏅'}</span>
             Add {tab === 'stocks' ? 'Stock' : tab === 'crypto' ? 'Crypto' : 'Commodity'} Holding
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-
+ 
             {tab === 'stocks' && (
               <div className="col-span-2 relative">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SEARCH STOCK</label>
@@ -461,7 +461,7 @@ export default function Portfolio() {
                 )}
               </div>
             )}
-            
+ 
             {tab === 'crypto' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT CRYPTO</label>
@@ -473,7 +473,7 @@ export default function Portfolio() {
                 </select>
               </div>
             )}
-
+ 
             {tab === 'commodities' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT COMMODITY</label>
@@ -485,7 +485,7 @@ export default function Portfolio() {
                 </select>
               </div>
             )}
-
+ 
             <div>
               <label className="text-gray-400 text-xs font-mono mb-1 block">QUANTITY</label>
               <input type="number" placeholder="e.g. 10" value={form.quantity}
