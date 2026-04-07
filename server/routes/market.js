@@ -91,33 +91,40 @@ const fetchFromNSE = async function() {
 
   if (!n || !n.last || n.last === 0) throw new Error('NSE returned zero for NIFTY 50');
 
-  // Fetch SENSEX separately from Yahoo Finance if NSE didn't return it
-  let sensexLast = 74742.5, sensexPct = -0.28, sensexChg = -209.9;  // Hardcoded fallback
-  if (s && s.last && s.last > 0) {
+  // Fetch SENSEX via Yahoo Finance because BSE Sensex is not always reliable in NSE allIndices
+  let sensexLast = 0, sensexPct = 0, sensexChg = 0;
+  try {
+    const yr = await axios.get(
+      'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
+      { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com/' } }
+    );
+    const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
+    const ys = yq.find(q => q.symbol === '^BSESN');
+
+    if (ys && ys.regularMarketPrice && ys.regularMarketPrice > 0) {
+      sensexLast = parseFloat(ys.regularMarketPrice.toFixed(2));
+      sensexPct  = parseFloat((ys.regularMarketChangePercent || 0).toFixed(2));
+      sensexChg  = parseFloat((ys.regularMarketChange || 0).toFixed(2));
+      console.log('[NSE] SENSEX from Yahoo Finance:', sensexLast);
+    } else {
+      console.log('[NSE] Yahoo SENSEX invalid');
+    }
+  } catch (e) {
+    console.log('[NSE] SENSEX Yahoo fetch failed:', e.message);
+  }
+
+  if ((!sensexLast || sensexLast === 0) && s && s.last && s.last > 0) {
     sensexLast = parseFloat(s.last);
     sensexPct  = parseFloat(s.percentChange || 0);
     sensexChg  = parseFloat(s.change || 0);
-  } else {
-    // Fetch ^BSESN directly from Yahoo
-    try {
-      const yr = await axios.get(
-        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
-        { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com/' } }
-      );
-      const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
-      const ys = yq.find(q => q.symbol === '^BSESN');
+    console.log('[NSE] SENSEX from NSE allIndices fallback:', sensexLast);
+  }
 
-      if (ys && ys.regularMarketPrice && ys.regularMarketPrice > 0) {
-        sensexLast = parseFloat(ys.regularMarketPrice.toFixed(2));
-        sensexPct  = parseFloat((ys.regularMarketChangePercent || 0).toFixed(2));
-        sensexChg  = parseFloat((ys.regularMarketChange || 0).toFixed(2));
-        console.log('[NSE] SENSEX from Yahoo Finance:', sensexLast);
-      } else {
-        console.log('[NSE] Yahoo SENSEX invalid, using fallback');
-      }
-    } catch (e) {
-      console.log('[NSE] SENSEX Yahoo fallback failed:', e.message);
-    }
+  if (!sensexLast || sensexLast === 0) {
+    sensexLast = 74742.5;
+    sensexPct  = -0.28;
+    sensexChg  = -209.9;
+    console.log('[NSE] SENSEX no live data, using fallback:', sensexLast);
   }
 
   const result = [
