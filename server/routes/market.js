@@ -201,30 +201,46 @@ router.get('/indices', async function(req, res) {
   const day    = ist.getDay();
   const mins   = ist.getHours() * 60 + ist.getMinutes();
   const isOpen = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
-  const ttl    = isOpen ? 5 : 300; // 5s live (refreshes every 5s during market hours), 5min closed
 
   try {
-    const data = await getCached('indices', async function() {
-      // NSE allIndices works during market hours AND pre-open session
-      // Try NSE first always — it has the most accurate live/closing data
-      // Yahoo Finance and Stooq are fallbacks
-      try { return await fetchFromNSE(); }    catch (e) { console.log('[Indices] NSE failed:', e.message); }
-      try { return await fetchFromYahoo(); }  catch (e) { console.log('[Indices] Yahoo failed:', e.message); }
-      try { return await fetchFromStooq(); }  catch (e) { console.log('[Indices] Stooq failed:', e.message); }
-      throw new Error('All sources failed');
-    }, ttl);
+    // During market hours: NO CACHE — always fetch fresh live data
+    // During closed hours: cache for 5 minutes
+    let data = null;
+    
+    if (isOpen) {
+      // Live market hours — fetch fresh data every time
+      try { data = await fetchFromNSE();   } catch (e) { console.log('[Indices] NSE failed:', e.message); }
+      if (!data) {
+        try { data = await fetchFromYahoo();  } catch (e) { console.log('[Indices] Yahoo failed:', e.message); }
+      }
+      if (!data) {
+        try { data = await fetchFromStooq();  } catch (e) { console.log('[Indices] Stooq failed:', e.message); }
+      }
+    } else {
+      // Market closed — use cache to reduce API calls
+      const ttl = 300; // 5 min cache when market closed
+      try {
+        data = await getCached('indices', async function() {
+          try { return await fetchFromNSE();   } catch (e) { console.log('[Indices] NSE failed:', e.message); }
+          try { return await fetchFromYahoo();  } catch (e) { console.log('[Indices] Yahoo failed:', e.message); }
+          try { return await fetchFromStooq();  } catch (e) { console.log('[Indices] Stooq failed:', e.message); }
+          throw new Error('All sources failed');
+        }, ttl);
+      } catch (err) {
+        console.log('[Indices] Night cache failed:', err.message);
+      }
+    }
+
+    if (!data) {
+      throw new Error('No data available from any source');
+    }
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    console.log('[Indices] Complete failure, using hardcoded:', err.message);
+    console.log('[Indices] Complete failure:', err.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.json([
-      { index: 'NIFTY 50',   last: 22713.0,  pChange: -0.34, change: -77.1  },
-      { index: 'SENSEX',     last: 74742.5,  pChange: -0.28, change: -209.9 },
-      { index: 'NIFTY BANK', last: 48540.25, pChange: -0.12, change: -58.2  },
-      { index: 'NIFTY IT',   last: 33200.4,  pChange: -0.55, change: -183.1 },
-    ]);
+    res.status(500).json({ error: 'Failed to fetch live indices', message: err.message });
   }
 });
 
