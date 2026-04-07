@@ -3,7 +3,6 @@ const axios   = require('axios');
 const router  = express.Router();
 
 // ── TWO-LAYER CACHE ────────────────────────────────────────────────
-// lastGood never expires — survives Render sleep & Yahoo failures
 const cache    = {};
 const lastGood = {};
 
@@ -17,7 +16,7 @@ const getCached = async function(key, fn, ttl) {
     return data;
   } catch (err) {
     if (lastGood[key]) {
-      console.log('[Cache] lastGood hit for', key, ':', err.message);
+      console.log('[Cache] lastGood for', key, ':', err.message);
       return lastGood[key].data;
     }
     throw err;
@@ -75,85 +74,37 @@ const normalizeStock = function(s) {
   };
 };
 
-// ── PARSE STOOQ CSV ────────────────────────────────────────────────
-// Stooq returns CSV: Date,Open,High,Low,Close,Volume
-// We only need the latest Close price
-const parseStooqCSV = function(csv) {
-  const lines = csv.trim().split('\n');
-  if (lines.length < 2) throw new Error('No data');
-  const latest = lines[1].split(',');
-  // latest = [Date, Open, High, Low, Close, Volume]
-  const close = parseFloat(latest[4]);
-  const open  = parseFloat(latest[1]);
-  const high  = parseFloat(latest[2]);
-  const low   = parseFloat(latest[3]);
-  if (!close || close === 0) throw new Error('Zero price');
-  const change    = close - open;
-  const changePct = ((change / open) * 100);
-  return { close, open, high, low, change, changePct };
-};
+// ── FETCH INDICES: NSE allIndices (live) → Yahoo Finance → Stooq ──
+// Priority order: NSE (most accurate live) > Yahoo > Stooq (EOD only)
 
-// ── FETCH INDICES FROM MULTIPLE SOURCES ───────────────────────────
-// Source 1: Stooq.com — CSV, no auth, works great from server
-// Source 2: Yahoo Finance — fallback if Stooq fails
-// Source 3: lastGood cache — last real value we ever fetched
+const fetchFromNSE = async function() {
+  const res = await nseGet('https://www.nseindia.com/api/allIndices');
+  const indices = res.data.data || [];
+  const find = name => indices.find(i => i.index === name || i.indexSymbol === name);
 
-const fetchIndicesFromStooq = async function() {
-  // Stooq symbols: ^nf50 = Nifty50, ^bsesn = Sensex, ^nfbank = BankNifty, ^nfit = NiftyIT
-  const stooqMap = [
-    { stooq: '^nf50',   index: 'NIFTY 50'   },
-    { stooq: '^bsesn',  index: 'SENSEX'     },
-    { stooq: '^nfbank', index: 'NIFTY BANK' },
-    { stooq: '^nfit',   index: 'NIFTY IT'   },
+  const n  = find('NIFTY 50');
+  const s  = find('SENSEX') || find('S&P BSE SENSEX');
+  const b  = find('NIFTY BANK');
+  const it = find('NIFTY IT');
+
+  if (!n || !n.last || n.last === 0) throw new Error('NSE returned zero for NIFTY 50');
+
+  const result = [
+    { index: 'NIFTY 50',   last: parseFloat(n.last),  pChange: parseFloat(n.percentChange || 0), change: parseFloat(n.change || 0), open: n.open || 0, high: n.high || 0, low: n.low || 0, prev: n.previousClose || 0 },
+    { index: 'SENSEX',     last: s  ? parseFloat(s.last)  : 0, pChange: s  ? parseFloat(s.percentChange  || 0) : 0, change: s  ? parseFloat(s.change  || 0) : 0 },
+    { index: 'NIFTY BANK', last: b  ? parseFloat(b.last)  : 0, pChange: b  ? parseFloat(b.percentChange  || 0) : 0, change: b  ? parseFloat(b.change  || 0) : 0 },
+    { index: 'NIFTY IT',   last: it ? parseFloat(it.last) : 0, pChange: it ? parseFloat(it.percentChange || 0) : 0, change: it ? parseFloat(it.change || 0) : 0 },
   ];
-
-  const results = await Promise.all(
-    stooqMap.map(async function(item) {
-      try {
-        const url = 'https://stooq.com/q/d/l/?s=' + item.stooq + '&i=d';
-        const res = await axios.get(url, {
-          timeout: 10000,
-          headers: { 'User-Agent': 'Mozilla/5.0' }
-        });
-        const parsed = parseStooqCSV(res.data);
-        console.log('[Stooq]', item.index, '=', parsed.close, '(' + parsed.changePct.toFixed(2) + '%)');
-        return {
-          index:   item.index,
-          last:    parseFloat(parsed.close.toFixed(2)),
-          pChange: parseFloat(parsed.changePct.toFixed(2)),
-          change:  parseFloat(parsed.change.toFixed(2)),
-          open:    parsed.open,
-          high:    parsed.high,
-          low:     parsed.low,
-        };
-      } catch (e) {
-        console.log('[Stooq] Failed for', item.index, ':', e.message);
-        return null;
-      }
-    })
-  );
-
-  // Check if we got at least Nifty and Sensex
-  const nifty  = results[0];
-  const sensex = results[1];
-  if (!nifty || !sensex || nifty.last === 0 || sensex.last === 0) {
-    throw new Error('Stooq returned zero/null for primary indices');
-  }
-
-  // Replace nulls with zeros gracefully
-  return results.map(function(r, i) {
-    if (r) return r;
-    return { index: stooqMap[i].index, last: 0, pChange: 0, change: 0, open: 0, high: 0, low: 0 };
-  });
+  console.log('[NSE] Live:', result[0].index, result[0].last, '(' + result[0].pChange + '%)');
+  return result;
 };
 
-const fetchIndicesFromYahoo = async function() {
+const fetchFromYahoo = async function() {
   const symbols = ['^NSEI', '^BSESN', '^NSEBANK', 'NIFTY_IT.NS'];
   const urls = [
     'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
     'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + symbols.join(','),
   ];
-
   for (let i = 0; i < urls.length; i++) {
     try {
       const result = await axios.get(urls[i], {
@@ -165,96 +116,139 @@ const fetchIndicesFromYahoo = async function() {
         }
       });
       const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
-      if (quotes.length === 0) continue;
+      if (!quotes.length) continue;
       const find = sym => quotes.find(q => q.symbol === sym);
-      const n  = find('^NSEI');
-      const s  = find('^BSESN');
-      const b  = find('^NSEBANK');
-      const it = find('NIFTY_IT.NS');
+      const n = find('^NSEI'), s = find('^BSESN'), b = find('^NSEBANK'), it = find('NIFTY_IT.NS');
       if (!n || !n.regularMarketPrice || n.regularMarketPrice === 0) continue;
-
       const data = [
-        { index: 'NIFTY 50',   last: parseFloat((n.regularMarketPrice).toFixed(2)),  pChange: parseFloat((n.regularMarketChangePercent).toFixed(2)),  change: parseFloat((n.regularMarketChange).toFixed(2))  },
-        { index: 'SENSEX',     last: parseFloat((s ? s.regularMarketPrice : 0).toFixed(2)),    pChange: parseFloat((s ? s.regularMarketChangePercent : 0).toFixed(2)),  change: parseFloat((s ? s.regularMarketChange : 0).toFixed(2))  },
-        { index: 'NIFTY BANK', last: parseFloat((b ? b.regularMarketPrice : 0).toFixed(2)),   pChange: parseFloat((b ? b.regularMarketChangePercent : 0).toFixed(2)),  change: parseFloat((b ? b.regularMarketChange : 0).toFixed(2))  },
-        { index: 'NIFTY IT',   last: parseFloat((it ? it.regularMarketPrice : 0).toFixed(2)), pChange: parseFloat((it ? it.regularMarketChangePercent : 0).toFixed(2)), change: parseFloat((it ? it.regularMarketChange : 0).toFixed(2)) },
+        { index: 'NIFTY 50',   last: parseFloat(n.regularMarketPrice.toFixed(2)),  pChange: parseFloat(n.regularMarketChangePercent.toFixed(2)),  change: parseFloat(n.regularMarketChange.toFixed(2))  },
+        { index: 'SENSEX',     last: s  ? parseFloat(s.regularMarketPrice.toFixed(2))  : 0, pChange: s  ? parseFloat(s.regularMarketChangePercent.toFixed(2))  : 0, change: s  ? parseFloat(s.regularMarketChange.toFixed(2))  : 0 },
+        { index: 'NIFTY BANK', last: b  ? parseFloat(b.regularMarketPrice.toFixed(2))  : 0, pChange: b  ? parseFloat(b.regularMarketChangePercent.toFixed(2))  : 0, change: b  ? parseFloat(b.regularMarketChange.toFixed(2))  : 0 },
+        { index: 'NIFTY IT',   last: it ? parseFloat(it.regularMarketPrice.toFixed(2)) : 0, pChange: it ? parseFloat(it.regularMarketChangePercent.toFixed(2)) : 0, change: it ? parseFloat(it.regularMarketChange.toFixed(2)) : 0 },
       ];
-      console.log('[Yahoo] Fetched indices:', data[0].index, data[0].last);
+      console.log('[Yahoo] Live:', data[0].index, data[0].last);
       return data;
     } catch (e) {
       console.log('[Yahoo] URL', i, 'failed:', e.message);
     }
   }
-  throw new Error('All Yahoo URLs failed');
+  throw new Error('Yahoo failed');
+};
+
+const fetchFromStooq = async function() {
+  // Stooq = EOD data only, used as last resort when market is closed
+  const stooqMap = [
+    { stooq: '^nf50',   index: 'NIFTY 50'   },
+    { stooq: '^bsesn',  index: 'SENSEX'     },
+    { stooq: '^nfbank', index: 'NIFTY BANK' },
+    { stooq: '^nfit',   index: 'NIFTY IT'   },
+  ];
+  const results = await Promise.all(stooqMap.map(async item => {
+    try {
+      const res = await axios.get('https://stooq.com/q/d/l/?s=' + item.stooq + '&i=d', {
+        timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      const lines = res.data.trim().split('\n');
+      if (lines.length < 2) return null;
+      const cols   = lines[1].split(',');
+      const close  = parseFloat(cols[4]);
+      const open   = parseFloat(cols[1]);
+      if (!close || close === 0) return null;
+      const change    = parseFloat((close - open).toFixed(2));
+      const changePct = parseFloat(((change / open) * 100).toFixed(2));
+      return { index: item.index, last: close, pChange: changePct, change, open, high: parseFloat(cols[2]), low: parseFloat(cols[3]) };
+    } catch { return null; }
+  }));
+  if (!results[0] || results[0].last === 0) throw new Error('Stooq failed');
+  console.log('[Stooq] EOD:', results[0].index, results[0].last);
+  return results.map((r, i) => r || { index: stooqMap[i].index, last: 0, pChange: 0, change: 0 });
 };
 
 // ── INDICES ROUTE ──────────────────────────────────────────────────
 router.get('/indices', async function(req, res) {
-  // Smart TTL: 20s during market hours, 5min otherwise
   const ist    = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
   const day    = ist.getDay();
   const mins   = ist.getHours() * 60 + ist.getMinutes();
   const isOpen = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
-  const ttl    = isOpen ? 20 : 300;
+  const ttl    = isOpen ? 15 : 300; // 15s live, 5min closed
 
   try {
     const data = await getCached('indices', async function() {
-      // Try Stooq first (more reliable from Render free tier)
-      try {
-        return await fetchIndicesFromStooq();
-      } catch (stooqErr) {
-        console.log('[Indices] Stooq failed, trying Yahoo:', stooqErr.message);
-        // Try Yahoo as fallback
-        return await fetchIndicesFromYahoo();
-      }
+      // NSE allIndices works during market hours AND pre-open session
+      // Try NSE first always — it has the most accurate live/closing data
+      // Yahoo Finance and Stooq are fallbacks
+      try { return await fetchFromNSE(); }    catch (e) { console.log('[Indices] NSE failed:', e.message); }
+      try { return await fetchFromYahoo(); }  catch (e) { console.log('[Indices] Yahoo failed:', e.message); }
+      try { return await fetchFromStooq(); }  catch (e) { console.log('[Indices] Stooq failed:', e.message); }
+      throw new Error('All sources failed');
     }, ttl);
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    console.log('[Indices] ALL sources failed:', err.message);
-    // Last resort: serve truly hardcoded values only if lastGood is also empty
+    console.log('[Indices] Complete failure, using hardcoded:', err.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json([
-      { index: 'NIFTY 50',   last: 22713.0,  pChange: -0.34, change: -77.1   },
-      { index: 'SENSEX',     last: 74742.5,  pChange: -0.28, change: -209.9  },
-      { index: 'NIFTY BANK', last: 48540.25, pChange: -0.12, change: -58.2   },
-      { index: 'NIFTY IT',   last: 33200.4,  pChange: -0.55, change: -183.1  },
+      { index: 'NIFTY 50',   last: 22713.0,  pChange: -0.34, change: -77.1  },
+      { index: 'SENSEX',     last: 74742.5,  pChange: -0.28, change: -209.9 },
+      { index: 'NIFTY BANK', last: 48540.25, pChange: -0.12, change: -58.2  },
+      { index: 'NIFTY IT',   last: 33200.4,  pChange: -0.55, change: -183.1 },
     ]);
   }
 });
 
-// ── STOCK QUOTES PROXY ─────────────────────────────────────────────
-router.get('/quotes', async function(req, res) {
+// ── STOCK QUOTES PROXY (GET) — for Portfolio page ──────────────────
+// Uses Yahoo Finance server-side (no CORS) to get live stock prices
+router.get('/stock-quotes', async function(req, res) {
   try {
-    const symbols = req.query.symbols;
+    const symbols = req.query.symbols; // e.g. "RELIANCE.NS,TCS.NS,MARUTI.NS"
     if (!symbols) return res.status(400).json({ error: 'symbols param required' });
-    const data = await getCached('quotes_' + symbols, async function() {
+
+    const data = await getCached('sq_' + symbols, async function() {
       const result = await axios.get(
         'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(symbols),
-        { timeout: 10000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com' } }
+        {
+          timeout: 12000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+            'Accept':     'application/json',
+            'Referer':    'https://finance.yahoo.com',
+          }
+        }
       );
       const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
       const map = {};
       quotes.forEach(q => {
         const sym = q.symbol.replace('.NS', '').replace('.BO', '');
-        map[sym] = { price: q.regularMarketPrice || 0, change: q.regularMarketChangePercent || 0 };
+        map[sym] = {
+          price:  parseFloat((q.regularMarketPrice         || 0).toFixed(2)),
+          change: parseFloat((q.regularMarketChangePercent || 0).toFixed(2)),
+          high:   q.regularMarketDayHigh       || 0,
+          low:    q.regularMarketDayLow        || 0,
+          open:   q.regularMarketOpen          || 0,
+          prev:   q.regularMarketPreviousClose || 0,
+          name:   q.longName || q.shortName    || sym,
+        };
       });
+      console.log('[StockQuotes] Fetched:', Object.keys(map).join(', '));
       return map;
-    }, 15);
+    }, 15); // 15 second cache
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch quotes' });
+    console.log('[StockQuotes] Error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch stock quotes: ' + err.message });
   }
 });
 
-// ── CRYPTO PRICES PROXY ────────────────────────────────────────────
+// ── CRYPTO PRICES PROXY (GET) — for Portfolio page ─────────────────
 router.get('/crypto-prices', async function(req, res) {
   try {
     const ids = req.query.ids;
     if (!ids) return res.status(400).json({ error: 'ids param required' });
-    const data = await getCached('crypto_' + ids, async function() {
+
+    const data = await getCached('cp_' + ids, async function() {
       const result = await axios.get(
         'https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&ids=' + ids +
         '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
@@ -262,14 +256,24 @@ router.get('/crypto-prices', async function(req, res) {
       );
       const map = {};
       result.data.forEach(c => {
-        const obj = { id: c.id, symbol: c.symbol.toUpperCase(), name: c.name, price: c.current_price, change24h: c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2) : '0' };
-        map[c.id] = obj; map[c.symbol.toUpperCase()] = obj; map[c.symbol.toLowerCase()] = obj;
+        const obj = {
+          id:        c.id,
+          symbol:    c.symbol.toUpperCase(),
+          name:      c.name,
+          price:     c.current_price,
+          change24h: c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2) : '0',
+        };
+        map[c.id]                   = obj;
+        map[c.symbol.toUpperCase()] = obj;
+        map[c.symbol.toLowerCase()] = obj;
       });
       return map;
     }, 60);
+
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
+    console.log('[CryptoPrices] Error:', err.message);
     res.status(500).json({ error: 'Failed to fetch crypto prices' });
   }
 });
@@ -309,7 +313,7 @@ router.get('/quote/:symbol', async function(req, res) {
   } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
-// ── MULTIPLE QUOTES (Watchlist) ────────────────────────────────────
+// ── MULTIPLE QUOTES POST (Watchlist) ───────────────────────────────
 const quoteCache = {};
 router.post('/quotes', async function(req, res) {
   try {
@@ -520,9 +524,8 @@ function getFallbackCrypto() {
 
 function getFallbackNews() {
   return [
-    { title: 'Nifty 50 closes at 22,713; market sees broad selling', source: 'Economic Times', url: '#', image: null, time: new Date(Date.now() - 30 * 60000).toISOString(), description: 'Indian markets close lower amid global cues.' },
-    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',  source: 'Moneycontrol',   url: '#', image: null, time: new Date(Date.now() - 60 * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.' },
-    { title: 'FII outflows continue; DII support limits downside',   source: 'Business Standard', url: '#', image: null, time: new Date(Date.now() - 90 * 60000).toISOString(), description: 'Foreign investors sell; domestic funds absorb.' },
+    { title: 'Nifty 50 trades near 22,970; market recovers from lows', source: 'Economic Times', url: '#', image: null, time: new Date(Date.now() - 30 * 60000).toISOString(), description: 'Indian markets recover amid global uncertainty.' },
+    { title: 'RBI holds repo rate at 6.5% amid global uncertainty',    source: 'Moneycontrol',   url: '#', image: null, time: new Date(Date.now() - 60 * 60000).toISOString(), description: 'The Reserve Bank of India kept rates unchanged.' },
   ];
 }
 

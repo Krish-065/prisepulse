@@ -3,26 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
-const BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
-const API_ROOT = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+const BASE     = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api';
+const MKTBASE  = (process.env.REACT_APP_API_URL || 'http://localhost:5000') + '/api/market';
 
-const fetchCryptoByIds = async (ids) => {
-  if (!ids || ids.length === 0) return {};
-  try {
-    const res = await axios.get(
-      'https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&ids=' + ids.join(',') +
-      '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
-      { timeout: 15000, headers: { Accept: 'application/json' } }
-    );
-    const map = {};
-    res.data.forEach(c => {
-      const obj = { id: c.id, symbol: c.symbol.toUpperCase(), name: c.name, price: c.current_price,
-        change24h: c.price_change_percentage_24h ? c.price_change_percentage_24h.toFixed(2) : '0' };
-      map[c.id] = obj; map[c.symbol.toUpperCase()] = obj; map[c.symbol.toLowerCase()] = obj;
-    });
-    return map;
-  } catch { return {}; }
-};
+// ── All price calls go through YOUR backend — no direct browser API calls ──
+// Fixes: Yahoo Finance CORS block, CoinGecko rate-limit
 
 const NSE_STOCKS = [
   { sym: 'RELIANCE',   name: 'Reliance Industries'       },
@@ -65,15 +50,11 @@ const NSE_STOCKS = [
   { sym: 'ETERNAL',    name: 'Eternal (Zomato)'          },
   { sym: 'PAYTM',      name: 'Paytm'                     },
   { sym: 'NYKAA',      name: 'Nykaa'                     },
-  { sym: 'BAJAJ-AUTO', name: 'Bajaj Auto'                },
-  { sym: 'HDFCLIFE',   name: 'HDFC Life'                 },
-  { sym: 'POWERGRID',  name: 'Power Grid Corp'           },
   { sym: 'TATAPOWER',  name: 'Tata Power'                },
-  { sym: 'GAIL',       name: 'GAIL India'                },
-  { sym: 'IOC',        name: 'Indian Oil Corp'           },
-  { sym: 'BPCL',       name: 'Bharat Petroleum'          },
-  { sym: 'PNB',        name: 'Punjab National Bank'      },
-  { sym: 'BANKBARODA', name: 'Bank of Baroda'            },
+  { sym: 'ADANIGREEN', name: 'Adani Green Energy'        },
+  { sym: 'TATACONSUM', name: 'Tata Consumer Products'    },
+  { sym: 'EICHERMOT',  name: 'Eicher Motors'             },
+  { sym: 'BAJAJ-AUTO', name: 'Bajaj Auto'                },
 ];
 
 const CRYPTO_LIST = [
@@ -89,20 +70,18 @@ const CRYPTO_LIST = [
   { id: 'matic-network', sym: 'MATIC',name: 'Polygon'   },
   { id: 'chainlink',     sym: 'LINK', name: 'Chainlink' },
   { id: 'litecoin',      sym: 'LTC',  name: 'Litecoin'  },
-  { id: 'shiba-inu',     sym: 'SHIB', name: 'Shiba Inu' },
-  { id: 'tron',          sym: 'TRX',  name: 'TRON'      },
 ];
 
 const COMMODITY_LIST = [
   { id: 'gold',      name: 'Gold',      unit: 'per 10g', icon: '🥇' },
   { id: 'silver',    name: 'Silver',    unit: 'per kg',  icon: '🥈' },
-  { id: 'crude',     name: 'Crude Oil', unit: 'per bbl', icon: '🛢' },
+  { id: 'crude',     name: 'Crude Oil', unit: 'per bbl', icon: '🛢'  },
   { id: 'copper',    name: 'Copper',    unit: 'per kg',  icon: '🔩' },
   { id: 'aluminium', name: 'Aluminium', unit: 'per kg',  icon: '⚙'  },
   { id: 'zinc',      name: 'Zinc',      unit: 'per kg',  icon: '🔗' },
 ];
 
-const PIE_COLORS = ['#4ade80', '#60a5fa', '#f59e0b', '#f87171', '#a78bfa', '#34d399'];
+const PIE_COLORS = ['#4ade80', '#60a5fa', '#f59e0b'];
 
 export default function Portfolio() {
   const [tab,          setTab]          = useState('stocks');
@@ -114,13 +93,14 @@ export default function Portfolio() {
   const [showForm,     setShowForm]     = useState(false);
   const [stockSearch,  setStockSearch]  = useState('');
   const [showSugg,     setShowSugg]     = useState(false);
-  const [priceLoading, setPriceLoading] = useState(false);
+  const [lastUpdated,  setLastUpdated]  = useState(null);
   const [form, setForm] = useState({ symbol: '', name: '', quantity: '', buyPrice: '', type: 'stock' });
-  const navigate = useNavigate();
 
-  const token = localStorage.getItem('token');
+  const navigate    = useNavigate();
+  const token       = localStorage.getItem('token');
   const authHeaders = { Authorization: 'Bearer ' + token };
 
+  // ── Load holdings from backend ──────────────────────────────────
   const loadHoldings = useCallback(async () => {
     if (!token) return;
     try {
@@ -131,65 +111,72 @@ export default function Portfolio() {
     }
   }, [token]);
 
-  // Fetch via backend proxy — avoids CORS issues in production
-  const refreshStockPrices = useCallback(async (h) => {
-    const stockSyms = h.filter(x => !x.type || x.type === 'stock').map(x => x.symbol);
+  // ── Fetch stock prices via backend (/market/stock-quotes) ────────
+  const fetchStockPrices = useCallback(async (h) => {
+    const stockSyms = (h || holdings).filter(x => !x.type || x.type === 'stock').map(x => x.symbol);
     if (stockSyms.length === 0) return;
-    setPriceLoading(true);
     try {
-      // Primary: backend proxy (no CORS issues)
+      const nsSyms = stockSyms.map(s => s + '.NS').join(',');
       const { data } = await axios.get(
-        API_ROOT + '/api/market/quotes?symbols=' + stockSyms.map(s => s + '.NS').join(','),
-        { timeout: 12000 }
+        MKTBASE + '/stock-quotes?symbols=' + encodeURIComponent(nsSyms),
+        { timeout: 15000 }
       );
-      const map = {};
-      (data || []).forEach(q => { map[q.symbol] = { price: q.price, change: q.change }; });
-      setPrices(map);
-    } catch {
-      // Fallback: Yahoo Finance direct (works in some browsers)
-      try {
-        const syms = stockSyms.map(s => s + '.NS').join(',');
-        const { data } = await axios.get(
-          'https://query2.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(syms),
-          { timeout: 12000, headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' } }
-        );
-        const quotes = (data.quoteResponse && data.quoteResponse.result) || [];
-        const map = {};
-        quotes.forEach(q => {
-          const sym = q.symbol.replace('.NS', '');
-          map[sym] = { price: q.regularMarketPrice || 0, change: q.regularMarketChangePercent || 0 };
-        });
-        setPrices(map);
-      } catch {}
+      // data = { RELIANCE: { price, change }, TCS: { price, change }, ... }
+      if (data && typeof data === 'object' && !Array.isArray(data)) {
+        setPrices(data);
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      console.log('[Portfolio] Stock prices error:', err.message);
     }
-    setPriceLoading(false);
-  }, []);
+  }, [holdings]);
 
+  // ── Fetch crypto prices via backend (/market/crypto-prices) ─────
+  const fetchCryptoPrices = useCallback(async (h) => {
+    const ids = (h || holdings).filter(x => x.type === 'crypto').map(x => x.symbol);
+    if (ids.length === 0) return;
+    try {
+      const { data } = await axios.get(
+        MKTBASE + '/crypto-prices?ids=' + ids.join(','),
+        { timeout: 15000 }
+      );
+      if (data && typeof data === 'object') setCryptoPrices(data);
+    } catch (err) {
+      console.log('[Portfolio] Crypto prices error:', err.message);
+    }
+  }, [holdings]);
+
+  // ── Fetch commodity prices via backend ──────────────────────────
   const fetchCommPrices = useCallback(async () => {
     try {
-      const { data } = await axios.get(API_ROOT + '/api/market/commodities', { timeout: 8000 });
-      setCommPrices(data || {});
-    } catch {}
+      const { data } = await axios.get(MKTBASE + '/commodities', { timeout: 8000 });
+      if (data && typeof data === 'object') setCommPrices(data);
+    } catch (err) {
+      console.log('[Portfolio] Commodity prices error:', err.message);
+    }
   }, []);
 
+  // ── On mount: check auth, load holdings ─────────────────────────
   useEffect(() => {
     if (!token) { navigate('/login'); return; }
     loadHoldings();
   }, [token]);
 
+  // ── On holdings change: fetch all prices + set auto-refresh ─────
   useEffect(() => {
     if (holdings.length === 0) return;
-    refreshStockPrices(holdings);
-    const cryptoIds = holdings.filter(h => h.type === 'crypto').map(h => h.symbol);
-    if (cryptoIds.length > 0) fetchCryptoByIds(cryptoIds).then(setCryptoPrices);
+    fetchStockPrices(holdings);
+    fetchCryptoPrices(holdings);
     fetchCommPrices();
     const interval = setInterval(() => {
-      refreshStockPrices(holdings);
+      fetchStockPrices(holdings);
+      fetchCryptoPrices(holdings);
       fetchCommPrices();
     }, 30000);
     return () => clearInterval(interval);
   }, [holdings]);
 
+  // ── Add holding ─────────────────────────────────────────────────
   const addHolding = async () => {
     if (!form.symbol || !form.quantity || !form.buyPrice) return;
     setLoading(true);
@@ -199,10 +186,9 @@ export default function Portfolio() {
       setShowForm(false);
       setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: 'stock' });
       setStockSearch('');
-      refreshStockPrices(data);
-      const cryptoIds = data.filter(h => h.type === 'crypto').map(h => h.symbol);
-      if (cryptoIds.length > 0) fetchCryptoByIds(cryptoIds).then(setCryptoPrices);
-    } catch {}
+    } catch (err) {
+      console.log('[Portfolio] Add failed:', err.message);
+    }
     setLoading(false);
   };
 
@@ -213,41 +199,56 @@ export default function Portfolio() {
     } catch {}
   };
 
+  // ── Get current price for a holding ─────────────────────────────
   const getPrice = (h) => {
-    if (!h.type || h.type === 'stock') return prices[h.symbol] ? prices[h.symbol].price : 0;
-    if (h.type === 'crypto') {
-      const c = cryptoPrices[h.symbol] || cryptoPrices[h.symbol?.toLowerCase()];
-      return c ? c.price : 0;
+    if (!h.type || h.type === 'stock') {
+      const p = prices[h.symbol];
+      return p && p.price > 0 ? p.price : 0;
     }
-    if (h.type === 'commodity') { const c = commPrices[h.symbol]; return c ? c.price : 0; }
+    if (h.type === 'crypto') {
+      const c = cryptoPrices[h.symbol] || cryptoPrices[h.symbol?.toLowerCase?.()];
+      return c && c.price > 0 ? c.price : 0;
+    }
+    if (h.type === 'commodity') {
+      const c = commPrices[h.symbol];
+      return c && c.price > 0 ? c.price : 0;
+    }
     return 0;
   };
 
+  // ── Stock search suggestions ─────────────────────────────────────
   const stockSugg = stockSearch.length > 0
-    ? NSE_STOCKS.filter(s => s.sym.toLowerCase().includes(stockSearch.toLowerCase()) || s.name.toLowerCase().includes(stockSearch.toLowerCase())).slice(0, 6)
+    ? NSE_STOCKS.filter(s =>
+        s.sym.toLowerCase().includes(stockSearch.toLowerCase()) ||
+        s.name.toLowerCase().includes(stockSearch.toLowerCase())
+      ).slice(0, 6)
     : [];
 
+  // ── Holdings grouped by type ─────────────────────────────────────
   const stockHoldings = holdings.filter(h => !h.type || h.type === 'stock');
   const cryptoHoldings = holdings.filter(h => h.type === 'crypto');
   const commHoldings   = holdings.filter(h => h.type === 'commodity');
 
-  const allHoldings = holdings.map(h => {
-    const cp = getPrice(h), invested = h.buyPrice * h.quantity;
-    const current = cp > 0 ? cp * h.quantity : invested;
-    return { ...h, currentPrice: cp, invested, current, pnl: current - invested };
+  // ── Portfolio summary ────────────────────────────────────────────
+  const allWithPrices = holdings.map(h => {
+    const cp       = getPrice(h);
+    const invested = h.buyPrice * h.quantity;
+    const current  = cp > 0 ? cp * h.quantity : invested;
+    return { ...h, cp, invested, current, pnl: current - invested };
   });
 
-  const totalInvested = allHoldings.reduce((a, h) => a + h.invested, 0);
-  const totalCurrent  = allHoldings.reduce((a, h) => a + h.current, 0);
+  const totalInvested = allWithPrices.reduce((a, h) => a + h.invested, 0);
+  const totalCurrent  = allWithPrices.reduce((a, h) => a + h.current,  0);
   const totalPnL      = totalCurrent - totalInvested;
-  const totalPct      = totalInvested > 0 ? ((totalPnL / totalInvested) * 100) : 0;
+  const totalPct      = totalInvested > 0 ? (totalPnL / totalInvested * 100) : 0;
 
   const pieData = [
-    { name: 'Stocks',      value: stockHoldings.reduce((a, h)  => a + (getPrice(h) > 0 ? getPrice(h) : h.buyPrice) * h.quantity, 0) },
+    { name: 'Stocks',      value: stockHoldings.reduce((a, h) => a + (getPrice(h) > 0 ? getPrice(h) : h.buyPrice) * h.quantity, 0) },
     { name: 'Crypto',      value: cryptoHoldings.reduce((a, h) => a + (getPrice(h) > 0 ? getPrice(h) : h.buyPrice) * h.quantity, 0) },
-    { name: 'Commodities', value: commHoldings.reduce((a, h)   => a + (getPrice(h) > 0 ? getPrice(h) : h.buyPrice) * h.quantity, 0) },
+    { name: 'Commodities', value: commHoldings.reduce((a, h) => a + (getPrice(h) > 0 ? getPrice(h) : h.buyPrice) * h.quantity, 0) },
   ].filter(d => d.value > 0);
 
+  // ── Render holdings table ────────────────────────────────────────
   const renderTable = (list) => {
     if (list.length === 0) return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
@@ -258,11 +259,6 @@ export default function Portfolio() {
     );
     return (
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        {priceLoading && (
-          <div className="px-4 py-2 bg-gray-800/50 text-gray-500 text-xs font-mono flex items-center gap-2">
-            <span className="animate-pulse">●</span> Fetching live prices...
-          </div>
-        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-max">
             <thead>
@@ -273,17 +269,18 @@ export default function Portfolio() {
                 <th className="text-right px-4 py-3">CURRENT</th>
                 <th className="text-right px-4 py-3">INVESTED</th>
                 <th className="text-right px-4 py-3">CURRENT VAL</th>
-                <th className="text-right px-4 py-3">P&amp;L</th>
+                <th className="text-right px-4 py-3">P&L</th>
                 <th className="text-right px-4 py-3">CHANGE %</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {list.map((h, i) => {
-                const cp = getPrice(h), invested = h.buyPrice * h.quantity;
-                const current = cp > 0 ? cp * h.quantity : invested;
-                const pnl = current - invested;
-                const pct = invested > 0 ? ((pnl / invested) * 100).toFixed(2) : '0.00';
+                const cp       = getPrice(h);
+                const invested = h.buyPrice * h.quantity;
+                const current  = cp > 0 ? cp * h.quantity : invested;
+                const pnl      = current - invested;
+                const pct      = invested > 0 ? (pnl / invested * 100).toFixed(2) : '0.00';
                 const hasPrice = cp > 0;
                 return (
                   <tr key={h._id || i} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
@@ -292,11 +289,18 @@ export default function Portfolio() {
                       <div className="text-gray-500 text-xs">{h.name}</div>
                     </td>
                     <td className="px-4 py-3 text-right font-mono text-white text-sm">{h.quantity}</td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">₹{Number(h.buyPrice).toLocaleString('en-IN')}</td>
-                    <td className="px-4 py-3 text-right font-mono text-white text-sm">
-                      {hasPrice ? '₹' + cp.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : <span className="text-yellow-500 text-xs animate-pulse">loading...</span>}
+                    <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                      ₹{Number(h.buyPrice).toLocaleString('en-IN')}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">₹{invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm">
+                      {hasPrice
+                        ? <span className="text-white">₹{cp.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                        : <span className="text-yellow-500 text-xs animate-pulse">fetching...</span>
+                      }
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono text-gray-400 text-sm">
+                      ₹{invested.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono text-white text-sm">
                       {hasPrice ? '₹' + current.toLocaleString('en-IN', { maximumFractionDigits: 0 }) : <span className="text-gray-600">—</span>}
                     </td>
@@ -305,13 +309,15 @@ export default function Portfolio() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       {hasPrice
-                        ? <span className={'px-1.5 py-0.5 rounded font-mono text-xs font-bold ' + (parseFloat(pct) >= 0 ? 'bg-green-400/10 text-green-400' : 'bg-red-400/10 text-red-400')}>
+                        ? <span className={'px-2 py-0.5 rounded font-mono font-bold text-xs ' + (parseFloat(pct) >= 0 ? 'bg-green-400/10 text-green-400' : 'bg-red-400/10 text-red-400')}>
                             {parseFloat(pct) >= 0 ? '+' : ''}{pct}%
                           </span>
-                        : <span className="text-gray-600 font-mono text-xs">—</span>}
+                        : <span className="text-gray-600 font-mono text-xs">—</span>
+                      }
                     </td>
                     <td className="px-4 py-3">
-                      <button onClick={() => removeHolding(h._id)} className="text-gray-600 hover:text-red-400 transition-colors text-xs px-2 py-1 rounded hover:bg-red-400/10">✕</button>
+                      <button onClick={() => removeHolding(h._id)}
+                        className="text-gray-600 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">✕</button>
                     </td>
                   </tr>
                 );
@@ -319,8 +325,15 @@ export default function Portfolio() {
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2 border-t border-gray-800 text-gray-700 text-xs font-mono">
-          Refreshes every 30s · Stocks via Yahoo Finance · Crypto via CoinGecko · Commodities via backend
+        <div className="px-4 py-2 border-t border-gray-800 flex items-center justify-between">
+          <span className="text-gray-700 text-xs font-mono">
+            Auto-refreshes every 30s · via backend proxy
+          </span>
+          {lastUpdated && (
+            <span className="text-gray-600 text-xs font-mono">
+              Updated {lastUpdated.toLocaleTimeString('en-IN')}
+            </span>
+          )}
         </div>
       </div>
     );
@@ -330,26 +343,35 @@ export default function Portfolio() {
 
   return (
     <div className="p-4 max-w-6xl mx-auto">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-white text-2xl font-bold">Portfolio</h1>
           <p className="text-gray-500 text-xs font-mono mt-1">
-            {holdings.length} holdings across {[stockHoldings.length > 0, cryptoHoldings.length > 0, commHoldings.length > 0].filter(Boolean).length} asset classes
+            {holdings.length} holdings · {[stockHoldings.length > 0, cryptoHoldings.length > 0, commHoldings.length > 0].filter(Boolean).length} asset classes
           </p>
         </div>
-        <button onClick={() => { setShowForm(!showForm); setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: tab === 'crypto' ? 'crypto' : tab === 'commodities' ? 'commodity' : 'stock' }); setStockSearch(''); }}
-          className="bg-green-400 text-gray-950 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors flex items-center gap-1.5">
+        <button
+          onClick={() => {
+            setShowForm(!showForm);
+            setForm({ symbol: '', name: '', quantity: '', buyPrice: '', type: tab === 'crypto' ? 'crypto' : tab === 'commodities' ? 'commodity' : 'stock' });
+            setStockSearch('');
+          }}
+          className="bg-green-400 text-gray-950 font-bold px-4 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors"
+        >
           + Add Holding
         </button>
       </div>
 
+      {/* Summary Cards */}
       {holdings.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
           {[
-            { label: 'Total Invested', value: '₹' + totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: 'text-white' },
-            { label: 'Current Value',  value: '₹' + totalCurrent.toLocaleString('en-IN',  { maximumFractionDigits: 0 }), color: 'text-white' },
-            { label: 'Total P&L',      value: (totalPnL >= 0 ? '+' : '') + '₹' + totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: totalPnL >= 0 ? 'text-green-400' : 'text-red-400' },
-            { label: 'Return',         value: (totalPct >= 0 ? '+' : '') + totalPct.toFixed(2) + '%', color: totalPct >= 0 ? 'text-green-400' : 'text-red-400' },
+            { label: 'Total Invested',  value: '₹' + totalInvested.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: 'text-white' },
+            { label: 'Current Value',   value: '₹' + totalCurrent.toLocaleString('en-IN',  { maximumFractionDigits: 0 }), color: 'text-white' },
+            { label: 'Total P&L',       value: (totalPnL >= 0 ? '+' : '') + '₹' + totalPnL.toLocaleString('en-IN', { maximumFractionDigits: 0 }), color: totalPnL >= 0 ? 'text-green-400' : 'text-red-400' },
+            { label: 'Return',          value: (totalPct >= 0 ? '+' : '') + totalPct.toFixed(2) + '%', color: totalPct >= 0 ? 'text-green-400' : 'text-red-400' },
           ].map((c, i) => (
             <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <div className="text-gray-500 text-xs font-mono mb-1">{c.label}</div>
@@ -359,6 +381,7 @@ export default function Portfolio() {
         </div>
       )}
 
+      {/* Allocation Pie */}
       {pieData.length > 1 && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-6">
           <div className="flex items-center gap-6">
@@ -390,10 +413,12 @@ export default function Portfolio() {
         </div>
       )}
 
+      {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b border-gray-800">
         {tabs.map(t => (
           <button key={t} onClick={() => { setTab(t); setShowForm(false); }}
-            className={'px-4 py-2 text-xs font-mono capitalize transition-all border-b-2 ' + (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
+            className={'px-4 py-2 text-xs font-mono capitalize transition-all border-b-2 ' +
+              (tab === t ? 'text-green-400 border-green-400' : 'text-gray-500 border-transparent hover:text-white')}>
             {t}
             {t === 'stocks'      && stockHoldings.length  > 0 && <span className="ml-1.5 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{stockHoldings.length}</span>}
             {t === 'crypto'      && cryptoHoldings.length > 0 && <span className="ml-1.5 bg-green-400/20 text-green-400 px-1.5 py-0.5 rounded text-xs">{cryptoHoldings.length}</span>}
@@ -402,6 +427,7 @@ export default function Portfolio() {
         ))}
       </div>
 
+      {/* Add Form */}
       {showForm && (
         <div className="bg-gray-900 border border-green-400/30 rounded-xl p-5 mb-5">
           <h3 className="text-white font-semibold mb-4 text-sm flex items-center gap-2">
@@ -409,10 +435,11 @@ export default function Portfolio() {
             Add {tab === 'stocks' ? 'Stock' : tab === 'crypto' ? 'Crypto' : 'Commodity'} Holding
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+
             {tab === 'stocks' && (
               <div className="col-span-2 relative">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SEARCH STOCK</label>
-                <input type="text" placeholder="Type symbol or company name..."
+                <input type="text" placeholder="Type symbol or company..."
                   value={stockSearch}
                   onChange={e => { setStockSearch(e.target.value); setShowSugg(true); setForm(f => ({ ...f, symbol: e.target.value.toUpperCase(), name: '' })); }}
                   onFocus={() => setShowSugg(true)}
@@ -422,8 +449,10 @@ export default function Portfolio() {
                 {showSugg && stockSugg.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-xl overflow-hidden z-50 shadow-xl">
                     {stockSugg.map((s, i) => (
-                      <div key={i} onMouseDown={() => { setForm(f => ({ ...f, symbol: s.sym, name: s.name, type: 'stock' })); setStockSearch(s.sym + ' — ' + s.name); setShowSugg(false); }}
-                        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-700 border-b border-gray-700 last:border-0">
+                      <div key={i}
+                        onMouseDown={() => { setForm(f => ({ ...f, symbol: s.sym, name: s.name, type: 'stock' })); setStockSearch(s.sym + ' — ' + s.name); setShowSugg(false); }}
+                        className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-700 border-b border-gray-700 last:border-0"
+                      >
                         <span className="font-mono font-bold text-white text-sm w-24 flex-shrink-0">{s.sym}</span>
                         <span className="text-gray-400 text-xs">{s.name}</span>
                       </div>
@@ -432,42 +461,55 @@ export default function Portfolio() {
                 )}
               </div>
             )}
+
             {tab === 'crypto' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT CRYPTO</label>
-                <select value={form.symbol} onChange={e => { const c = CRYPTO_LIST.find(x => x.id === e.target.value); if (c) setForm(f => ({ ...f, symbol: c.id, name: c.name + ' (' + c.sym + ')', type: 'crypto' })); }}
+                <select value={form.symbol}
+                  onChange={e => { const c = CRYPTO_LIST.find(x => x.id === e.target.value); if (c) setForm(f => ({ ...f, symbol: c.id, name: c.name + ' (' + c.sym + ')', type: 'crypto' })); }}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400">
                   <option value="">-- Select Crypto --</option>
                   {CRYPTO_LIST.map(c => <option key={c.id} value={c.id}>{c.sym} — {c.name}</option>)}
                 </select>
               </div>
             )}
+
             {tab === 'commodities' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT COMMODITY</label>
-                <select value={form.symbol} onChange={e => { const c = COMMODITY_LIST.find(x => x.id === e.target.value); if (c) setForm(f => ({ ...f, symbol: c.id, name: c.name, type: 'commodity' })); }}
+                <select value={form.symbol}
+                  onChange={e => { const c = COMMODITY_LIST.find(x => x.id === e.target.value); if (c) setForm(f => ({ ...f, symbol: c.id, name: c.name, type: 'commodity' })); }}
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400">
                   <option value="">-- Select Commodity --</option>
                   {COMMODITY_LIST.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name} ({c.unit})</option>)}
                 </select>
               </div>
             )}
+
             <div>
               <label className="text-gray-400 text-xs font-mono mb-1 block">QUANTITY</label>
-              <input type="number" placeholder="e.g. 10" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"/>
+              <input type="number" placeholder="e.g. 10" value={form.quantity}
+                onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
+              />
             </div>
             <div>
               <label className="text-gray-400 text-xs font-mono mb-1 block">BUY PRICE (₹)</label>
-              <input type="number" placeholder="e.g. 2800" value={form.buyPrice} onChange={e => setForm(f => ({ ...f, buyPrice: e.target.value }))}
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"/>
+              <input type="number" placeholder="e.g. 2800" value={form.buyPrice}
+                onChange={e => setForm(f => ({ ...f, buyPrice: e.target.value }))}
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm w-full outline-none focus:border-green-400"
+              />
             </div>
             <div className="col-span-2 md:col-span-4 flex gap-3">
-              <button onClick={addHolding} disabled={loading || !form.symbol || !form.quantity || !form.buyPrice}
+              <button onClick={addHolding}
+                disabled={loading || !form.symbol || !form.quantity || !form.buyPrice}
                 className="bg-green-400 text-gray-950 font-bold px-5 py-2 rounded-lg text-sm hover:bg-green-300 transition-colors disabled:opacity-50">
                 {loading ? 'Adding...' : 'Add to Portfolio'}
               </button>
-              <button onClick={() => setShowForm(false)} className="text-gray-500 text-sm px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">Cancel</button>
+              <button onClick={() => setShowForm(false)}
+                className="text-gray-500 text-sm px-4 py-2 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
