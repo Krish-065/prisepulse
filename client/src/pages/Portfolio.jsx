@@ -133,18 +133,18 @@ export default function Portfolio() {
 
   // ── Fetch crypto prices via backend (/market/crypto-prices) ─────
   const fetchCryptoPrices = useCallback(async (h) => {
-    const ids = (h || holdings).filter(x => x.type === 'crypto').map(x => x.symbol);
-    if (ids.length === 0) return;
-    try {
-      const { data } = await axios.get(
-        MKTBASE + '/crypto-prices?ids=' + ids.join(','),
-        { timeout: 15000 }
-      );
-      if (data && typeof data === 'object') setCryptoPrices(data);
-    } catch (err) {
-      console.log('[Portfolio] Crypto prices error:', err.message);
-    }
-  }, [holdings]);
+      const ids = (h || holdings).filter(x => x.type === 'crypto').map(x => x.symbol);
+      if (ids.length === 0) return;
+      try {
+        const { data } = await axios.get(
+          MKTBASE + '/crypto-prices?ids=' + ids.join(','),
+          { timeout: 15000 }
+        );
+        if (data && typeof data === 'object') setCryptoPrices(data);
+      } catch (err) {
+        console.log('[Portfolio] Crypto prices error:', err.message);
+      }
+    }, [holdings]);
 
   // ── Fetch commodity prices via backend ──────────────────────────
   const fetchCommPrices = useCallback(async () => {
