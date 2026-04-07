@@ -366,12 +366,15 @@ router.get('/crypto-prices', async function(req, res) {
     const ids = req.query.ids;
     if (!ids) return res.status(400).json({ error: 'ids param required' });
 
+    console.log('[CryptoPrices] Request IDs:', ids);
+
     const data = await getCached('cp_' + ids, async function() {
-      const result = await axios.get(
-        'https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&ids=' + ids +
-        '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h',
-        { timeout: 15000, headers: { Accept: 'application/json' } }
-      );
+      const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=inr&ids=' + ids +
+        '&order=market_cap_desc&per_page=50&page=1&price_change_percentage=24h';
+      console.log('[CryptoPrices] Fetching from CoinGecko:', url);
+      const result = await axios.get(url, { timeout: 15000, headers: { Accept: 'application/json' } });
+      console.log('[CryptoPrices] CoinGecko returned:', result.data.length, 'coins');
+      
       const map = {};
       result.data.forEach(c => {
         const obj = {
@@ -384,15 +387,17 @@ router.get('/crypto-prices', async function(req, res) {
         map[c.id]                   = obj;
         map[c.symbol.toUpperCase()] = obj;
         map[c.symbol.toLowerCase()] = obj;
+        console.log('[CryptoPrices] Added:', c.id, '(symbol:', c.symbol, ')', '-> ₹' + c.current_price);
       });
       return map;
     }, 60);
 
+    console.log('[CryptoPrices] Response keys:', Object.keys(data).slice(0, 10));
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    console.log('[CryptoPrices] Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch crypto prices' });
+    console.error('[CryptoPrices] Fatal error:', err.message, err.response?.data);
+    res.status(500).json({ error: 'Failed to fetch crypto prices', message: err.message });
   }
 });
 

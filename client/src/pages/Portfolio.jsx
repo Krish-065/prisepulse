@@ -134,15 +134,20 @@ export default function Portfolio() {
   // ── Fetch crypto prices via backend (/market/crypto-prices) ─────
   const fetchCryptoPrices = useCallback(async (h) => {
     const ids = (h || holdings).filter(x => x.type === 'crypto').map(x => x.symbol);
-    if (ids.length === 0) return;
+    if (ids.length === 0) { setCryptoPrices({}); return; }
     try {
-      const { data } = await axios.get(
-        MKTBASE + '/crypto-prices?ids=' + ids.join(','),
-        { timeout: 15000 }
-      );
-      if (data && typeof data === 'object') setCryptoPrices(data);
+      const url = MKTBASE + '/crypto-prices?ids=' + ids.join(',');
+      console.log('[Portfolio] Fetching crypto prices:', url, 'IDs:', ids);
+      const { data } = await axios.get(url, { timeout: 15000 });
+      console.log('[Portfolio] Crypto prices received:', data);
+      if (data && typeof data === 'object') {
+        setCryptoPrices(data);
+        console.log('[Portfolio] Crypto prices set:', Object.keys(data));
+      } else {
+        console.error('[Portfolio] Invalid crypto prices response format:', data);
+      }
     } catch (err) {
-      console.log('[Portfolio] Crypto prices error:', err.message);
+      console.error('[Portfolio] Crypto prices error:', err.message, err.response?.data);
     }
   }, [holdings]);
 
@@ -206,8 +211,13 @@ export default function Portfolio() {
       return p && p.price > 0 ? p.price : 0;
     }
     if (h.type === 'crypto') {
+      // Try exact symbol first, then lowercase fallback
       const c = cryptoPrices[h.symbol] || cryptoPrices[h.symbol?.toLowerCase?.()];
-      return c && c.price > 0 ? c.price : 0;
+      if (!c) {
+        console.warn('[getPrice] Crypto not found - symbol:', h.symbol, 'available keys:', Object.keys(cryptoPrices).slice(0, 5));
+        return 0;
+      }
+      return c.price && c.price > 0 ? c.price : 0;
     }
     if (h.type === 'commodity') {
       const c = commPrices[h.symbol];
