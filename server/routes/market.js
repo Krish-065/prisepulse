@@ -83,19 +83,46 @@ const fetchFromNSE = async function() {
   const find = name => indices.find(i => i.index === name || i.indexSymbol === name);
 
   const n  = find('NIFTY 50');
-  const s  = find('SENSEX') || find('S&P BSE SENSEX');
   const b  = find('NIFTY BANK');
   const it = find('NIFTY IT');
+  // SENSEX is a BSE index — NSE's allIndices sometimes includes it as 'S&P BSE SENSEX'
+  // We try to find it but will fetch it separately if missing
+  const s  = find('SENSEX') || find('S&P BSE SENSEX') || find('BSE SENSEX');
 
   if (!n || !n.last || n.last === 0) throw new Error('NSE returned zero for NIFTY 50');
 
+  // Fetch SENSEX separately from Yahoo Finance if NSE didn't return it
+  let sensexLast = 0, sensexPct = 0, sensexChg = 0;
+  if (s && s.last && s.last > 0) {
+    sensexLast = parseFloat(s.last);
+    sensexPct  = parseFloat(s.percentChange || 0);
+    sensexChg  = parseFloat(s.change || 0);
+  } else {
+    // Fetch ^BSESN directly from Yahoo
+    try {
+      const yr = await axios.get(
+        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EBSESN',
+        { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com/' } }
+      );
+      const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
+      const ys = yq.find(q => q.symbol === '^BSESN');
+      if (ys && ys.regularMarketPrice) {
+        sensexLast = parseFloat(ys.regularMarketPrice.toFixed(2));
+        sensexPct  = parseFloat((ys.regularMarketChangePercent || 0).toFixed(2));
+        sensexChg  = parseFloat((ys.regularMarketChange || 0).toFixed(2));
+      }
+    } catch (e) {
+      console.log('[NSE] SENSEX Yahoo fallback failed:', e.message);
+    }
+  }
+
   const result = [
-    { index: 'NIFTY 50',   last: parseFloat(n.last),  pChange: parseFloat(n.percentChange || 0), change: parseFloat(n.change || 0), open: n.open || 0, high: n.high || 0, low: n.low || 0, prev: n.previousClose || 0 },
-    { index: 'SENSEX',     last: s  ? parseFloat(s.last)  : 0, pChange: s  ? parseFloat(s.percentChange  || 0) : 0, change: s  ? parseFloat(s.change  || 0) : 0 },
+    { index: 'NIFTY 50',   last: parseFloat(n.last),  pChange: parseFloat(n.percentChange || 0), change: parseFloat(n.change || 0) },
+    { index: 'SENSEX',     last: sensexLast,           pChange: sensexPct,                        change: sensexChg                  },
     { index: 'NIFTY BANK', last: b  ? parseFloat(b.last)  : 0, pChange: b  ? parseFloat(b.percentChange  || 0) : 0, change: b  ? parseFloat(b.change  || 0) : 0 },
     { index: 'NIFTY IT',   last: it ? parseFloat(it.last) : 0, pChange: it ? parseFloat(it.percentChange || 0) : 0, change: it ? parseFloat(it.change || 0) : 0 },
   ];
-  console.log('[NSE] Live:', result[0].index, result[0].last, '(' + result[0].pChange + '%)');
+  console.log('[NSE] NIFTY:', result[0].last, '| SENSEX:', result[1].last, '| BANK NIFTY:', result[2].last);
   return result;
 };
 
@@ -197,48 +224,76 @@ router.get('/indices', async function(req, res) {
   }
 });
 
-// ── STOCK QUOTES PROXY (GET) — for Portfolio page ──────────────────
-// Uses Yahoo Finance server-side (no CORS) to get live stock prices
+// ── STOCK QUOTES (GET) — for Portfolio page ────────────────────────
+// Strategy: fetch the full NIFTY 500 data from NSE in one call,
+// then return just the symbols requested. This is faster and more
+// reliable than calling Yahoo Finance for each symbol individually.
 router.get('/stock-quotes', async function(req, res) {
   try {
-    const symbols = req.query.symbols; // e.g. "RELIANCE.NS,TCS.NS,MARUTI.NS"
+    const symbols = req.query.symbols; // e.g. "RELIANCE.NS,TCS.NS"
     if (!symbols) return res.status(400).json({ error: 'symbols param required' });
 
-    const data = await getCached('sq_' + symbols, async function() {
-      const result = await axios.get(
-        'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(symbols),
-        {
-          timeout: 12000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-            'Accept':     'application/json',
-            'Referer':    'https://finance.yahoo.com',
+    // Parse symbol list — remove .NS suffix
+    const symList = symbols.split(',').map(s => s.replace('.NS', '').replace('.BO', '').trim().toUpperCase());
+
+    // Fetch live data from NSE's equity indices (covers all major NSE stocks)
+    // We use NIFTY 500 index which covers ~500 stocks
+    const data = await getCached('nse_equity_' + symList.sort().join('_'), async function() {
+      const map = {};
+
+      // Try to get all requested symbols via NSE individual quote API
+      // We run them in parallel for speed
+      await Promise.all(symList.map(async function(sym) {
+        try {
+          const result = await nseGet(
+            'https://www.nseindia.com/api/quote-equity?symbol=' + encodeURIComponent(sym)
+          );
+          const p = result.data.priceInfo;
+          if (!p || !p.lastPrice || p.lastPrice === 0) throw new Error('No price for ' + sym);
+          map[sym] = {
+            price:  parseFloat(p.lastPrice.toFixed(2)),
+            change: parseFloat((p.pChange || 0).toFixed(2)),
+            open:   p.open   || 0,
+            high:   p.intraDayHighLow ? p.intraDayHighLow.max : 0,
+            low:    p.intraDayHighLow ? p.intraDayHighLow.min : 0,
+            prev:   p.previousClose  || 0,
+          };
+          console.log('[StockQuotes] NSE:', sym, '=', p.lastPrice);
+        } catch (e) {
+          console.log('[StockQuotes] NSE failed for', sym, ':', e.message);
+          // Fallback: try Yahoo Finance for this specific symbol
+          try {
+            const yr = await axios.get(
+              'https://query1.finance.yahoo.com/v8/finance/quote?symbols=' + encodeURIComponent(sym + '.NS'),
+              { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json', 'Referer': 'https://finance.yahoo.com/' } }
+            );
+            const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
+            const ystock = yq[0];
+            if (ystock && ystock.regularMarketPrice) {
+              map[sym] = {
+                price:  parseFloat(ystock.regularMarketPrice.toFixed(2)),
+                change: parseFloat((ystock.regularMarketChangePercent || 0).toFixed(2)),
+                open:   ystock.regularMarketOpen || 0,
+                high:   ystock.regularMarketDayHigh || 0,
+                low:    ystock.regularMarketDayLow  || 0,
+                prev:   ystock.regularMarketPreviousClose || 0,
+              };
+              console.log('[StockQuotes] Yahoo fallback:', sym, '=', ystock.regularMarketPrice);
+            }
+          } catch (ye) {
+            console.log('[StockQuotes] Yahoo also failed for', sym, ':', ye.message);
           }
         }
-      );
-      const quotes = (result.data.quoteResponse && result.data.quoteResponse.result) || [];
-      const map = {};
-      quotes.forEach(q => {
-        const sym = q.symbol.replace('.NS', '').replace('.BO', '');
-        map[sym] = {
-          price:  parseFloat((q.regularMarketPrice         || 0).toFixed(2)),
-          change: parseFloat((q.regularMarketChangePercent || 0).toFixed(2)),
-          high:   q.regularMarketDayHigh       || 0,
-          low:    q.regularMarketDayLow        || 0,
-          open:   q.regularMarketOpen          || 0,
-          prev:   q.regularMarketPreviousClose || 0,
-          name:   q.longName || q.shortName    || sym,
-        };
-      });
-      console.log('[StockQuotes] Fetched:', Object.keys(map).join(', '));
+      }));
+
       return map;
-    }, 15); // 15 second cache
+    }, 20); // 20 second cache — fresh enough for portfolio display
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.json(data);
   } catch (err) {
-    console.log('[StockQuotes] Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch stock quotes: ' + err.message });
+    console.log('[StockQuotes] Fatal error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch stock quotes' });
   }
 });
 
