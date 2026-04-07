@@ -76,15 +76,16 @@ export default function Markets() {
         var s  = find('SENSEX');
         var b  = find('NIFTY BANK');
         var it = find('NIFTY IT');
-        if (n  && n.last > 0)  setNifty(n.last);
-        if (s  && s.last > 0)  setSensex(s.last);
-        if (b  && b.last > 0)  setBankNifty(b.last);
-        if (it && it.last > 0) setNiftyIT(it.last);
+        if (n  && n.last)  setNifty(n.last);
+        if (s  && s.last)  setSensex(s.last);
+        if (b  && b.last)  setBankNifty(b.last);
+        if (it && it.last) setNiftyIT(it.last);
         if (n)  setNiftyChg(n.pChange  || 0);
         if (s)  setSensexChg(s.pChange || 0);
         if (b)  setBankChg(b.pChange   || 0);
         if (it) setITChg(it.pChange    || 0);
         setLastTick(new Date());
+        console.log('[Markets] Indices updated:', { nifty: n?.last, sensex: s?.last, bank: b?.last, it: it?.last });
       })
       .catch(function(err) {
         console.log('[Markets] Indices fetch failed:', err.message);
