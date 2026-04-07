@@ -106,10 +106,14 @@ const fetchFromNSE = async function() {
       );
       const yq = (yr.data.quoteResponse && yr.data.quoteResponse.result) || [];
       const ys = yq.find(q => q.symbol === '^BSESN');
-      if (ys && ys.regularMarketPrice) {
+
+      if (ys && ys.regularMarketPrice && ys.regularMarketPrice > 0) {
         sensexLast = parseFloat(ys.regularMarketPrice.toFixed(2));
         sensexPct  = parseFloat((ys.regularMarketChangePercent || 0).toFixed(2));
         sensexChg  = parseFloat((ys.regularMarketChange || 0).toFixed(2));
+        console.log('[NSE] SENSEX from Yahoo Finance:', sensexLast);
+      } else {
+        console.log('[NSE] Yahoo SENSEX invalid, using fallback');
       }
     } catch (e) {
       console.log('[NSE] SENSEX Yahoo fallback failed:', e.message);
@@ -197,7 +201,7 @@ router.get('/indices', async function(req, res) {
   const day    = ist.getDay();
   const mins   = ist.getHours() * 60 + ist.getMinutes();
   const isOpen = day >= 1 && day <= 5 && mins >= 555 && mins <= 930;
-  const ttl    = isOpen ? 15 : 300; // 15s live, 5min closed
+  const ttl    = isOpen ? 5 : 300; // 5s live (refreshes every 5s during market hours), 5min closed
 
   try {
     const data = await getCached('indices', async function() {

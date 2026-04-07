@@ -112,8 +112,8 @@ export default function Markets() {
   useEffect(function() {
     fetchIndices();
     fetchAll();
-    // Refresh indices every 15 seconds via backend
-    tickRef.current = setInterval(fetchIndices, 15000);
+    // Refresh indices every 5 seconds for live updating prices
+    tickRef.current = setInterval(fetchIndices, 5000);
     var slowInterval = setInterval(fetchAll, 60000);
     return function() {
       clearInterval(tickRef.current);
