@@ -461,7 +461,7 @@ export default function Portfolio() {
                 )}
               </div>
             )}
-
+            
             {tab === 'crypto' && (
               <div className="col-span-2">
                 <label className="text-gray-400 text-xs font-mono mb-1 block">SELECT CRYPTO</label>
