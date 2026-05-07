@@ -64,20 +64,7 @@ A full-stack real-time financial intelligence web application inspired by MoneyC
 
 ---
 
-## Future Features
 
-- [ ] **Stock Detail Page** — Full company info, financials, 52-week high/low, analyst ratings
-- [ ] **Price Alerts** — Email or browser notification when a stock hits your target price
-- [ ] **F&O Data** — Options chain, put-call ratio, futures data
-- [ ] **IPO Tracker** — Upcoming IPOs with subscription status and GMP
-- [ ] **Screener** — Filter stocks by P/E, P/B, market cap, dividend yield, sector
-- [ ] **Compare Stocks** — Side by side comparison of multiple stocks
-- [ ] **Dark/Light Theme Toggle** — User preference for theme
-- [ ] **Mobile App** — React Native version for Android and iOS
-- [ ] **Paper Trading** — Simulated trading with virtual money
-- [ ] **AI Insights** — GPT-powered stock analysis and market summaries
-- [ ] **Export Portfolio** — Download holdings as Excel or PDF
-- [ ] **Broker Integration** — Connect Zerodha or Upstox for real portfolio sync
 
 ---
 
