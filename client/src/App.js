@@ -17,6 +17,7 @@ import PriceAlerts from './pages/PriceAlerts';
 import Profile     from './pages/Profile';
 import Calculators from './pages/Calculators';
 import IPOTracker  from './pages/IPOTracker';
+import PaperTrading from './pages/PaperTrading';
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
           <Route path="/profile"   element={<Profile />} />
           <Route path="/calculators" element={<Calculators />} />
           <Route path="/ipotracker" element={<IPOTracker />} />
+          <Route path="/paper-trading" element={<PaperTrading />} />
         </Routes>
       </div>
     </Router>

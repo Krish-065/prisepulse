@@ -21,10 +21,12 @@ function Navbar() {
 
   var links = [
     { path: '/',          label: 'Markets',      icon: '📈' },
+    { path: '/stock/RELIANCE.NS', label: 'Charts', icon: '📊' },
     { path: '/news',      label: 'News',         icon: '📰' },
     { path: '/crypto',    label: 'Crypto',       icon: '₿'  },
     { path: '/mf',        label: 'Mutual Funds', icon: '📊' },
-    { path: '/ipo',       label: 'IPO',          icon: '🚀' },
+    { path: '/paper-trading', label: 'Paper Trading', icon: '📝' },
+    { path: '/ipotracker',label: 'IPO Tracker',  icon: '🚀' },
     { path: '/screener',  label: 'Screener',     icon: '🔍' },
     { path: '/watchlist', label: 'Watchlist',    icon: '⭐' },
     { path: '/portfolio', label: 'Portfolio',    icon: '💼' },
@@ -73,12 +75,12 @@ function Navbar() {
             <ThemeToggle />
             {token && user ? (
               <>
-                <div className="hidden md:flex items-center gap-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors">
+                <Link to="/profile" className="hidden md:flex items-center gap-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-1.5 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer">
                   <div className="w-6 h-6 bg-primary/20 rounded-full flex items-center justify-center">
                     <span className="text-primary text-xs font-bold">{user.name ? user.name[0].toUpperCase() : 'U'}</span>
                   </div>
                   <span className="text-foreground dark:text-gray-300 text-sm font-medium">{user.name}</span>
-                </div>
+                </Link>
                 <button
                   onClick={logout}
                   className="text-sm font-medium text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 px-4 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-400/10 hover:border-red-200 dark:hover:border-red-400/40 hover:text-red-500 dark:hover:text-red-400 transition-all"
