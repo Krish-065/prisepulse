@@ -28,6 +28,8 @@ const tradeHistorySchema = new mongoose.Schema(
       min: 0
     },
     exitPrice: Number,
+    stopLoss: Number,
+    targetProfit: Number,
     tradeValue: Number, // Quantity * EntryPrice
     profitLoss: Number,
     profitLossPercent: Number,

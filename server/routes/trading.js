@@ -45,7 +45,7 @@ router.get('/trades', verifyToken, async (req, res) => {
 // PLACE trade (BUY/SELL)
 router.post('/trades', verifyToken, async (req, res) => {
   try {
-    const { symbol, type, quantity, entryPrice } = req.body;
+    const { symbol, type, quantity, entryPrice, stopLoss, targetProfit } = req.body;
     const account = await TradingAccount.findOne({ userId: req.user.id });
     
     if (!account) return res.status(404).json({ error: 'Trading account not found' });
@@ -62,6 +62,8 @@ router.post('/trades', verifyToken, async (req, res) => {
       type,
       quantity,
       entryPrice,
+      stopLoss,
+      targetProfit,
       tradeValue,
       isPaperTrade: true
     });
