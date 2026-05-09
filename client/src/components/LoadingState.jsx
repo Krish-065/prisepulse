@@ -1,10 +1,10 @@
 import React from 'react';
-import { Loader } from 'react-icons/fa';
+import { FaSpinner } from 'react-icons/fa';
 
 export const LoadingState = ({ message = 'Loading...', fullScreen = false }) => {
   const content = (
     <div className="flex flex-col items-center justify-center gap-4">
-      <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+      <FaSpinner className="w-8 h-8 text-blue-600 animate-spin" />
       <p className="text-gray-600 text-sm">{message}</p>
     </div>
   );
