@@ -5,7 +5,13 @@ const http     = require('http');
 const axios    = require('axios');
 const cron     = require('node-cron');
 const { Server } = require('socket.io');
+const passport = require('passport');
 require('dotenv').config();
+
+// Import config and middleware
+const connectDB = require('./config/database');
+require('./config/oauth');
+const { verifyToken } = require('./middleware/auth');
 
 const app    = express();
 const server = http.createServer(app);
@@ -15,16 +21,26 @@ const io     = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB connected successfully!'))
-  .catch(err => console.log('MongoDB error:', err));
+// Connect to MongoDB
+connectDB();
 
-app.use('/api/auth',      require('./routes/auth'));
-app.use('/api/market',    require('./routes/market'));
-app.use('/api/watchlist', require('./routes/watchlist'));
-app.use('/api/portfolio', require('./routes/portfolio'));
-app.use('/api/news',      require('./routes/news'));
+// Mount all routes
+app.use('/api/auth',         require('./routes/auth'));
+app.use('/api/market',       require('./routes/market'));
+app.use('/api/watchlist',    require('./routes/watchlist'));
+app.use('/api/portfolio',    require('./routes/portfolio'));
+app.use('/api/news',         require('./routes/news'));
+app.use('/api/crypto',       require('./routes/crypto'));
+app.use('/api/trading',      verifyToken, require('./routes/trading'));
+app.use('/api/priceAlerts',  verifyToken, require('./routes/priceAlerts'));
+app.use('/api/notifications', verifyToken, require('./routes/notifications'));
+app.use('/api/ipo',          require('./routes/ipo'));
+app.use('/api/mutualFunds',  require('./routes/mutualFunds'));
+app.use('/api/comparison',   require('./routes/comparison'));
+app.use('/api/screener',     verifyToken, require('./routes/screener'));
+app.use('/api/aiInsights',   verifyToken, require('./routes/aiInsights'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'PrisePulse API is running!' });
