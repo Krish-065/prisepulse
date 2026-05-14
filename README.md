@@ -28,19 +28,7 @@ A comprehensive web-based financial intelligence platform with real-time stock t
 - **Export Options**: Download portfolio as PDF or Excel
 - **Multi-Watchlist**: Organize stocks in custom watchlists
 
-### 🎮 Paper Trading (Virtual Trading)
-- **₹1,00,000 Starting Balance**: Risk-free trading simulation
-- **Buy/Sell Execution**: Execute trades with virtual money
-- **Performance Metrics**: Track win rate, Sharpe ratio, max drawdown
-- **Trade History**: Complete transaction log with analysis
-- **Account Reset**: Reset to practice strategies
 
-### 🤖 AI-Powered Insights
-- **Market Sentiment Analysis**: Real-time market mood assessment
-- **Stock Recommendations**: AI-driven BUY/SELL/HOLD signals
-- **Portfolio Analysis**: Smart suggestions for optimization
-- **Sector Trends**: Industry-wise market analysis
-- **Predictive Analytics**: Market movement predictions
 
 ### 💎 Cryptocurrency Tracking
 - **16+ Cryptocurrencies**: Bitcoin, Ethereum, and major altcoins
