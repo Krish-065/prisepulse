@@ -6,7 +6,6 @@ export const apiClient = axios.create({
   baseURL: API_URL,
 });
 
-// Attach token to every request if present
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {

@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-// Helper function to fetch quotes directly from Yahoo Finance
-async function fetchYahooQuote(symbol) {
+// Helper: fetch quote directly from Yahoo Finance
+async function fetchQuote(symbol) {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
     const response = await fetch(url);
@@ -15,12 +15,12 @@ async function fetchYahooQuote(symbol) {
     const change = price - prevClose;
     const changePercent = (change / prevClose) * 100;
     return {
-      price: price,
-      change: change,
-      changePercent: changePercent,
+      price,
+      change,
+      changePercent,
       dayHigh: meta.regularMarketDayHigh,
       dayLow: meta.regularMarketDayLow,
-      volume: meta.regularMarketVolume
+      volume: meta.regularMarketVolume,
     };
   } catch (err) {
     console.error(`Yahoo error for ${symbol}:`, err.message);
@@ -33,13 +33,13 @@ router.get('/indices', async (req, res) => {
   const symbols = ['^NSEI', '^BSESN', '^NSEBANK', '^NSEIT'];
   const results = {};
   for (const sym of symbols) {
-    const data = await fetchYahooQuote(sym);
+    const data = await fetchQuote(sym);
     results[sym] = data || { price: null, change: null, changePercent: null };
   }
   res.json(results);
 });
 
-// GET /market/movers (top gainers/losers)
+// GET /market/movers
 router.get('/movers', async (req, res) => {
   const niftyStocks = [
     'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
@@ -48,7 +48,7 @@ router.get('/movers', async (req, res) => {
   ];
   const stocks = [];
   for (const sym of niftyStocks) {
-    const quote = await fetchYahooQuote(sym);
+    const quote = await fetchQuote(sym);
     if (quote && quote.price) {
       stocks.push({
         symbol: sym.replace('.NS', ''),
@@ -63,10 +63,10 @@ router.get('/movers', async (req, res) => {
   res.json({ gainers, losers });
 });
 
-// GET /market/search/:query
+// GET /market/search/:query – for autocomplete dropdown
 router.get('/search/:query', async (req, res) => {
   try {
-    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${req.params.query}&quotesCount=20`;
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${req.params.query}&quotesCount=20&newsCount=0`;
     const response = await fetch(url);
     const data = await response.json();
     const quotes = data.quotes || [];
@@ -80,7 +80,6 @@ router.get('/search/:query', async (req, res) => {
       }));
     res.json(stocks);
   } catch (err) {
-    console.error('Search error:', err);
     res.status(500).json([]);
   }
 });
@@ -88,27 +87,27 @@ router.get('/search/:query', async (req, res) => {
 // GET /market/stock/:symbol
 router.get('/stock/:symbol', async (req, res) => {
   const { symbol } = req.params;
-  const quote = await fetchYahooQuote(`${symbol}.NS`);
+  const quote = await fetchQuote(`${symbol}.NS`);
   if (!quote || !quote.price) {
     return res.status(404).json({ error: 'Stock not found' });
   }
   res.json({
-    symbol: symbol,
+    symbol,
     price: quote.price.toFixed(2),
     change: quote.change.toFixed(2),
     changePercent: quote.changePercent.toFixed(2),
     dayHigh: quote.dayHigh?.toFixed(2),
     dayLow: quote.dayLow?.toFixed(2),
-    volume: quote.volume
+    volume: quote.volume,
   });
 });
 
-// GET /market/stock-list (for screener)
+// GET /market/stock-list (NIFTY 50)
 router.get('/stock-list', async (req, res) => {
   const symbols = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'AXISBANK', 'LT', 'WIPRO', 'ASIANPAINT', 'HCLTECH', 'TITAN', 'SUNPHARMA', 'MARUTI', 'BAJFINANCE', 'NESTLEIND'];
   const results = [];
   for (const sym of symbols) {
-    const quote = await fetchYahooQuote(`${sym}.NS`);
+    const quote = await fetchQuote(`${sym}.NS`);
     if (quote && quote.price) {
       results.push({
         symbol: sym,
@@ -117,7 +116,7 @@ router.get('/stock-list', async (req, res) => {
         changePercent: quote.changePercent.toFixed(2),
         dayHigh: quote.dayHigh?.toFixed(2),
         dayLow: quote.dayLow?.toFixed(2),
-        volume: quote.volume
+        volume: quote.volume,
       });
     }
     await new Promise(r => setTimeout(r, 100));
@@ -135,11 +134,10 @@ router.get('/crypto', async (req, res) => {
       name: c.name,
       price: c.current_price?.toLocaleString(),
       change: c.price_change_percentage_24h?.toFixed(2),
-      up: c.price_change_percentage_24h >= 0
+      up: c.price_change_percentage_24h >= 0,
     }));
     res.json(mapped);
   } catch (err) {
-    console.error('Crypto error:', err);
     res.status(500).json([]);
   }
 });
@@ -147,29 +145,25 @@ router.get('/crypto', async (req, res) => {
 // GET /market/news
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 router.get('/news', async (req, res) => {
-  if (!NEWS_API_KEY) {
-    return res.status(500).json({ error: 'News API key not configured' });
-  }
+  if (!NEWS_API_KEY) return res.status(500).json({ error: 'News API key missing' });
   try {
     const url = `https://newsapi.org/v2/everything?q=stock%20market%20OR%20nifty%20OR%20sensex&language=en&sortBy=publishedAt&apiKey=${NEWS_API_KEY}`;
     const response = await fetch(url);
     const data = await response.json();
     if (data.status === 'ok') {
-      const articles = data.articles.slice(0, 20).map(article => ({
-        title: article.title,
-        description: article.description,
-        time: new Date(article.publishedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-        date: new Date(article.publishedAt).toLocaleDateString(),
-        url: article.url,
-        source: article.source.name,
-        image: article.urlToImage
+      const articles = data.articles.slice(0, 20).map(a => ({
+        title: a.title,
+        description: a.description,
+        time: new Date(a.publishedAt).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }),
+        url: a.url,
+        source: a.source.name,
+        image: a.urlToImage,
       }));
       res.json(articles);
     } else {
       res.status(500).json({ error: data.message });
     }
   } catch (err) {
-    console.error('News error:', err);
     res.status(500).json({ error: 'Failed to fetch news' });
   }
 });
