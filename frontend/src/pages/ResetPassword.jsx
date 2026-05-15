@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import CandlestickBackground from '../components/CandlestickBackground';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -35,25 +36,25 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="reset-container">
-      <div className="reset-card">
-        <h2>Create New Password</h2>
-        <form onSubmit={handleSubmit}>
-          <input type="password" placeholder="New Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          <input type="password" placeholder="Confirm Password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-          <button type="submit" disabled={loading}>{loading ? 'Resetting...' : 'Reset Password'}</button>
-          {message && <p className="success">{message}</p>}
-          {error && <p className="error">{error}</p>}
-        </form>
+    <>
+      <CandlestickBackground />
+      <div className="market-bg"></div>
+      <div className="animated-bg"></div>
+      <div className="particle-bg">{[...Array(30)].map((_, i) => <div key={i} className="particle"></div>)}</div>
+      <div className="grid-overlay"></div>
+      
+      <div className="reset-container">
+        <div className="reset-card">
+          <h2>Create New Password</h2>
+          <form onSubmit={handleSubmit}>
+            <input type="password" placeholder="New Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <input type="password" placeholder="Confirm Password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
+            <button type="submit" disabled={loading}>{loading ? 'Resetting...' : 'Reset Password'}</button>
+            {message && <p className="success">{message}</p>}
+            {error && <p className="error">{error}</p>}
+          </form>
+        </div>
       </div>
-      <style>{`
-        .reset-container { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); }
-        .reset-card { background: var(--bg-card); border-radius: 16px; padding: 40px; width: 100%; max-width: 450px; }
-        input { width: 100%; padding: 12px; margin-bottom: 16px; background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: 8px; color: white; }
-        button { width: 100%; padding: 12px; background: linear-gradient(135deg, #00ff88, #00bcd4); border: none; border-radius: 8px; font-weight: 700; cursor: pointer; }
-        .success { color: #00ff88; margin-top: 12px; }
-        .error { color: #ff4444; margin-top: 12px; }
-      `}</style>
-    </div>
+    </>
   );
 }
