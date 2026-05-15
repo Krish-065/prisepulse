@@ -35,9 +35,10 @@ function App() {
           <Toaster position="top-right" />
           <Routes>
             {/* Public Routes (No Layout) */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={token ? <Navigate to="/dashboard" /> : <Login />} />
-            <Route path="/register" element={token ? <Navigate to="/dashboard" /> : <Register />} />
+                       <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route path="/dashboard" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 
