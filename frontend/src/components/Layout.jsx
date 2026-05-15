@@ -22,6 +22,20 @@ export default function Layout({ children }) {
       <main className="main-content" style={{ marginLeft: sidebarWidth }}>
         {children}
       </main>
+      
+      <style>{`
+        .layout {
+          display: flex;
+          min-height: 100vh;
+        }
+        .main-content {
+          flex: 1;
+          padding: 24px;
+          background: var(--bg-primary);
+          transition: margin-left 0.3s;
+          overflow-x: auto;
+        }
+      `}</style>
     </div>
   );
 }
