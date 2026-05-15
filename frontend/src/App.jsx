@@ -1,55 +1,37 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from './contexts/ThemeContext';
-import PrivateRoute from './components/PrivateRoute';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
-import Portfolio from './pages/Portfolio';
-import Watchlist from './pages/Watchlist';
-import Trading from './pages/Trading';
-import Screener from './pages/Screener';
-import IPOs from './pages/IPOs';
-import FnO from './pages/FnO';
-import Markets from './pages/Markets';
-import Tools from './pages/Tools';
-import News from './pages/News';
-import Crypto from './pages/Crypto';
-import MutualFunds from './pages/MutualFunds';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
+import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+
+function Home() {
+  return (
+    <div style={{ padding: '20px', color: 'white', background: '#0a0e27', minHeight: '100vh' }}>
+      <h1>PricePulse</h1>
+      <p>If you see this, the app is rendering correctly.</p>
+      <p>Your backend API should be at: {import.meta.env.VITE_API_URL}</p>
+      <nav>
+        <Link to="/dashboard" style={{ color: '#00ff88', marginRight: '10px' }}>Dashboard</Link>
+        <Link to="/login" style={{ color: '#00ff88' }}>Login</Link>
+      </nav>
+    </div>
+  )
+}
+
+function Dashboard() {
+  return <div style={{ padding: '20px', color: 'white' }}>Dashboard – coming soon</div>
+}
+
+function Login() {
+  return <div style={{ padding: '20px', color: 'white' }}>Login page – coming soon</div>
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <Toaster position="top-right" />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
-            <Route path="/dashboard" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
-            <Route path="/portfolio" element={<PrivateRoute><Layout><Portfolio /></Layout></PrivateRoute>} />
-            <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
-            <Route path="/trading" element={<PrivateRoute><Layout><Trading /></Layout></PrivateRoute>} />
-            <Route path="/screener" element={<PrivateRoute><Layout><Screener /></Layout></PrivateRoute>} />
-            <Route path="/ipos" element={<PrivateRoute><Layout><IPOs /></Layout></PrivateRoute>} />
-            <Route path="/fno" element={<PrivateRoute><Layout><FnO /></Layout></PrivateRoute>} />
-            <Route path="/markets" element={<PrivateRoute><Layout><Markets /></Layout></PrivateRoute>} />
-            <Route path="/tools" element={<PrivateRoute><Layout><Tools /></Layout></PrivateRoute>} />
-            <Route path="/news" element={<PrivateRoute><Layout><News /></Layout></PrivateRoute>} />
-            <Route path="/crypto" element={<PrivateRoute><Layout><Crypto /></Layout></PrivateRoute>} />
-            <Route path="/mutual-funds" element={<PrivateRoute><Layout><MutualFunds /></Layout></PrivateRoute>} />
-          </Routes>
-        </AuthProvider>
-      </ThemeProvider>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/login" element={<Login />} />
+      </Routes>
     </BrowserRouter>
-  );
+  )
 }
 
-export default App;
+export default App
