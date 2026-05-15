@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
+import CandlestickBackground from './CandlestickBackground';
 
 export default function Layout({ children }) {
   const [sidebarWidth, setSidebarWidth] = useState(260);
+  
   useEffect(() => {
     const handleResize = () => {
       const sidebar = document.querySelector('.sidebar');
@@ -15,6 +17,7 @@ export default function Layout({ children }) {
 
   return (
     <div className="layout">
+      <CandlestickBackground />
       <Sidebar />
       <main className="main-content" style={{ marginLeft: sidebarWidth }}>
         {children}

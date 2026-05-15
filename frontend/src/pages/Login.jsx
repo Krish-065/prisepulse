@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import CandlestickBackground from '../components/CandlestickBackground';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -24,6 +25,7 @@ export default function Login() {
       <div className="particle-bg">{[...Array(30)].map((_, i) => <div key={i} className="particle"></div>)}</div>
       <div className="grid-overlay"></div>
       <div className="candlestick-pattern"></div>
+      <CandlestickBackground />
       
       <div className="login-container">
         <div className="login-card">

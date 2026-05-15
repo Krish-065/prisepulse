@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import CandlestickBackground from '../components/CandlestickBackground';
 
 export default function Landing() {
   return (
@@ -24,6 +25,8 @@ export default function Landing() {
 
       <div className="landing-container">
         <div className="landing-content">
+            <CandlestickBackground />
+
           {/* Hero Section */}
           <div className="hero-section">
             <div className="hero-badge">🚀 POWERED BY AI</div>
