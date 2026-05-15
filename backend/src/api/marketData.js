@@ -1,18 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const yahooFinance = require('yahoo-finance2').default;
 
-// Helper function to fetch a quote from Yahoo Finance
-async function fetchQuote(symbol) {
+// Helper function to fetch quotes directly from Yahoo Finance
+async function fetchYahooQuote(symbol) {
   try {
-    const quote = await yahooFinance.quote(symbol);
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const result = data.chart.result[0];
+    if (!result) return null;
+    const meta = result.meta;
+    const price = meta.regularMarketPrice;
+    const prevClose = meta.previousClose;
+    const change = price - prevClose;
+    const changePercent = (change / prevClose) * 100;
     return {
-      price: quote.regularMarketPrice,
-      change: quote.regularMarketChange,
-      changePercent: quote.regularMarketChangePercent,
-      dayHigh: quote.regularMarketDayHigh,
-      dayLow: quote.regularMarketDayLow,
-      volume: quote.regularMarketVolume,
+      price: price,
+      change: change,
+      changePercent: changePercent,
+      dayHigh: meta.regularMarketDayHigh,
+      dayLow: meta.regularMarketDayLow,
+      volume: meta.regularMarketVolume
     };
   } catch (err) {
     console.error(`Yahoo error for ${symbol}:`, err.message);
@@ -25,23 +33,22 @@ router.get('/indices', async (req, res) => {
   const symbols = ['^NSEI', '^BSESN', '^NSEBANK', '^NSEIT'];
   const results = {};
   for (const sym of symbols) {
-    const data = await fetchQuote(sym);
+    const data = await fetchYahooQuote(sym);
     results[sym] = data || { price: null, change: null, changePercent: null };
   }
   res.json(results);
 });
 
-// GET /market/movers (top gainers/losers from NIFTY 50)
+// GET /market/movers (top gainers/losers)
 router.get('/movers', async (req, res) => {
   const niftyStocks = [
     'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
     'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-    'AXISBANK.NS', 'LT.NS', 'WIPRO.NS', 'ASIANPAINT.NS', 'HCLTECH.NS',
-    'TITAN.NS', 'SUNPHARMA.NS', 'MARUTI.NS', 'BAJFINANCE.NS', 'NESTLEIND.NS'
+    'AXISBANK.NS', 'LT.NS', 'WIPRO.NS', 'ASIANPAINT.NS', 'HCLTECH.NS'
   ];
   const stocks = [];
   for (const sym of niftyStocks) {
-    const quote = await fetchQuote(sym);
+    const quote = await fetchYahooQuote(sym);
     if (quote && quote.price) {
       stocks.push({
         symbol: sym.replace('.NS', ''),
@@ -49,7 +56,7 @@ router.get('/movers', async (req, res) => {
         changePercent: quote.changePercent.toFixed(2)
       });
     }
-    await new Promise(r => setTimeout(r, 150)); // rate limit
+    await new Promise(r => setTimeout(r, 150));
   }
   const gainers = [...stocks].sort((a,b) => b.changePercent - a.changePercent).slice(0, 10);
   const losers = [...stocks].sort((a,b) => a.changePercent - b.changePercent).slice(0, 10);
@@ -59,8 +66,11 @@ router.get('/movers', async (req, res) => {
 // GET /market/search/:query
 router.get('/search/:query', async (req, res) => {
   try {
-    const result = await yahooFinance.search(req.params.query);
-    const stocks = result.quotes
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${req.params.query}&quotesCount=20`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const quotes = data.quotes || [];
+    const stocks = quotes
       .filter(q => q.quoteType === 'EQUITY' && (q.exchange === 'NSI' || q.exchange === 'BSE'))
       .slice(0, 15)
       .map(q => ({
@@ -73,6 +83,46 @@ router.get('/search/:query', async (req, res) => {
     console.error('Search error:', err);
     res.status(500).json([]);
   }
+});
+
+// GET /market/stock/:symbol
+router.get('/stock/:symbol', async (req, res) => {
+  const { symbol } = req.params;
+  const quote = await fetchYahooQuote(`${symbol}.NS`);
+  if (!quote || !quote.price) {
+    return res.status(404).json({ error: 'Stock not found' });
+  }
+  res.json({
+    symbol: symbol,
+    price: quote.price.toFixed(2),
+    change: quote.change.toFixed(2),
+    changePercent: quote.changePercent.toFixed(2),
+    dayHigh: quote.dayHigh?.toFixed(2),
+    dayLow: quote.dayLow?.toFixed(2),
+    volume: quote.volume
+  });
+});
+
+// GET /market/stock-list (for screener)
+router.get('/stock-list', async (req, res) => {
+  const symbols = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'AXISBANK', 'LT', 'WIPRO', 'ASIANPAINT', 'HCLTECH', 'TITAN', 'SUNPHARMA', 'MARUTI', 'BAJFINANCE', 'NESTLEIND'];
+  const results = [];
+  for (const sym of symbols) {
+    const quote = await fetchYahooQuote(`${sym}.NS`);
+    if (quote && quote.price) {
+      results.push({
+        symbol: sym,
+        price: quote.price.toFixed(2),
+        change: quote.change.toFixed(2),
+        changePercent: quote.changePercent.toFixed(2),
+        dayHigh: quote.dayHigh?.toFixed(2),
+        dayLow: quote.dayLow?.toFixed(2),
+        volume: quote.volume
+      });
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  res.json(results);
 });
 
 // GET /market/crypto
@@ -94,9 +144,9 @@ router.get('/crypto', async (req, res) => {
   }
 });
 
-// GET /market/news (uses NewsAPI key from .env)
+// GET /market/news
+const NEWS_API_KEY = process.env.NEWS_API_KEY;
 router.get('/news', async (req, res) => {
-  const NEWS_API_KEY = process.env.NEWS_API_KEY;
   if (!NEWS_API_KEY) {
     return res.status(500).json({ error: 'News API key not configured' });
   }
@@ -108,7 +158,7 @@ router.get('/news', async (req, res) => {
       const articles = data.articles.slice(0, 20).map(article => ({
         title: article.title,
         description: article.description,
-        time: new Date(article.publishedAt).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' }),
+        time: new Date(article.publishedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
         date: new Date(article.publishedAt).toLocaleDateString(),
         url: article.url,
         source: article.source.name,
@@ -122,46 +172,6 @@ router.get('/news', async (req, res) => {
     console.error('News error:', err);
     res.status(500).json({ error: 'Failed to fetch news' });
   }
-});
-
-// GET /market/stock-list (NIFTY 50 stocks for screener)
-router.get('/stock-list', async (req, res) => {
-  const symbols = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK', 'AXISBANK', 'LT', 'WIPRO', 'ASIANPAINT', 'HCLTECH', 'TITAN', 'SUNPHARMA', 'MARUTI', 'BAJFINANCE', 'NESTLEIND'];
-  const results = [];
-  for (const sym of symbols) {
-    const quote = await fetchQuote(`${sym}.NS`);
-    if (quote && quote.price) {
-      results.push({
-        symbol: sym,
-        price: quote.price.toFixed(2),
-        change: quote.change.toFixed(2),
-        changePercent: quote.changePercent.toFixed(2),
-        dayHigh: quote.dayHigh?.toFixed(2),
-        dayLow: quote.dayLow?.toFixed(2),
-        volume: quote.volume
-      });
-    }
-    await new Promise(r => setTimeout(r, 100));
-  }
-  res.json(results);
-});
-
-// GET /market/stock/:symbol (single stock detail)
-router.get('/stock/:symbol', async (req, res) => {
-  const { symbol } = req.params;
-  const quote = await fetchQuote(`${symbol}.NS`);
-  if (!quote) {
-    return res.status(404).json({ error: 'Stock not found' });
-  }
-  res.json({
-    symbol,
-    price: quote.price.toFixed(2),
-    change: quote.change.toFixed(2),
-    changePercent: quote.changePercent.toFixed(2),
-    dayHigh: quote.dayHigh?.toFixed(2),
-    dayLow: quote.dayLow?.toFixed(2),
-    volume: quote.volume
-  });
 });
 
 module.exports = router;

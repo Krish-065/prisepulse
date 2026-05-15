@@ -5,18 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/index.js"
   },
-  "keywords": [
-    "stock-market",
-    "trading",
-    "finance",
-    "express",
-    "nodejs"
-  ],
-  "author": "PricePulse Team",
-  "license": "MIT",
   "dependencies": {
     "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
@@ -30,14 +20,9 @@
     "pg": "^8.11.3",
     "prisma": "^5.7.0",
     "socket.io": "^4.6.1",
-    "speakeasy": "^2.0.0",
-    "yahoo-finance2": "^2.11.3"
+    "speakeasy": "^2.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
   }
 }
