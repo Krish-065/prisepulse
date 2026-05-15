@@ -8,13 +8,15 @@ export default function Sidebar() {
 
   const menuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
-    { path: '/portfolio', label: 'Portfolio', icon: '📁' },
-    { path: '/watchlist', label: 'Watchlist', icon: '⭐' },
-    { path: '/trading', label: 'Paper Trading', icon: '🎮' },
+    { path: '/markets', label: 'Markets', icon: '🌍' },
     { path: '/screener', label: 'Screener', icon: '🔍' },
+    { path: '/watchlist', label: 'Watchlist', icon: '⭐' },
+    { path: '/portfolio', label: 'Portfolio', icon: '📁' },
+    { path: '/trading', label: 'Paper Trading', icon: '🎮' },
     { path: '/ipos', label: 'IPOs', icon: '📈' },
     { path: '/fno', label: 'F&O', icon: '📉' },
-    { path: '/markets', label: 'Markets', icon: '🌍' },
+    { path: '/crypto', label: 'Crypto', icon: '🪙' },
+    { path: '/news', label: 'News', icon: '📰' },
     { path: '/tools', label: 'Tools', icon: '🧮' },
   ];
 
@@ -30,7 +32,8 @@ export default function Sidebar() {
       borderRight: '1px solid rgba(0, 255, 136, 0.2)',
       display: 'flex',
       flexDirection: 'column',
-      zIndex: 100
+      zIndex: 100,
+      overflowY: 'auto'
     }}>
       <div style={{ padding: '24px 20px', fontSize: '20px', fontWeight: 700, borderBottom: '1px solid rgba(0, 255, 136, 0.2)' }}>
         <span style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>PricePulse</span>

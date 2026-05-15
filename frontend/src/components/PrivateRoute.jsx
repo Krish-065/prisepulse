@@ -4,10 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 export default function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return <div className="loading-screen">Loading...</div>;
-  }
+  if (loading) return <div>Loading...</div>;
 
-  // If not authenticated, redirect to Landing page (not Login)
-  return user ? children : <Navigate to="/" />;
+  return user ? children : <Navigate to="/login" />;
 }

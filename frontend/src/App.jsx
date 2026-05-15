@@ -1,37 +1,44 @@
-import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
+import PrivateRoute from './components/PrivateRoute';
+import Layout from './components/Layout';
 
-function Home() {
-  return (
-    <div style={{ padding: '20px', color: 'white', background: '#0a0e27', minHeight: '100vh' }}>
-      <h1>PricePulse</h1>
-      <p>If you see this, the app is rendering correctly.</p>
-      <p>Your backend API should be at: {import.meta.env.VITE_API_URL}</p>
-      <nav>
-        <Link to="/dashboard" style={{ color: '#00ff88', marginRight: '10px' }}>Dashboard</Link>
-        <Link to="/login" style={{ color: '#00ff88' }}>Login</Link>
-      </nav>
-    </div>
-  )
-}
-
-function Dashboard() {
-  return <div style={{ padding: '20px', color: 'white' }}>Dashboard – coming soon</div>
-}
-
-function Login() {
-  return <div style={{ padding: '20px', color: 'white' }}>Login page – coming soon</div>
-}
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Dashboard from './pages/Dashboard';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+// Import other placeholder pages as you create them
+// import Portfolio from './pages/Portfolio';
+// import Watchlist from './pages/Watchlist';
+// import Trading from './pages/Trading';
+// ...
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/login" element={<Login />} />
-      </Routes>
+      <ThemeProvider>
+        <AuthProvider>
+          <Toaster position="top-right" />
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Protected Routes with Layout */}
+            <Route path="/" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
+            <Route path="/dashboard" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
+            {/* <Route path="/portfolio" element={<PrivateRoute><Layout><Portfolio /></Layout></PrivateRoute>} /> */}
+            {/* Add more routes here as you create them */}
+          </Routes>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;

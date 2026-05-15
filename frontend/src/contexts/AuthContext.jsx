@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
       setUser(res.data);
     } catch (err) {
       localStorage.removeItem('token');
+      delete apiClient.defaults.headers.common['Authorization'];
     } finally {
       setLoading(false);
     }
@@ -75,7 +76,6 @@ export function AuthProvider({ children }) {
     delete apiClient.defaults.headers.common['Authorization'];
     setUser(null);
     toast.success('Logged out');
-    window.location.href = '/login';
   };
 
   return (
