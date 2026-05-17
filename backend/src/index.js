@@ -74,6 +74,18 @@ app.delete('/api/portfolio/:symbol', authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+// Keep‑alive endpoint – prevents database suspension
+app.get('/api/keep-alive', async (req, res) => {
+  try {
+    const { query } = require('./db/index');
+    await query('SELECT 1');
+    res.json({ status: 'Database awake', timestamp: new Date() });
+  } catch (err) {
+    console.error('Keep‑alive error:', err.message);
+    res.status(500).json({ error: 'Database not reachable' });
+  }
+});
+
 // Socket.io
 io.use((socket, next) => {
   const token = socket.handshake.auth.token;
