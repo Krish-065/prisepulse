@@ -10,7 +10,7 @@
 
 > **PrisePulse** is a full-stack, real-time financial intelligence platform built for Indian retail investors and traders. Track live markets, manage your portfolio, paper-trade risk-free, screen stocks, and use professional financial calculators — all in one place.
 
-### 🌐 [https://prisepulse-nine.vercel.app/](https://prisepulse-nine.vercel.app)
+### 🌐 [https://prisepulse-nine.vercel.app](https://prisepulse-nine.vercel.app)
 
 </div>
 
