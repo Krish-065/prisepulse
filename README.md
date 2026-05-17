@@ -126,57 +126,7 @@
 
 ---
 
-## 🚀 Getting Started
 
-### Prerequisites
-- Node.js 18+
-- npm or yarn
-- PostgreSQL database (local or cloud)
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/Krish-065/prisepulse.git
-cd prisepulse
-```
-
-### 2. Setup the Backend
-```bash
-cd backend
-npm install
-```
-
-Create `.env` in the `backend/` directory:
-```env
-DATABASE_URL=postgresql://user:password@host:5432/prisepulse
-JWT_SECRET=your_super_secret_jwt_key_here
-FRONTEND_URL=http://localhost:5173
-NEWS_API_KEY=your_newsapi_key        # optional, for market news
-```
-
-Start the backend:
-```bash
-npm run dev
-# Server runs on http://localhost:3000
-```
-
-### 3. Setup the Frontend
-```bash
-cd ../frontend
-npm install
-```
-
-Create `.env` in the `frontend/` directory:
-```env
-VITE_API_URL=http://localhost:3000/api
-```
-
-Start the frontend:
-```bash
-npm run dev
-# App runs on http://localhost:5173
-```
-
----
 
 ## 🌐 API Endpoints
 
