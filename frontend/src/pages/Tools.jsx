@@ -106,27 +106,67 @@ export default function Tools() {
 
   return (
     <div>
-      <h1>Financial Tools</h1>
-      <div className="two-column" style={{ gap: '12px', marginBottom: '20px' }}>
-        {Object.keys(calculators).map(key => (
-          <button key={key} className={calc === key ? 'active-filter' : ''} onClick={() => { setCalc(key); setResult(null); }} style={{ padding: '8px' }}>
-            {calculators[key].name}
-          </button>
-        ))}
-      </div>
-      <div className="section-card">
-        <h2>{calculators[calc].name}</h2>
-        <div className="two-column" style={{ gridTemplateColumns: 'repeat(2,1fr)', gap: '16px' }}>
-          {calculators[calc].fields.map((f, i) => (
-            <div key={f}><label>{calculators[calc].labels[i]}</label><input type="number" className="global-search" onChange={(e) => update(f, e.target.value)} /></div>
+      <h1 style={{ marginBottom: '24px' }}>Financial Tools</h1>
+      <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', gap: '24px', alignItems: 'start' }}>
+        <div className="section-card" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '16px' }}>
+          <h3 style={{ marginBottom: '12px', fontSize: '14px', color: 'var(--text-secondary)' }}>CALCULATORS</h3>
+          {Object.keys(calculators).map(key => (
+            <button 
+              key={key} 
+              className={calc === key ? 'btn-premium' : ''} 
+              onClick={() => { setCalc(key); setResult(null); }} 
+              style={{ 
+                padding: '12px 16px', 
+                textAlign: 'left',
+                borderRadius: '10px',
+                background: calc === key ? 'var(--accent-green)' : 'transparent',
+                color: calc === key ? '#0a0e27' : 'var(--text-primary)',
+                border: calc === key ? 'none' : '1px solid var(--border-color)',
+                cursor: 'pointer',
+                fontWeight: calc === key ? '600' : '500',
+                transition: '0.2s'
+              }}
+            >
+              {calculators[key].name}
+            </button>
           ))}
         </div>
-        <button onClick={handleCalculate} className="btn-premium" style={{ marginTop: '20px' }}>Calculate</button>
-        {result && (
-          <div style={{ marginTop: '20px', borderTop: '1px solid #2a2e39', paddingTop: '16px' }}>
-            {Object.entries(result).map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}><span>{k.toUpperCase()}:</span><strong>{k.toLowerCase().includes('quantity') || k.toLowerCase().includes('%') ? '' : '₹'}{v}</strong></div>)}
+        
+        <div className="section-card" style={{ padding: '32px' }}>
+          <h2 style={{ marginBottom: '24px', fontSize: '24px', color: 'var(--accent-green)' }}>{calculators[calc].name}</h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+            {calculators[calc].fields.map((f, i) => (
+              <div key={f} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{calculators[calc].labels[i]}</label>
+                <input 
+                  type="number" 
+                  className="global-search" 
+                  onChange={(e) => update(f, e.target.value)} 
+                  style={{ marginBottom: '0', background: 'var(--bg-glass-light)' }}
+                />
+              </div>
+            ))}
           </div>
-        )}
+          
+          <button onClick={handleCalculate} className="btn-premium" style={{ marginTop: '32px', width: '100%', padding: '16px', fontSize: '16px' }}>Calculate Results</button>
+          
+          {result && (
+            <div style={{ marginTop: '32px', padding: '24px', background: 'var(--bg-glass-heavy)', borderRadius: '16px', border: '1px solid var(--accent-green)' }}>
+              <h3 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Results Overview</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+                {Object.entries(result).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{k.toUpperCase()}</span>
+                    <strong style={{ fontSize: '20px', color: k.toLowerCase().includes('profit') || k.toLowerCase().includes('return') ? 'var(--accent-green)' : 'var(--text-primary)' }}>
+                      {k.toLowerCase().includes('quantity') || k.toLowerCase().includes('%') ? '' : '₹'}{v}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
