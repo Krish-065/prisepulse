@@ -27,7 +27,7 @@ async function fetchYahooQuote(symbol) {
 }
 
 router.get('/indices', async (req, res) => {
-  const symbols = ['^NSEI', '^BSESN', '^NSEBANK', '^NSEIT'];
+  const symbols = ['^NSEI', '^BSESN', '^NSEBANK', '^CNXIT'];
   const results = {};
   for (const sym of symbols) {
     const data = await fetchYahooQuote(sym);
@@ -91,7 +91,7 @@ router.get('/stock/:symbol', async (req, res) => {
     'SENSEX': '^BSESN',
     'BANKNIFTY': '^NSEBANK',
     'NIFTYBANK': '^NSEBANK',
-    'NIFTYIT': '^NSEIT'
+    'NIFTYIT': '^CNXIT'
   };
   
   if (indexMap[fetchSymbol]) {
@@ -136,7 +136,12 @@ router.get('/stock-list', async (req, res) => {
 });
 
 router.get('/crypto', async (req, res) => {
-  const symbols = ['BTC-USD', 'ETH-USD', 'SOL-USD', 'BNB-USD', 'XRP-USD', 'DOGE-USD'];
+  const symbols = [
+    'BTC-USD', 'ETH-USD', 'USDT-USD', 'BNB-USD', 'SOL-USD',
+    'USDC-USD', 'XRP-USD', 'DOGE-USD', 'TON11419-USD', 'ADA-USD',
+    'SHIB-USD', 'AVAX-USD', 'TRX-USD', 'DOT-USD', 'BCH-USD',
+    'LINK-USD', 'MATIC-USD', 'LTC-USD', 'NEAR-USD', 'UNI7083-USD'
+  ];
   const results = [];
   for (const sym of symbols) {
     const quote = await fetchYahooQuote(sym);
@@ -147,9 +152,10 @@ router.get('/crypto', async (req, res) => {
         price: quote.price.toLocaleString(),
         change: quote.changePercent.toFixed(2),
         up: quote.change >= 0,
+        // using simple logo logic via a standard crypto logo provider if needed
+        image: `https://assets.coincap.io/assets/icons/${sym.split('-')[0].toLowerCase()}@2x.png`
       });
     }
-    await new Promise(r => setTimeout(r, 100));
   }
   res.json(results.length > 0 ? results : []);
 });

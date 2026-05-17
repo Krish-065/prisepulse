@@ -13,8 +13,11 @@ export default function FnO() {
         // Try to fetch from backend first (if endpoint exists)
         // Fallback to mock data if backend not ready
         const res = await apiClient.get('/market/futures').catch(() => null);
-        if (res && res.data) {
-          setFutures(res.data);
+        if (res && res.data && res.data.nifty) {
+          setFutures([
+            { symbol: 'NIFTY FUT', price: res.data.nifty.price, change: res.data.nifty.change+'%', openInterest: res.data.nifty.oi },
+            { symbol: 'BANKNIFTY FUT', price: res.data.banknifty.price, change: res.data.banknifty.change+'%', openInterest: res.data.banknifty.oi },
+          ]);
         } else {
           // Mock data
           setFutures([

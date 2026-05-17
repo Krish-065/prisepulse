@@ -4,7 +4,7 @@ import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 export default function Markets() {
   const [searchParams] = useSearchParams();
-  const [symbol, setSymbol] = useState(searchParams.get('symbol') || 'NSE:NIFTY');
+  const [symbol, setSymbol] = useState(searchParams.get('symbol') || 'BSE:SENSEX');
   const [iframeSrc, setIframeSrc] = useState('');
 
   useEffect(() => {
@@ -13,7 +13,7 @@ export default function Markets() {
   }, [symbol]);
 
   const quickSymbols = [
-    { label: 'NIFTY 50', value: 'NSE:NIFTY' }, { label: 'SENSEX', value: 'NSE:SENSEX' }, { label: 'BANK NIFTY', value: 'NSE:BANKNIFTY' },
+    { label: 'NIFTY 50', value: 'BSE:SENSEX' }, { label: 'SENSEX', value: 'BSE:SENSEX' }, { label: 'BANK NIFTY', value: 'NSE:BANKNIFTY' },
     { label: 'RELIANCE', value: 'NSE:RELIANCE' }, { label: 'TCS', value: 'NSE:TCS' }, { label: 'INFY', value: 'NSE:INFY' },
     { label: 'HDFC BANK', value: 'NSE:HDFCBANK' }, { label: 'Bitcoin', value: 'COINBASE:BTCUSD' }, { label: 'Ethereum', value: 'COINBASE:ETHUSD' },
     { label: 'Solana', value: 'COINBASE:SOLUSD' }, { label: 'USD/INR', value: 'FX_IDC:USDINR' }, { label: 'EUR/INR', value: 'FX_IDC:EURINR' },
@@ -28,7 +28,7 @@ export default function Markets() {
           <button key={s.value} onClick={() => setSymbol(s.value)} style={{ padding: '6px 12px', background: symbol===s.value ? '#00ff88' : '#1e222d', border: '1px solid #2a2e39', borderRadius: '20px', cursor: 'pointer', color: symbol===s.value ? '#0a0e27' : 'white' }}>{s.label}</button>
         ))}
       </div>
-      <SearchWithSuggestions onSelect={(stock) => setSymbol(`NSE:${stock.symbol}`)} placeholder="Search any stock (e.g., TCS, WIPRO)..." className="global-search" />
+      <SearchWithSuggestions onSelect={(stock) => setSymbol(`${stock.exchange === 'NSE' ? 'NSE:' : stock.exchange === 'BSE' ? 'BSE:' : ''}${stock.symbol.replace('.NS', '').replace('.BO', '')}`)} placeholder="Search any stock (e.g., TCS, WIPRO)..." className="global-search" />
       <div style={{ background: '#1e222d', borderRadius: '16px', padding: '8px', marginTop: '20px' }}>
         {iframeSrc && <iframe src={iframeSrc} style={{ width: '100%', height: '550px', border: 'none' }} title="TradingView Chart" />}
       </div>

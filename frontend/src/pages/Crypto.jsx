@@ -22,13 +22,14 @@ export default function Crypto() {
   return (
     <div>
       <h1>Cryptocurrency</h1>
-      <div className="crypto-grid" style={{ gridTemplateColumns: 'repeat(4,1fr)' }}>
+      <div className="crypto-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
         {crypto.map(coin => (
-          <div key={coin.symbol} className="crypto-item">
-            <div className="crypto-symbol">{coin.symbol}</div>
-            <div className="crypto-name">{coin.name}</div>
-            <div className="crypto-price">₹{coin.price}</div>
-            <div className={`crypto-change ${coin.up ? 'positive' : 'negative'}`}>{coin.change}%</div>
+          <div key={coin.symbol} className="index-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            {coin.image && <img src={coin.image} alt={coin.name} style={{ width: '48px', height: '48px', borderRadius: '50%' }} />}
+            <div className="crypto-symbol" style={{ fontWeight: 'bold', fontSize: '18px' }}>{coin.name}</div>
+            <div className="crypto-name" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{coin.symbol}</div>
+            <div className="crypto-price" style={{ fontSize: '20px', marginTop: '8px' }}>₹{coin.price}</div>
+            <div className={`crypto-change ${coin.up ? 'positive' : 'negative'}`}>{coin.up ? '+' : ''}{coin.change}%</div>
           </div>
         ))}
       </div>

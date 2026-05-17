@@ -124,7 +124,7 @@ export default function Tools() {
         <button onClick={handleCalculate} className="btn-premium" style={{ marginTop: '20px' }}>Calculate</button>
         {result && (
           <div style={{ marginTop: '20px', borderTop: '1px solid #2a2e39', paddingTop: '16px' }}>
-            {Object.entries(result).map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}><span>{k.toUpperCase()}:</span><strong>₹{v}</strong></div>)}
+            {Object.entries(result).map(([k, v]) => <div key={k} style={{ display: 'flex', justifyContent: 'space-between' }}><span>{k.toUpperCase()}:</span><strong>{k.toLowerCase().includes('quantity') || k.toLowerCase().includes('%') ? '' : '₹'}{v}</strong></div>)}
           </div>
         )}
       </div>
