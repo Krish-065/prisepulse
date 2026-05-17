@@ -11,24 +11,10 @@ export default function Screener() {
   useEffect(() => {
     const fetchStocks = async () => {
       try {
-        const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/RELIANCE.NS'); // dummy
-        // For simplicity, we'll use a predefined list of NIFTY 50 stocks
-        const symbols = ['RELIANCE','TCS','HDFCBANK','INFY','ICICIBANK','HINDUNILVR','ITC','SBIN','BHARTIARTL','KOTAKBANK','AXISBANK','LT','WIPRO','ASIANPAINT','HCLTECH','TITAN','SUNPHARMA','MARUTI','BAJFINANCE','NESTLEIND'];
-        const results = [];
-        for (const sym of symbols) {
-          const quote = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}.NS`).then(r=>r.json());
-          const meta = quote.chart.result[0]?.meta;
-          if (meta) {
-            const price = meta.regularMarketPrice;
-            const prevClose = meta.previousClose;
-            const change = price - prevClose;
-            const changePercent = (change / prevClose) * 100;
-            results.push({ symbol: sym, price: price.toFixed(2), change: change.toFixed(2), changePercent: changePercent.toFixed(2) });
-          }
-          await new Promise(r => setTimeout(r, 150));
-        }
-        setStocks(results);
-        setFiltered(results);
+        const { apiClient } = await import('../services/api');
+        const res = await apiClient.get('/market/stock-list');
+        setStocks(res.data || []);
+        setFiltered(res.data || []);
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchStocks();

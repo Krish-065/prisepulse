@@ -9,25 +9,12 @@ export default function IPOs() {
   useEffect(() => {
     const fetchIPOs = async () => {
       try {
-        // Upcoming IPOs from Chittorgarh API (public, free)
-        const res = await axios.get('https://api.chittorgarh.com/api/v1/ipos/upcoming');
-        if (res.data && Array.isArray(res.data)) {
-          setUpcoming(res.data.slice(0, 12).map(ipo => ({
-            name: ipo.company_name,
-            openDate: ipo.open_date,
-            closeDate: ipo.close_date,
-            priceBand: `₹${ipo.price_band_lower} - ₹${ipo.price_band_upper}`,
-            lotSize: ipo.lot_size,
-            gmp: ipo.gmp ? `+${ipo.gmp}%` : 'N/A',
-            subscription: ipo.subscription || '0x',
-          })));
-        } else {
-          // fallback data
-          setUpcoming([
-            { name: 'Tata Technologies', openDate: 'Nov 22, 2024', closeDate: 'Nov 24, 2024', priceBand: '₹475-500', lotSize: '30', gmp: '+65%', subscription: '45.2x' },
-            { name: 'IREDA', openDate: 'Nov 21, 2024', closeDate: 'Nov 23, 2024', priceBand: '₹30-32', lotSize: '400', gmp: '+45%', subscription: '38.5x' },
-          ]);
-        }
+        // Realistic Mock Data for upcoming Indian IPOs since free APIs are unreliable
+        setUpcoming([
+          { name: 'Oyo Rooms', openDate: 'May 22, 2026', closeDate: 'May 24, 2026', priceBand: '₹120-125', lotSize: '120', gmp: '+12%', subscription: '0.5x' },
+          { name: 'Swiggy', openDate: 'May 28, 2026', closeDate: 'May 30, 2026', priceBand: '₹350-370', lotSize: '40', gmp: '+45%', subscription: 'Upcoming' },
+          { name: 'Pharmeasy', openDate: 'Jun 05, 2026', closeDate: 'Jun 07, 2026', priceBand: '₹80-85', lotSize: '170', gmp: '+5%', subscription: 'Upcoming' },
+        ]);
 
         // Past IPOs (mock data – you can replace with real API if available)
         setPast([
@@ -38,10 +25,7 @@ export default function IPOs() {
         ]);
       } catch (error) {
         console.error('IPO fetch error:', error);
-        // fallback on error
-        setUpcoming([
-          { name: 'Sample IPO', openDate: 'TBD', closeDate: 'TBD', priceBand: '₹100-120', lotSize: '100', gmp: 'N/A', subscription: '0x' },
-        ]);
+        setUpcoming([]);
       } finally {
         setLoading(false);
       }

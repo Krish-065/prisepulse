@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { apiClient } from '../services/api';
+import SearchWithSuggestions from '../components/SearchWithSuggestions';
 
 export default function Trading() {
   const [balance, setBalance] = useState(100000);
@@ -8,37 +10,44 @@ export default function Trading() {
   const [orderType, setOrderType] = useState('BUY');
   const [message, setMessage] = useState('');
 
-  const popularStocks = [
-    { symbol: 'RELIANCE', price: 2856.45 }, { symbol: 'TCS', price: 3987.20 },
-    { symbol: 'INFY', price: 1523.80 }, { symbol: 'HDFCBANK', price: 1689.30 },
-    { symbol: 'ICICIBANK', price: 1123.45 },
-  ];
+  const [prices, setPrices] = useState({});
 
-  const getPrice = (sym) => popularStocks.find(s => s.symbol === sym)?.price || 0;
-
-  const handleTrade = () => {
+  const handleTrade = async () => {
     const qty = parseInt(quantity);
     if (!symbol || !qty) { setMessage('Enter symbol and quantity'); return; }
-    const price = getPrice(symbol.toUpperCase());
-    if (!price) { setMessage('Stock not found'); return; }
-    const cost = price * qty;
-    if (orderType === 'BUY') {
-      if (cost > balance) { setMessage('Insufficient balance'); return; }
-      setBalance(balance - cost);
-      const existing = holdings.find(h => h.symbol === symbol.toUpperCase());
-      if (existing) existing.quantity += qty;
-      else setHoldings([...holdings, { symbol: symbol.toUpperCase(), quantity: qty, avgPrice: price }]);
-      setMessage(`Bought ${qty} shares of ${symbol.toUpperCase()}`);
-    } else {
-      const holding = holdings.find(h => h.symbol === symbol.toUpperCase());
-      if (!holding || holding.quantity < qty) { setMessage('Insufficient shares'); return; }
-      holding.quantity -= qty;
-      if (holding.quantity === 0) setHoldings(holdings.filter(h => h.symbol !== symbol.toUpperCase()));
-      setBalance(balance + cost);
-      setMessage(`Sold ${qty} shares of ${symbol.toUpperCase()}`);
+    
+    try {
+      const res = await apiClient.get(`/market/stock/${symbol}`);
+      const price = parseFloat(res.data.price);
+      if (!price) { setMessage('Stock not found'); return; }
+      
+      setPrices(prev => ({ ...prev, [symbol.toUpperCase()]: price }));
+      
+      const cost = price * qty;
+      if (orderType === 'BUY') {
+        if (cost > balance) { setMessage('Insufficient balance'); return; }
+        setBalance(balance - cost);
+        const existing = holdings.find(h => h.symbol === symbol.toUpperCase());
+        if (existing) {
+          existing.avgPrice = ((existing.avgPrice * existing.quantity) + cost) / (existing.quantity + qty);
+          existing.quantity += qty;
+        } else {
+          setHoldings([...holdings, { symbol: symbol.toUpperCase(), quantity: qty, avgPrice: price }]);
+        }
+        setMessage(`Bought ${qty} shares of ${symbol.toUpperCase()} at ₹${price}`);
+      } else {
+        const holding = holdings.find(h => h.symbol === symbol.toUpperCase());
+        if (!holding || holding.quantity < qty) { setMessage('Insufficient shares'); return; }
+        holding.quantity -= qty;
+        if (holding.quantity === 0) setHoldings(holdings.filter(h => h.symbol !== symbol.toUpperCase()));
+        setBalance(balance + cost);
+        setMessage(`Sold ${qty} shares of ${symbol.toUpperCase()} at ₹${price}`);
+      }
+      setSymbol(''); setQuantity('');
+      setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage('Stock not found or error fetching price');
     }
-    setSymbol(''); setQuantity('');
-    setTimeout(() => setMessage(''), 3000);
   };
 
   const reset = () => { setBalance(100000); setHoldings([]); setMessage('Portfolio reset'); };
@@ -48,7 +57,7 @@ export default function Trading() {
       <h1>Paper Trading</h1>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '24px', marginBottom: '24px' }}>
         <div className="index-card"><div>Balance</div><div className="index-value">₹{balance.toLocaleString()}</div></div>
-        <div className="index-card"><div>Holdings Value</div><div className="index-value">₹{holdings.reduce((sum, h) => sum + (h.quantity * getPrice(h.symbol)), 0).toLocaleString()}</div></div>
+        <div className="index-card"><div>Holdings Value</div><div className="index-value">₹{holdings.reduce((sum, h) => sum + (h.quantity * (prices[h.symbol] || h.avgPrice)), 0).toLocaleString()}</div></div>
       </div>
       <div className="two-column">
         <div className="section-card">
@@ -57,7 +66,7 @@ export default function Trading() {
             <button className={orderType === 'BUY' ? 'active-filter' : ''} onClick={() => setOrderType('BUY')}>BUY</button>
             <button className={orderType === 'SELL' ? 'active-filter' : ''} onClick={() => setOrderType('SELL')}>SELL</button>
           </div>
-          <input type="text" placeholder="Symbol" value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())} className="global-search" style={{ marginBottom: '8px' }} />
+          <SearchWithSuggestions onSelect={(stock) => setSymbol(stock.symbol)} placeholder="Search Symbol..." className="global-search" style={{ marginBottom: '8px' }} />
           <input type="number" placeholder="Quantity" value={quantity} onChange={(e) => setQuantity(e.target.value)} className="global-search" style={{ marginBottom: '8px' }} />
           <button onClick={handleTrade} className="btn-premium">Place Order</button>
           {message && <p style={{ marginTop: '12px', color: '#00ff88' }}>{message}</p>}

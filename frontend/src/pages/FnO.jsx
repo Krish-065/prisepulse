@@ -39,6 +39,8 @@ export default function FnO() {
       }
     };
     fetchFutures();
+    const interval = setInterval(fetchFutures, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   // Calculate put-call ratio (mock)
