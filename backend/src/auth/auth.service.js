@@ -91,11 +91,22 @@ async function register(req, res) {
       );
     }
 
-    await sendVerificationEmail(email, otp);
-    res.json({ message: 'Verification code sent to email' });
+    try {
+      await sendVerificationEmail(email, otp);
+      res.json({ message: 'Verification code sent to email' });
+    } catch (mailError) {
+      console.error('❌ SMTP Mail Delivery Failed:', mailError);
+      console.log(`🔑 [DEBUG FALLBACK] Verification OTP for ${email} is: ${otp}`);
+      
+      return res.status(500).json({ 
+        error: 'Failed to send verification email. Please ensure your SMTP environment variables (SMTP_HOST, SMTP_PORT, EMAIL_USER, EMAIL_PASS) are configured correctly in your Render dashboard.',
+        details: mailError.message,
+        otpFallback: process.env.NODE_ENV !== 'production' ? otp : undefined
+      });
+    }
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('❌ Registration system error:', error);
+    res.status(500).json({ error: 'Registration failed due to a system error.' });
   }
 }
 
