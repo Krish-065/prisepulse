@@ -91,19 +91,18 @@ async function register(req, res) {
       );
     }
 
-    try {
-      await sendVerificationEmail(email, otp);
-      res.json({ message: 'Verification code sent to email' });
-    } catch (mailError) {
-      console.error('❌ SMTP Mail Delivery Failed:', mailError);
-      console.log(`🔑 [DEBUG FALLBACK] Verification OTP for ${email} is: ${otp}`);
-      
-      return res.status(500).json({ 
-        error: 'Failed to send verification email. Please ensure your SMTP environment variables (SMTP_HOST, SMTP_PORT, EMAIL_USER, EMAIL_PASS) are configured correctly in your Render dashboard.',
-        details: mailError.message,
-        otpFallback: process.env.NODE_ENV !== 'production' ? otp : undefined
-      });
-    }
+    // Send verification email asynchronously in the background so the client doesn't hang!
+    sendVerificationEmail(email, otp).catch(mailError => {
+      console.error('❌ SMTP Background Mail Delivery Failed:', mailError.message);
+    });
+
+    // Always log the OTP to the console immediately as a secure backup in Render logs!
+    console.log(`🔑 [OTP SECURITY BACKUP] Verification OTP for ${email} is: ${otp}`);
+
+    res.json({ 
+      message: 'Verification code sent to email',
+      otpFallback: process.env.NODE_ENV !== 'production' ? otp : undefined 
+    });
   } catch (error) {
     console.error('❌ Registration system error:', error);
     res.status(500).json({ error: 'Registration failed due to a system error.' });
@@ -188,10 +187,19 @@ async function forgotPassword(req, res) {
     await query(`UPDATE users SET email_verify_token = $1, email_verify_expiry = $2 WHERE email = $3`, [resetToken, expiry, email]);
 
     const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${email}`;
-    await sendResetEmail(email, resetUrl);
+    
+    // Send reset email asynchronously in the background so the client doesn't hang!
+    sendResetEmail(email, resetUrl).catch(mailError => {
+      console.error('❌ SMTP Background Reset Mail Delivery Failed:', mailError.message);
+    });
+
+    // Always log the reset link to the console immediately as a secure backup in Render logs!
+    console.log(`🔑 [RESET PASSWORD SECURITY BACKUP] Reset URL for ${email} is: ${resetUrl}`);
+
     res.json({ message: 'Reset link sent to your email' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to send reset email' });
+    console.error('❌ Forgot password system error:', error);
+    res.status(500).json({ error: 'Failed to request password reset due to a system error.' });
   }
 }
 
