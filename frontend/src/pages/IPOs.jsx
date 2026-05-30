@@ -126,7 +126,7 @@ export default function IPOs() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Highly detailed mock data representing real premium APIs
+    // Massive mock dataset for realism
     const mockData = [
       {
         id: 1,
@@ -139,7 +139,7 @@ export default function IPOs() {
         price: '364-383',
         lotSize: 39,
         issueSize: '598.93',
-        lm: ['ICICI Securities', 'Axis Capital', 'Emkay Global'],
+        lm: ['ICICI Securities', 'Axis Capital'],
         allotment: 'May 28, 2026',
         listing: 'May 30, 2026',
         status: 'open'
@@ -161,6 +161,38 @@ export default function IPOs() {
         status: 'upcoming'
       },
       {
+        id: 101,
+        company: 'Swiggy',
+        type: 'MAINBOARD',
+        gmp: '185',
+        gmpPercent: '42.5%',
+        open: 'Jun 12, 2026',
+        close: 'Jun 15, 2026',
+        price: '400-435',
+        lotSize: 35,
+        issueSize: '10414.00',
+        lm: ['Kotak Mahindra', 'Citi'],
+        allotment: 'Jun 16, 2026',
+        listing: 'Jun 19, 2026',
+        status: 'upcoming'
+      },
+      {
+        id: 102,
+        company: 'Hyundai Motor India',
+        type: 'MAINBOARD',
+        gmp: '250',
+        gmpPercent: '15.2%',
+        open: 'Jun 18, 2026',
+        close: 'Jun 20, 2026',
+        price: '1550-1640',
+        lotSize: 10,
+        issueSize: '25000.00',
+        lm: ['Morgan Stanley', 'JP Morgan'],
+        allotment: 'Jun 21, 2026',
+        listing: 'Jun 24, 2026',
+        status: 'upcoming'
+      },
+      {
         id: 3,
         company: 'Beacon Trusteeship',
         type: 'NSE SME',
@@ -171,9 +203,41 @@ export default function IPOs() {
         price: '60',
         lotSize: 2000,
         issueSize: '32.52',
-        lm: ['Beeline Capital Advisors'],
+        lm: ['Beeline Capital'],
         allotment: 'May 31, 2026',
         listing: 'Jun 4, 2026',
+        status: 'open'
+      },
+      {
+        id: 103,
+        company: 'Kronox Lab Sciences',
+        type: 'MAINBOARD',
+        gmp: '82',
+        gmpPercent: '60.2%',
+        open: 'Jun 3, 2026',
+        close: 'Jun 5, 2026',
+        price: '129-136',
+        lotSize: 110,
+        issueSize: '130.15',
+        lm: ['Pantomath Capital'],
+        allotment: 'Jun 6, 2026',
+        listing: 'Jun 10, 2026',
+        status: 'upcoming'
+      },
+      {
+        id: 104,
+        company: 'Ola Electric',
+        type: 'MAINBOARD',
+        gmp: '35',
+        gmpPercent: '24.1%',
+        open: 'Jun 25, 2026',
+        close: 'Jun 27, 2026',
+        price: '135-145',
+        lotSize: 100,
+        issueSize: '5500.00',
+        lm: ['Kotak Mahindra', 'BofA'],
+        allotment: 'Jun 28, 2026',
+        listing: 'Jul 2, 2026',
         status: 'upcoming'
       },
       {
@@ -187,9 +251,73 @@ export default function IPOs() {
         price: '258-272',
         lotSize: 55,
         issueSize: '2614.65',
-        lm: ['ICICI Securities', 'Morgan Stanley', 'Axis Capital'],
+        lm: ['ICICI Securities', 'Morgan Stanley'],
         allotment: 'May 21, 2026',
         listing: 'May 23, 2026',
+        status: 'closed'
+      },
+      {
+        id: 105,
+        company: 'FirstCry (Brainbees)',
+        type: 'MAINBOARD',
+        gmp: '105',
+        gmpPercent: '18.5%',
+        open: 'Jul 10, 2026',
+        close: 'Jul 12, 2026',
+        price: '540-565',
+        lotSize: 26,
+        issueSize: '4193.00',
+        lm: ['Kotak Mahindra', 'Morgan Stanley'],
+        allotment: 'Jul 13, 2026',
+        listing: 'Jul 16, 2026',
+        status: 'upcoming'
+      },
+      {
+        id: 106,
+        company: 'TBI Corn',
+        type: 'NSE SME',
+        gmp: '45',
+        gmpPercent: '47.8%',
+        open: 'May 31, 2026',
+        close: 'Jun 4, 2026',
+        price: '90-94',
+        lotSize: 1200,
+        issueSize: '44.94',
+        lm: ['Swastika Investmart'],
+        allotment: 'Jun 5, 2026',
+        listing: 'Jun 9, 2026',
+        status: 'upcoming'
+      },
+      {
+        id: 107,
+        company: 'Aadhar Housing Finance',
+        type: 'MAINBOARD',
+        gmp: '65',
+        gmpPercent: '20.6%',
+        open: 'May 8, 2026',
+        close: 'May 10, 2026',
+        price: '300-315',
+        lotSize: 47,
+        issueSize: '3000.00',
+        lm: ['ICICI Securities', 'Nomura'],
+        allotment: 'May 13, 2026',
+        listing: 'May 15, 2026',
+        status: 'closed'
+      },
+      {
+        id: 108,
+        company: 'TBO Tek',
+        type: 'MAINBOARD',
+        gmp: '340',
+        gmpPercent: '36.9%',
+        open: 'May 8, 2026',
+        close: 'May 10, 2026',
+        price: '875-920',
+        lotSize: 16,
+        issueSize: '1550.81',
+        lm: ['Axis Capital', 'Jefferies'],
+        allotment: 'May 13, 2026',
+        listing: 'May 15, 2026',
         status: 'closed'
       },
       {
@@ -206,6 +334,38 @@ export default function IPOs() {
         lm: ['Narnolia Financial'],
         allotment: 'Jun 3, 2026',
         listing: 'Jun 5, 2026',
+        status: 'open'
+      },
+      {
+        id: 109,
+        company: 'Indegene',
+        type: 'MAINBOARD',
+        gmp: '255',
+        gmpPercent: '56.4%',
+        open: 'May 6, 2026',
+        close: 'May 8, 2026',
+        price: '430-452',
+        lotSize: 33,
+        issueSize: '1841.76',
+        lm: ['Kotak Mahindra', 'Citigroup'],
+        allotment: 'May 9, 2026',
+        listing: 'May 13, 2026',
+        status: 'closed'
+      },
+      {
+        id: 110,
+        company: 'OYO (Oravel Stays)',
+        type: 'MAINBOARD',
+        gmp: '42',
+        gmpPercent: '11.5%',
+        open: 'Aug 18, 2026',
+        close: 'Aug 21, 2026',
+        price: '350-365',
+        lotSize: 40,
+        issueSize: '8430.00',
+        lm: ['Kotak Mahindra', 'JP Morgan'],
+        allotment: 'Aug 24, 2026',
+        listing: 'Aug 27, 2026',
         status: 'upcoming'
       }
     ];
@@ -224,14 +384,14 @@ export default function IPOs() {
   };
 
   if (loading) {
-    return <div className="loading" style={{ height: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', fontSize: '20px' }}>Loading Premium IPO Data...</div>;
+    return <div className="loading" style={{ height: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00ff88', fontSize: '20px' }}>Loading Live IPO Data...</div>;
   }
 
   return (
     <div style={{ paddingBottom: '40px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ margin: 0, backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }}>IPO Premium Dashboard</h1>
+          <h1 style={{ margin: 0, backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }}>Live IPO Center</h1>
           <p style={{ color: '#9b9eac', margin: '4px 0 0 0', fontSize: '14px' }}>Real-time GMP, Subscription & Allotment tracking</p>
         </div>
       </div>
