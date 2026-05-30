@@ -84,15 +84,20 @@ router.get('/indices', async (req, res) => {
   res.json(results);
 });
 
+const NIFTY_50 = [
+  'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'INFY', 'ITC', 'HINDUNILVR', 
+  'LT', 'BAJFINANCE', 'HCLTECH', 'MARUTI', 'SUNPHARMA', 'ADANIENT', 'KOTAKBANK', 'TITAN', 'ONGC', 
+  'TATAMOTORS', 'NTPC', 'AXISBANK', 'ADANIPORTS', 'ULTRACEMCO', 'ASIANPAINT', 'COALINDIA', 
+  'BAJAJFINSV', 'BAJAJ-AUTO', 'POWERGRID', 'NESTLEIND', 'GRASIM', 'TATASTEEL', 'TECHM', 'HINDALCO', 
+  'WIPRO', 'LTIM', 'APOLLOHOSP', 'EICHERMOT', 'DIVISLAB', 'INDUSINDBK', 'DRREDDY', 'CIPLA', 'BPCL', 
+  'BRITANNIA', 'SHREECEM', 'TATACONSUM', 'HEROMOTOCO', 'UPL', 'JSWSTEEL', 'HDFCLIFE', 'SBIBASE'
+];
+
 router.get('/movers', async (req, res) => {
-  const nifty = [
-    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
-    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'KOTAKBANK.NS',
-    'AXISBANK.NS', 'LT.NS', 'WIPRO.NS', 'HCLTECH.NS', 'TITAN.NS'
-  ];
-  const fetched = await fetchBatch(nifty);
+  const nsSymbols = NIFTY_50.map(s => `${s}.NS`);
+  const fetched = await fetchBatch(nsSymbols);
   const stocks = [];
-  for (const sym of nifty) {
+  for (const sym of nsSymbols) {
     const quote = fetched[sym];
     if (quote?.price) {
       stocks.push({
@@ -158,16 +163,10 @@ router.get('/stock/:symbol', async (req, res) => {
 });
 
 router.get('/stock-list', async (req, res) => {
-  const symbols = [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-    'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'KOTAKBANK',
-    'AXISBANK', 'LT', 'WIPRO', 'ASIANPAINT', 'HCLTECH',
-    'TITAN', 'SUNPHARMA', 'MARUTI', 'BAJFINANCE', 'NESTLEIND'
-  ];
-  const nsSymbols = symbols.map(s => `${s}.NS`);
+  const nsSymbols = NIFTY_50.map(s => `${s}.NS`);
   const fetched = await fetchBatch(nsSymbols);
   const results = [];
-  for (const sym of symbols) {
+  for (const sym of NIFTY_50) {
     const quote = fetched[`${sym}.NS`];
     if (quote?.price) {
       results.push({
