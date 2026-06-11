@@ -16,7 +16,6 @@ import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import Portfolio from './pages/Portfolio';
 import Watchlist from './pages/Watchlist';
-import Trading from './pages/Trading';
 import Screener from './pages/Screener';
 import IPOs from './pages/IPOs';
 import FnO from './pages/FnO';
@@ -45,7 +44,6 @@ function App() {
             <Route path="/dashboard" element={<PrivateRoute><Layout><Dashboard /></Layout></PrivateRoute>} />
             <Route path="/portfolio" element={<PrivateRoute><Layout><Portfolio /></Layout></PrivateRoute>} />
             <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
-            <Route path="/trading" element={<PrivateRoute><Layout><Trading /></Layout></PrivateRoute>} />
             <Route path="/screener" element={<PrivateRoute><Layout><Screener /></Layout></PrivateRoute>} />
             <Route path="/ipos" element={<PrivateRoute><Layout><IPOs /></Layout></PrivateRoute>} />
             <Route path="/fno" element={<PrivateRoute><Layout><FnO /></Layout></PrivateRoute>} />

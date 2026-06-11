@@ -25,7 +25,7 @@ export default function Landing() {
               {[
                 { icon: '📈', title: 'Live Market Data', desc: 'Real-time NSE/BSE indices and global markets' },
                 { icon: '📊', title: 'Advanced Charts', desc: 'Candlestick charts with technical indicators' },
-                { icon: '🎮', title: 'Paper Trading', desc: 'Practice with ₹1,00,000 virtual money' },
+                { icon: '🔍', title: 'Stock Screener', desc: 'Filter stocks by 1D/1W/1M change and key metrics' },
                 { icon: '📁', title: 'Portfolio Tracker', desc: 'Track your investments in real-time' },
                 { icon: '🔔', title: 'Price Alerts', desc: 'Get notified when stocks hit your target' },
                 { icon: '🧮', title: 'Financial Calculators', desc: 'SIP, EMI, Brokerage, and more' }

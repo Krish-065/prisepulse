@@ -10,24 +10,39 @@ const YAHOO_HEADERS = {
   'Origin': 'https://finance.yahoo.com',
 };
 
+const quoteCache = {};
+const CACHE_TTL = 15000; // 15 seconds
+
 async function fetchYahooQuote(symbol) {
   try {
+    const now = Date.now();
+    if (quoteCache[symbol] && (now - quoteCache[symbol].timestamp < CACHE_TTL)) {
+      return quoteCache[symbol].data;
+    }
+
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`;
-    const res = await fetch(url, { headers: YAHOO_HEADERS });
+    let res = await fetch(url, { headers: YAHOO_HEADERS });
     if (!res.ok) {
       // Try query2 as fallback
-      const res2 = await fetch(
+      res = await fetch(
         `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`,
         { headers: YAHOO_HEADERS }
       );
-      if (!res2.ok) return null;
-      const data2 = await res2.json();
-      return parseYahooData(data2);
+    }
+    if (!res.ok) {
+      return quoteCache[symbol] ? quoteCache[symbol].data : null;
     }
     const data = await res.json();
-    return parseYahooData(data);
+    const parsed = parseYahooData(data);
+    if (parsed) {
+      quoteCache[symbol] = {
+        timestamp: now,
+        data: parsed
+      };
+    }
+    return parsed;
   } catch (err) {
-    return null;
+    return quoteCache[symbol] ? quoteCache[symbol].data : null;
   }
 }
 
@@ -62,10 +77,10 @@ async function fetchWithTimeout(symbol, timeoutMs = 5000) {
   ]);
 }
 
-// Fetch multiple symbols in parallel (batches of 5)
+// Fetch multiple symbols in parallel (batches of 15)
 async function fetchBatch(symbols) {
   const results = {};
-  const batchSize = 5;
+  const batchSize = 15;
   for (let i = 0; i < symbols.length; i += batchSize) {
     const batch = symbols.slice(i, i + batchSize);
     const batchResults = await Promise.all(batch.map(sym => fetchWithTimeout(sym)));
@@ -84,17 +99,196 @@ router.get('/indices', async (req, res) => {
   res.json(results);
 });
 
-const NIFTY_50 = [
+const ALL_STOCKS = [
   'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'INFY', 'ITC', 'HINDUNILVR', 
   'LT', 'BAJFINANCE', 'HCLTECH', 'MARUTI', 'SUNPHARMA', 'ADANIENT', 'KOTAKBANK', 'TITAN', 'ONGC', 
   'TATAMOTORS', 'NTPC', 'AXISBANK', 'ADANIPORTS', 'ULTRACEMCO', 'ASIANPAINT', 'COALINDIA', 
   'BAJAJFINSV', 'BAJAJ-AUTO', 'POWERGRID', 'NESTLEIND', 'GRASIM', 'TATASTEEL', 'TECHM', 'HINDALCO', 
   'WIPRO', 'LTIM', 'APOLLOHOSP', 'EICHERMOT', 'DIVISLAB', 'INDUSINDBK', 'DRREDDY', 'CIPLA', 'BPCL', 
-  'BRITANNIA', 'SHREECEM', 'TATACONSUM', 'HEROMOTOCO', 'UPL', 'JSWSTEEL', 'HDFCLIFE', 'SBIBASE'
+  'BRITANNIA', 'TATACONSUM', 'HEROMOTOCO', 'UPL', 'JSWSTEEL', 'HDFCLIFE', 'SBILIFE', 'BEL',
+  'INDIGO', 'JIOFIN', 'MAXHEALTH', 'SHRIRAMFIN', 'TRENT', 'ZOMATO', 'TATAPOWER', 'IRCTC', 'HAL', 
+  'YESBANK', 'PNB', 'IOC', 'GAIL', 'VEDL', 'DLF', 'PIDILITIND', 'MRF', 'SHREECEM', 'DMART', 
+  'NYKAA', 'PAYTM', 'TATAELXSI', 'NHPC', 'SJVN', 'RVNL', 'IRFC', 'IREDA', 'PFC', 'RECL', 
+  'BHEL', 'HUDCO', 'LIC', 'SUZLON'
 ];
 
+function getDateOffset(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+}
+
+let activeIpos = [
+  {
+    id: 1,
+    company: 'Awfis Space Solutions',
+    type: 'MAINBOARD',
+    gmp: 115,
+    gmpPercent: '30.0%',
+    open: getDateOffset(-4),
+    close: getDateOffset(-1),
+    price: '364-383',
+    lotSize: 39,
+    issueSize: '598.93',
+    lm: ['ICICI Securities', 'Axis Capital'],
+    allotment: getDateOffset(0),
+    listing: getDateOffset(2),
+    status: 'closed'
+  },
+  {
+    id: 2,
+    company: 'Vilas Transcore',
+    type: 'NSE SME',
+    gmp: 130,
+    gmpPercent: '88.4%',
+    open: getDateOffset(-1),
+    close: getDateOffset(2),
+    price: '139-147',
+    lotSize: 1000,
+    issueSize: '95.26',
+    lm: ['Hem Securities'],
+    allotment: getDateOffset(3),
+    listing: getDateOffset(6),
+    status: 'open'
+  },
+  {
+    id: 3,
+    company: 'Swiggy Limited',
+    type: 'MAINBOARD',
+    gmp: 185,
+    gmpPercent: '42.5%',
+    open: getDateOffset(3),
+    close: getDateOffset(6),
+    price: '400-425',
+    lotSize: 35,
+    issueSize: '10414.00',
+    lm: ['Kotak Mahindra', 'Citi'],
+    allotment: getDateOffset(7),
+    listing: getDateOffset(10),
+    status: 'upcoming'
+  },
+  {
+    id: 4,
+    company: 'Hyundai Motor India',
+    type: 'MAINBOARD',
+    gmp: 250,
+    gmpPercent: '15.2%',
+    open: getDateOffset(6),
+    close: getDateOffset(9),
+    price: '1550-1640',
+    lotSize: 10,
+    issueSize: '25000.00',
+    lm: ['Morgan Stanley', 'JP Morgan'],
+    allotment: getDateOffset(10),
+    listing: getDateOffset(13),
+    status: 'upcoming'
+  },
+  {
+    id: 5,
+    company: 'Beacon Trusteeship',
+    type: 'NSE SME',
+    gmp: 40,
+    gmpPercent: '66.6%',
+    open: getDateOffset(-8),
+    close: getDateOffset(-5),
+    price: '60',
+    lotSize: 2000,
+    issueSize: '32.52',
+    lm: ['Beeline Capital'],
+    allotment: getDateOffset(-4),
+    listing: getDateOffset(-2),
+    status: 'closed'
+  }
+];
+
+const IPO_POOL = [
+  {
+    company: 'Ola Electric Mobility',
+    type: 'MAINBOARD',
+    price: '72-76',
+    lotSize: 195,
+    issueSize: '6145.56',
+    lm: ['Kotak Mahindra', 'BofA Securities'],
+  },
+  {
+    company: 'FirstCry (Brainbees)',
+    type: 'MAINBOARD',
+    price: '440-465',
+    lotSize: 32,
+    issueSize: '4193.00',
+    lm: ['Morgan Stanley', 'Kotak Mahindra'],
+  },
+  {
+    company: 'OYO Oravel Stays',
+    type: 'MAINBOARD',
+    price: '350-365',
+    lotSize: 40,
+    issueSize: '8430.00',
+    lm: ['Kotak Mahindra', 'JP Morgan'],
+  },
+  {
+    company: 'One97 Communications SME',
+    type: 'NSE SME',
+    price: '90-95',
+    lotSize: 1200,
+    issueSize: '45.00',
+    lm: ['Swastika Investmart'],
+  },
+  {
+    company: 'Kronox Lab Sciences',
+    type: 'MAINBOARD',
+    price: '129-136',
+    lotSize: 110,
+    issueSize: '130.15',
+    lm: ['Pantomath Capital'],
+  },
+  {
+    company: 'Ztech India',
+    type: 'NSE SME',
+    price: '104-110',
+    lotSize: 1200,
+    issueSize: '37.30',
+    lm: ['Narnolia Financial'],
+  },
+  {
+    company: 'Mobikwik Systems',
+    type: 'MAINBOARD',
+    price: '280-300',
+    lotSize: 50,
+    issueSize: '700.00',
+    lm: ['SBI Capital', 'DAM Capital'],
+  },
+  {
+    company: 'PhonePe Financial',
+    type: 'MAINBOARD',
+    price: '850-900',
+    lotSize: 15,
+    issueSize: '12000.00',
+    lm: ['Goldman Sachs', 'ICICI Securities'],
+  },
+  {
+    company: 'Tata Play',
+    type: 'MAINBOARD',
+    price: '105-115',
+    lotSize: 130,
+    issueSize: '2500.00',
+    lm: ['Axis Capital', 'HDFC Bank'],
+  },
+  {
+    company: 'Go Digit General Insurance',
+    type: 'MAINBOARD',
+    price: '258-272',
+    lotSize: 55,
+    issueSize: '2614.65',
+    lm: ['ICICI Securities', 'Morgan Stanley'],
+  }
+];
+
+let lastIpoArrivalTime = Date.now();
+let nextIpoId = 6;
+
 router.get('/movers', async (req, res) => {
-  const nsSymbols = NIFTY_50.map(s => `${s}.NS`);
+  const nsSymbols = ALL_STOCKS.map(s => `${s}.NS`);
   const fetched = await fetchBatch(nsSymbols);
   const stocks = [];
   for (const sym of nsSymbols) {
@@ -107,9 +301,69 @@ router.get('/movers', async (req, res) => {
       });
     }
   }
-  const gainers = [...stocks].sort((a, b) => b.changePercent - a.changePercent).slice(0, 10);
-  const losers = [...stocks].sort((a, b) => a.changePercent - b.changePercent).slice(0, 10);
+  const validStocks = stocks.filter(s => !isNaN(parseFloat(s.changePercent)));
+  const gainers = [...validStocks].sort((a, b) => parseFloat(b.changePercent) - parseFloat(a.changePercent)).slice(0, 10);
+  const losers = [...validStocks].sort((a, b) => parseFloat(a.changePercent) - parseFloat(b.changePercent)).slice(0, 10);
   res.json({ gainers, losers });
+});
+
+router.get('/ipos', (req, res) => {
+  const now = new Date();
+  
+  activeIpos.forEach(ipo => {
+    const openDate = new Date(ipo.open);
+    const closeDate = new Date(ipo.close);
+    if (now > closeDate) {
+      ipo.status = 'closed';
+    } else if (now >= openDate) {
+      ipo.status = 'open';
+    } else {
+      ipo.status = 'upcoming';
+    }
+  });
+
+  activeIpos.forEach(ipo => {
+    if (ipo.status !== 'closed') {
+      const gmpDiff = Math.floor(Math.random() * 7) - 3; // -3 to +3
+      const basePrice = parseInt(ipo.price.split('-')[0]) || 100;
+      ipo.gmp = Math.max(0, ipo.gmp + gmpDiff);
+      ipo.gmpPercent = ((ipo.gmp / basePrice) * 100).toFixed(1) + '%';
+    }
+  });
+
+  const timeElapsed = Date.now() - lastIpoArrivalTime;
+  if (timeElapsed > 45000 && IPO_POOL.length > 0) {
+    const randomIndex = Math.floor(Math.random() * IPO_POOL.length);
+    const candidate = IPO_POOL[randomIndex];
+    
+    const exists = activeIpos.some(ipo => ipo.company.toLowerCase() === candidate.company.toLowerCase());
+    if (!exists) {
+      const newIpo = {
+        id: nextIpoId++,
+        company: candidate.company,
+        type: candidate.type,
+        gmp: Math.floor(Math.random() * 100) + 15,
+        gmpPercent: '0.0%',
+        open: getDateOffset(2),
+        close: getDateOffset(5),
+        price: candidate.price,
+        lotSize: candidate.lotSize,
+        issueSize: candidate.issueSize,
+        lm: candidate.lm,
+        allotment: getDateOffset(6),
+        listing: getDateOffset(9),
+        status: 'upcoming'
+      };
+      const basePrice = parseInt(newIpo.price.split('-')[0]) || 100;
+      newIpo.gmpPercent = ((newIpo.gmp / basePrice) * 100).toFixed(1) + '%';
+      
+      activeIpos.unshift(newIpo);
+      IPO_POOL.splice(randomIndex, 1);
+      lastIpoArrivalTime = Date.now();
+    }
+  }
+
+  res.json(activeIpos);
 });
 
 router.get('/search/:query', async (req, res) => {
@@ -163,10 +417,10 @@ router.get('/stock/:symbol', async (req, res) => {
 });
 
 router.get('/stock-list', async (req, res) => {
-  const nsSymbols = NIFTY_50.map(s => `${s}.NS`);
+  const nsSymbols = ALL_STOCKS.map(s => `${s}.NS`);
   const fetched = await fetchBatch(nsSymbols);
   const results = [];
-  for (const sym of NIFTY_50) {
+  for (const sym of ALL_STOCKS) {
     const quote = fetched[`${sym}.NS`];
     if (quote?.price) {
       results.push({

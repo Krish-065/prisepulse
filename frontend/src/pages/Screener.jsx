@@ -26,10 +26,16 @@ export default function Screener() {
   }, []);
 
   useEffect(() => {
-    let filteredStocks = stocks;
+    let filteredStocks = [...stocks];
     if (search) filteredStocks = filteredStocks.filter(s => s.symbol.toLowerCase().includes(search.toLowerCase()));
-    if (filter === 'gainers') filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) > 1);
-    if (filter === 'losers') filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) < -1);
+    if (filter === 'gainers') {
+      filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) > 0);
+      filteredStocks.sort((a, b) => parseFloat(b.changePercent) - parseFloat(a.changePercent));
+    }
+    if (filter === 'losers') {
+      filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) < 0);
+      filteredStocks.sort((a, b) => parseFloat(a.changePercent) - parseFloat(b.changePercent));
+    }
     setFiltered(filteredStocks);
   }, [search, filter, stocks]);
 

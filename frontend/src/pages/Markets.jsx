@@ -1,36 +1,61 @@
-import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import SearchWithSuggestions from '../components/SearchWithSuggestions';
+import { useEffect, useRef } from 'react';
 
 export default function Markets() {
-  const [searchParams] = useSearchParams();
-  const [symbol, setSymbol] = useState(searchParams.get('symbol') || 'BSE:SENSEX');
-  const [iframeSrc, setIframeSrc] = useState('');
+  const container = useRef();
 
   useEffect(() => {
-    const src = `https://s.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${symbol}&interval=D&theme=dark&style=1&locale=in&toolbar_bg=f1f3f6&enable_publishing=false&hide_top_toolbar=true&save_image=false&studies=%5B%22MASimple@tv-basicstudies%22%5D`;
-    setIframeSrc(src);
-  }, [symbol]);
+    // Clear container to prevent duplicate widgets on re-renders
+    if (container.current) {
+      container.current.innerHTML = '';
+    }
 
-  const quickSymbols = [
-    { label: 'NIFTY 50', value: 'BSE:SENSEX' }, { label: 'SENSEX', value: 'BSE:SENSEX' }, { label: 'BANK NIFTY', value: 'NSE:BANKNIFTY' },
-    { label: 'RELIANCE', value: 'NSE:RELIANCE' }, { label: 'TCS', value: 'NSE:TCS' }, { label: 'INFY', value: 'NSE:INFY' },
-    { label: 'HDFC BANK', value: 'NSE:HDFCBANK' }, { label: 'Bitcoin', value: 'COINBASE:BTCUSD' }, { label: 'Ethereum', value: 'COINBASE:ETHUSD' },
-    { label: 'Solana', value: 'COINBASE:SOLUSD' }, { label: 'USD/INR', value: 'FX_IDC:USDINR' }, { label: 'EUR/INR', value: 'FX_IDC:EURINR' },
-    { label: 'Gold', value: 'TVC:GOLD' }, { label: 'Silver', value: 'TVC:SILVER' }, { label: 'Crude Oil', value: 'TVC:WTI' }
-  ];
+    const script = document.createElement("script");
+    script.src = "https://s.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = `
+      {
+        "autosize": true,
+        "symbol": "BSE:SENSEX",
+        "interval": "D",
+        "timezone": "Asia/Kolkata",
+        "theme": "dark",
+        "style": "1",
+        "locale": "in",
+        "enable_publishing": false,
+        "backgroundColor": "#131722",
+        "gridColor": "#1f293d",
+        "hide_top_toolbar": false,
+        "hide_legend": false,
+        "save_image": false,
+        "container_id": "tradingview_widget",
+        "toolbar_bg": "#f1f3f6",
+        "studies": [
+          "Volume@tv-basicstudies"
+        ],
+        "details": true,
+        "hotlist": true,
+        "calendar": false
+      }`;
+    
+    if (container.current) {
+      container.current.appendChild(script);
+    }
+  }, []);
 
   return (
-    <div>
-      <h1>Markets Explorer</h1>
-      <div style={{ marginBottom: '20px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-        {quickSymbols.map(s => (
-          <button key={s.value} onClick={() => setSymbol(s.value)} style={{ padding: '6px 12px', background: symbol===s.value ? '#00ff88' : '#1e222d', border: '1px solid #2a2e39', borderRadius: '20px', cursor: 'pointer', color: symbol===s.value ? '#0a0e27' : 'white' }}>{s.label}</button>
-        ))}
+    <div style={{ paddingBottom: '40px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h1 style={{ margin: 0, backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }}>Live Market Charting</h1>
+          <p style={{ color: '#9b9eac', margin: '4px 0 0 0', fontSize: '14px' }}>Advanced charting with full indicator support for all Indian stocks</p>
+        </div>
       </div>
-      <SearchWithSuggestions onSelect={(stock) => setSymbol(`${stock.exchange === 'NSE' ? 'NSE:' : stock.exchange === 'BSE' ? 'BSE:' : ''}${stock.symbol.replace('.NS', '').replace('.BO', '')}`)} placeholder="Search any stock (e.g., TCS, WIPRO)..." className="global-search" />
-      <div style={{ background: '#1e222d', borderRadius: '16px', padding: '8px', marginTop: '20px' }}>
-        {iframeSrc && <iframe src={iframeSrc} style={{ width: '100%', height: '550px', border: 'none' }} title="TradingView Chart" />}
+      
+      <div style={{ background: '#131722', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.05)', height: '700px', width: '100%', overflow: 'hidden' }}>
+        <div id="tradingview_widget" className="tradingview-widget-container" ref={container} style={{ height: '100%', width: '100%' }}>
+          <div className="tradingview-widget-container__widget" style={{ height: 'calc(100% - 32px)', width: '100%' }}></div>
+        </div>
       </div>
     </div>
   );

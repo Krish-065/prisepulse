@@ -12,7 +12,6 @@ export default function Sidebar() {
     { path: '/screener', label: 'Screener', icon: '🔍' },
     { path: '/watchlist', label: 'Watchlist', icon: '⭐' },
     { path: '/portfolio', label: 'Portfolio', icon: '📁' },
-    { path: '/trading', label: 'Paper Trading', icon: '🎮' },
     { path: '/ipos', label: 'IPOs', icon: '📈' },
     { path: '/fno', label: 'F&O', icon: '📉' },
     { path: '/crypto', label: 'Crypto', icon: '🪙' },
