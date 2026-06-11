@@ -13,7 +13,6 @@ export default function Sidebar() {
     { path: '/watchlist', label: 'Watchlist', icon: '⭐' },
     { path: '/portfolio', label: 'Portfolio', icon: '📁' },
     { path: '/ipos', label: 'IPOs', icon: '📈' },
-    { path: '/fno', label: 'F&O', icon: '📉' },
     { path: '/crypto', label: 'Crypto', icon: '🪙' },
     { path: '/news', label: 'News', icon: '📰' },
     { path: '/tools', label: 'Tools', icon: '🧮' },

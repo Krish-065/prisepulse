@@ -18,7 +18,7 @@ import Portfolio from './pages/Portfolio';
 import Watchlist from './pages/Watchlist';
 import Screener from './pages/Screener';
 import IPOs from './pages/IPOs';
-import FnO from './pages/FnO';
+
 import Markets from './pages/Markets';
 import Tools from './pages/Tools';
 import News from './pages/News';
@@ -46,7 +46,7 @@ function App() {
             <Route path="/watchlist" element={<PrivateRoute><Layout><Watchlist /></Layout></PrivateRoute>} />
             <Route path="/screener" element={<PrivateRoute><Layout><Screener /></Layout></PrivateRoute>} />
             <Route path="/ipos" element={<PrivateRoute><Layout><IPOs /></Layout></PrivateRoute>} />
-            <Route path="/fno" element={<PrivateRoute><Layout><FnO /></Layout></PrivateRoute>} />
+
             <Route path="/markets" element={<PrivateRoute><Layout><Markets /></Layout></PrivateRoute>} />
             <Route path="/tools" element={<PrivateRoute><Layout><Tools /></Layout></PrivateRoute>} />
             <Route path="/news" element={<PrivateRoute><Layout><News /></Layout></PrivateRoute>} />
