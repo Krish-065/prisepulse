@@ -1,104 +1,217 @@
-import { useState, useEffect } from 'react';
-import SearchWithSuggestions from '../components/SearchWithSuggestions';
+import { useState, useEffect, useMemo } from 'react';
 import { apiClient } from '../services/api';
+
+const SECTORS = ['All', 'IT', 'Banking', 'NBFC', 'Insurance', 'Oil & Gas', 'Auto', 'Auto Anc',
+  'Pharma', 'Healthcare', 'FMCG', 'Metals', 'Mining', 'Cement', 'Power', 'Finance',
+  'Infra', 'Real Estate', 'Defence', 'Capital Goods', 'Telecom', 'Consumer',
+  'Retail', 'Tech', 'Travel', 'Aviation', 'Chemicals', 'Cap Goods', 'Logistics', 'Other'];
+
+const colorFor = (val) => {
+  const v = parseFloat(val);
+  if (v > 0) return '#00ff88';
+  if (v < 0) return '#ff3366';
+  return '#9b9eac';
+};
 
 export default function Screener() {
   const [stocks, setStocks] = useState([]);
-  const [filtered, setFiltered] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [moverFilter, setMoverFilter] = useState('all');   // all | gainers | losers
+  const [sectorFilter, setSectorFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [sortKey, setSortKey] = useState('changePercent');
+  const [sortDir, setSortDir] = useState('desc');
 
   const fetchStocks = async () => {
     try {
       const res = await apiClient.get('/market/stock-list');
-      const data = res.data || [];
-      setStocks(data);
+      setStocks(res.data || []);
       setLastUpdated(new Date());
-    } catch (err) { console.error(err); } finally { setLoading(false); }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchStocks();
-    const interval = setInterval(fetchStocks, 30000); // refresh every 30s
+    const interval = setInterval(fetchStocks, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    let filteredStocks = [...stocks];
-    if (search) filteredStocks = filteredStocks.filter(s => s.symbol.toLowerCase().includes(search.toLowerCase()));
-    if (filter === 'gainers') {
-      filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) > 0);
-      filteredStocks.sort((a, b) => parseFloat(b.changePercent) - parseFloat(a.changePercent));
+  const handleSort = (key) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
     }
-    if (filter === 'losers') {
-      filteredStocks = filteredStocks.filter(s => parseFloat(s.changePercent) < 0);
-      filteredStocks.sort((a, b) => parseFloat(a.changePercent) - parseFloat(b.changePercent));
-    }
-    setFiltered(filteredStocks);
-  }, [search, filter, stocks]);
+  };
 
-  if (loading) return <div>Loading screener...</div>;
+  const filtered = useMemo(() => {
+    let result = [...stocks];
+
+    // Text search on symbol
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(s => s.symbol.toLowerCase().includes(q) || (s.sector || '').toLowerCase().includes(q));
+    }
+
+    // Sector filter
+    if (sectorFilter !== 'All') {
+      result = result.filter(s => s.sector === sectorFilter);
+    }
+
+    // Gainer/loser filter
+    if (moverFilter === 'gainers') result = result.filter(s => parseFloat(s.changePercent) > 0);
+    if (moverFilter === 'losers')  result = result.filter(s => parseFloat(s.changePercent) < 0);
+
+    // Sort
+    result.sort((a, b) => {
+      const av = parseFloat(a[sortKey]) || 0;
+      const bv = parseFloat(b[sortKey]) || 0;
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
+
+    return result;
+  }, [stocks, search, sectorFilter, moverFilter, sortKey, sortDir]);
+
+  const SortHeader = ({ label, field }) => (
+    <th
+      onClick={() => handleSort(field)}
+      style={{ cursor: 'pointer', userSelect: 'none', color: sortKey === field ? '#00ff88' : '#9b9eac', whiteSpace: 'nowrap' }}
+    >
+      {label} {sortKey === field ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+    </th>
+  );
+
+  const fmtVol = (v) => {
+    if (!v) return '—';
+    const n = parseFloat(v);
+    if (n >= 1e7) return (n / 1e7).toFixed(1) + 'Cr';
+    if (n >= 1e5) return (n / 1e5).toFixed(1) + 'L';
+    return (n / 1000).toFixed(0) + 'K';
+  };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1>Stock Screener</h1>
+    <div style={{ paddingBottom: '40px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <h1 style={{ margin: 0, backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }}>
+            Stock Screener
+          </h1>
+          <p style={{ color: '#9b9eac', margin: '4px 0 0 0', fontSize: '14px' }}>
+            {loading ? 'Loading...' : `${filtered.length} stocks from ${stocks.length} total — NSE India`}
+          </p>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span className="live-badge">LIVE</span>
-          {lastUpdated && <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Updated: {lastUpdated.toLocaleTimeString()}</span>}
-          <button onClick={fetchStocks} style={{ padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '12px' }}>↻ Refresh</button>
+          {lastUpdated && <span style={{ fontSize: '12px', color: '#9b9eac' }}>Updated: {lastUpdated.toLocaleTimeString()}</span>}
+          <button
+            onClick={fetchStocks}
+            style={{ padding: '7px 14px', background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', cursor: 'pointer', color: '#e1e3e6', fontSize: '12px', fontWeight: 600, transition: 'all 0.2s' }}
+          >
+            ↻ Refresh
+          </button>
         </div>
       </div>
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-        <SearchWithSuggestions onSelect={(stock) => setSearch(stock.symbol)} placeholder="Search symbol..." className="global-search" style={{ maxWidth: '300px' }} />
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button onClick={() => setFilter('all')} className={filter === 'all' ? 'active-filter' : ''}>All</button>
-          <button onClick={() => setFilter('gainers')} className={filter === 'gainers' ? 'active-filter' : ''}>Top Gainers</button>
-          <button onClick={() => setFilter('losers')} className={filter === 'losers' ? 'active-filter' : ''}>Top Losers</button>
-        </div>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', marginBottom: '16px', alignItems: 'center' }}>
+        {/* Search */}
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="🔍  Search by symbol or sector…"
+          style={{ padding: '9px 14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#ffffff', fontSize: '14px', outline: 'none', width: '240px', transition: 'border 0.2s' }}
+          onFocus={e => e.target.style.borderColor = '#00ff88'}
+          onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.1)'}
+        />
+
+        {/* Gainer / Loser Filter */}
+        {[{ label: 'All', value: 'all' }, { label: '▲ Gainers', value: 'gainers' }, { label: '▼ Losers', value: 'losers' }].map(f => (
+          <button
+            key={f.value}
+            onClick={() => setMoverFilter(f.value)}
+            style={{ padding: '8px 16px', background: moverFilter === f.value ? (f.value === 'losers' ? 'rgba(255,51,102,0.15)' : 'rgba(0,255,136,0.15)') : 'rgba(255,255,255,0.04)', border: `1px solid ${moverFilter === f.value ? (f.value === 'losers' ? '#ff3366' : '#00ff88') : 'rgba(255,255,255,0.1)'}`, borderRadius: '8px', color: moverFilter === f.value ? (f.value === 'losers' ? '#ff3366' : '#00ff88') : '#e1e3e6', fontSize: '13px', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
+          >
+            {f.label}
+          </button>
+        ))}
       </div>
-      <div className="screener-table">
-        <table>
-          <thead><tr><th>Company</th><th>Sector</th><th>Price (₹)</th><th>1D</th><th>1W</th><th>1M</th><th>Vol</th><th>P/E</th><th>P/B</th><th>ROE</th><th>Div</th></tr></thead>
-          <tbody>
-            {filtered.map((s, i) => {
-              // Mocking advanced metrics for design realism based on screenshot
-              const sectors = ['IT', 'Banking', 'FMCG', 'Auto', 'Infra', 'NRFC'];
-              const sector = sectors[i % sectors.length];
-              const pE = (15 + (i % 15)).toFixed(1);
-              const pB = (2 + (i % 5)).toFixed(1);
-              const roe = (10 + (i % 20)).toFixed(1);
-              const div = (0.5 + (i % 3)).toFixed(1);
-              const vol = (parseFloat(s.volume) / 100000).toFixed(1) + 'M';
-              
-              const w1 = (parseFloat(s.changePercent) * 2.5).toFixed(2);
-              const m1 = (parseFloat(s.changePercent) * 6.2).toFixed(2);
-              
-              return (
-                <tr key={s.symbol}>
-                  <td>
-                    <strong>{s.symbol}</strong>
-                    <div style={{ fontSize: '11px', color: '#787b86' }}>NSE</div>
+
+      {/* Sector scroll pills */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        {SECTORS.map(sec => (
+          <button
+            key={sec}
+            onClick={() => setSectorFilter(sec)}
+            style={{ padding: '5px 12px', background: sectorFilter === sec ? 'rgba(0,188,212,0.15)' : 'rgba(255,255,255,0.03)', border: `1px solid ${sectorFilter === sec ? '#00bcd4' : 'rgba(255,255,255,0.07)'}`, borderRadius: '20px', color: sectorFilter === sec ? '#00bcd4' : '#9b9eac', fontSize: '12px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap' }}
+          >
+            {sec}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '60px', color: '#00ff88', fontSize: '18px' }}>Loading market data…</div>
+      ) : (
+        <div style={{ overflowX: 'auto', borderRadius: '12px', background: '#0a0e27', border: '1px solid rgba(255,255,255,0.05)', boxShadow: '0 8px 32px rgba(0,0,0,0.4)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', whiteSpace: 'nowrap' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '2px solid rgba(0,255,136,0.15)' }}>
+                <th style={{ padding: '14px 12px', textAlign: 'left', color: '#9b9eac', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Company</th>
+                <th style={{ padding: '14px 12px', textAlign: 'left', color: '#9b9eac', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sector</th>
+                <SortHeader label="Price (₹)" field="price" />
+                <SortHeader label="1D %" field="changePercent" />
+                <SortHeader label="High" field="dayHigh" />
+                <SortHeader label="Low" field="dayLow" />
+                <SortHeader label="Volume" field="volume" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#9b9eac' }}>
+                    No stocks found matching your filters.
                   </td>
-                  <td><span style={{ padding: '2px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', fontSize: '11px' }}>{sector}</span></td>
-                  <td>₹{s.price}</td>
-                  <td className={s.changePercent >= 0 ? 'positive' : 'negative'}>{s.changePercent > 0 ? '+' : ''}{s.changePercent}%</td>
-                  <td className={w1 >= 0 ? 'positive' : 'negative'}>{w1 > 0 ? '+' : ''}{w1}%</td>
-                  <td className={m1 >= 0 ? 'positive' : 'negative'}>{m1 > 0 ? '+' : ''}{m1}%</td>
-                  <td>{s.volume ? vol : '700K'}</td>
-                  <td>{pE}</td>
-                  <td>{pB}</td>
-                  <td style={{ color: '#00ff88' }}>{roe}%</td>
-                  <td>{div}%</td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <style>{`.active-filter { background: #00ff88; color: #0a0e27; border-color: transparent; } button { background: #1e222d; border: 1px solid #2a2e39; padding: 6px 12px; border-radius: 8px; cursor: pointer; }`}</style>
+              ) : filtered.map((s) => {
+                const chg = parseFloat(s.changePercent);
+                return (
+                  <tr
+                    key={s.symbol}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.15s' }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.025)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <td style={{ padding: '13px 12px' }}>
+                      <strong style={{ color: '#ffffff', fontSize: '14px' }}>{s.symbol}</strong>
+                      <div style={{ fontSize: '11px', color: '#787b86', marginTop: '2px' }}>NSE</div>
+                    </td>
+                    <td style={{ padding: '13px 12px' }}>
+                      <span style={{ padding: '3px 8px', background: 'rgba(0,188,212,0.08)', border: '1px solid rgba(0,188,212,0.15)', borderRadius: '12px', fontSize: '11px', color: '#00bcd4', fontWeight: 600 }}>
+                        {s.sector || 'Other'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '13px 12px', color: '#ffffff', fontWeight: 600 }}>₹{s.price}</td>
+                    <td style={{ padding: '13px 12px', fontWeight: 700, color: colorFor(s.changePercent) }}>
+                      {chg > 0 ? '+' : ''}{s.changePercent}%
+                    </td>
+                    <td style={{ padding: '13px 12px', color: '#e1e3e6' }}>₹{s.dayHigh || '—'}</td>
+                    <td style={{ padding: '13px 12px', color: '#e1e3e6' }}>₹{s.dayLow || '—'}</td>
+                    <td style={{ padding: '13px 12px', color: '#9b9eac' }}>{fmtVol(s.volume)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

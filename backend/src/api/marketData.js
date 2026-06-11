@@ -99,18 +99,114 @@ router.get('/indices', async (req, res) => {
   res.json(results);
 });
 
-const ALL_STOCKS = [
-  'RELIANCE', 'TCS', 'HDFCBANK', 'ICICIBANK', 'BHARTIARTL', 'SBIN', 'INFY', 'ITC', 'HINDUNILVR', 
-  'LT', 'BAJFINANCE', 'HCLTECH', 'MARUTI', 'SUNPHARMA', 'ADANIENT', 'KOTAKBANK', 'TITAN', 'ONGC', 
-  'TATAMOTORS', 'NTPC', 'AXISBANK', 'ADANIPORTS', 'ULTRACEMCO', 'ASIANPAINT', 'COALINDIA', 
-  'BAJAJFINSV', 'BAJAJ-AUTO', 'POWERGRID', 'NESTLEIND', 'GRASIM', 'TATASTEEL', 'TECHM', 'HINDALCO', 
-  'WIPRO', 'LTIM', 'APOLLOHOSP', 'EICHERMOT', 'DIVISLAB', 'INDUSINDBK', 'DRREDDY', 'CIPLA', 'BPCL', 
-  'BRITANNIA', 'TATACONSUM', 'HEROMOTOCO', 'UPL', 'JSWSTEEL', 'HDFCLIFE', 'SBILIFE', 'BEL',
-  'INDIGO', 'JIOFIN', 'MAXHEALTH', 'SHRIRAMFIN', 'TRENT', 'ZOMATO', 'TATAPOWER', 'IRCTC', 'HAL', 
-  'YESBANK', 'PNB', 'IOC', 'GAIL', 'VEDL', 'DLF', 'PIDILITIND', 'MRF', 'SHREECEM', 'DMART', 
-  'NYKAA', 'PAYTM', 'TATAELXSI', 'NHPC', 'SJVN', 'RVNL', 'IRFC', 'IREDA', 'PFC', 'RECL', 
-  'BHEL', 'HUDCO', 'LIC', 'SUZLON'
-];
+// Full stock universe: symbol → sector
+const STOCK_UNIVERSE = {
+  // Large Cap — IT
+  'TCS': 'IT', 'INFY': 'IT', 'HCLTECH': 'IT', 'WIPRO': 'IT', 'TECHM': 'IT',
+  'LTIM': 'IT', 'MPHASIS': 'IT', 'PERSISTENT': 'IT', 'COFORGE': 'IT',
+  'TATAELXSI': 'IT', 'OFSS': 'IT', 'HEXAWARE': 'IT', 'KPITTECH': 'IT',
+  'MASTEK': 'IT', 'RATEGAIN': 'IT', 'ZENSARTECH': 'IT', 'NIIT': 'IT',
+  'NEWGEN': 'IT', 'DATAMATICS': 'IT', 'INTELLECT': 'IT',
+
+  // Banking & Finance
+  'HDFCBANK': 'Banking', 'ICICIBANK': 'Banking', 'SBIN': 'Banking', 'KOTAKBANK': 'Banking',
+  'AXISBANK': 'Banking', 'INDUSINDBK': 'Banking', 'BANKBARODA': 'Banking', 'PNB': 'Banking',
+  'CANARABANK': 'Banking', 'UNIONBANK': 'Banking', 'IDFCFIRSTB': 'Banking', 'FEDERALBNK': 'Banking',
+  'YESBANK': 'Banking', 'BANDHANBNK': 'Banking', 'RBLBANK': 'Banking', 'KARURVYSYA': 'Banking',
+  'CSBBANK': 'Banking', 'DCBBANK': 'Banking', 'SOUTHBANK': 'Banking', 'LAKSHVILAS': 'Banking',
+
+  // NBFC & Financial Services
+  'BAJFINANCE': 'NBFC', 'BAJAJFINSV': 'NBFC', 'SHRIRAMFIN': 'NBFC', 'CHOLAFIN': 'NBFC',
+  'MUTHOOTFIN': 'NBFC', 'JIOFIN': 'NBFC', 'MANAPPURAM': 'NBFC', 'IIFL': 'NBFC',
+  'M&MFIN': 'NBFC', 'LTFINANCE': 'NBFC', 'POONAWALLA': 'NBFC', 'HOMEFIRST': 'NBFC',
+  'AAVAS': 'NBFC', 'APTUS': 'NBFC', 'CREDITACC': 'NBFC',
+
+  // Insurance
+  'HDFCLIFE': 'Insurance', 'SBILIFE': 'Insurance', 'ICICIPRULI': 'Insurance',
+  'MAXHEALTH': 'Insurance', 'NIACL': 'Insurance', 'GICRE': 'Insurance',
+  'STARHEALTH': 'Insurance', 'LIC': 'Insurance',
+
+  // Oil & Gas
+  'RELIANCE': 'Oil & Gas', 'ONGC': 'Oil & Gas', 'IOC': 'Oil & Gas', 'BPCL': 'Oil & Gas',
+  'GAIL': 'Oil & Gas', 'OIL': 'Oil & Gas', 'PETRONET': 'Oil & Gas', 'MGL': 'Oil & Gas',
+  'IGL': 'Oil & Gas', 'GUJGASLTD': 'Oil & Gas', 'MRPL': 'Oil & Gas', 'HINDPETRO': 'Oil & Gas',
+
+  // Auto & Auto Ancillaries
+  'MARUTI': 'Auto', 'TATAMOTORS': 'Auto', 'EICHERMOT': 'Auto', 'HEROMOTOCO': 'Auto',
+  'BAJAJ-AUTO': 'Auto', 'TVSMOTORS': 'Auto', 'ASHOKLEY': 'Auto', 'MAHINDRA': 'Auto',
+  'M&M': 'Auto', 'TVSMOTOR': 'Auto', 'ESCORTS': 'Auto', 'FORCEMOT': 'Auto',
+  'MOTHERSON': 'Auto Anc', 'BOSCHLTD': 'Auto Anc', 'MRF': 'Auto Anc',
+  'APOLLOTYRE': 'Auto Anc', 'BALKRISIND': 'Auto Anc', 'CEATLTD': 'Auto Anc',
+  'EXIDEIND': 'Auto Anc', 'AMARAJABAT': 'Auto Anc', 'SUNDRMFAST': 'Auto Anc',
+
+  // Pharma & Healthcare
+  'SUNPHARMA': 'Pharma', 'DRREDDY': 'Pharma', 'CIPLA': 'Pharma', 'DIVISLAB': 'Pharma',
+  'APOLLOHOSP': 'Healthcare', 'MAXHEALTH': 'Healthcare', 'LUPIN': 'Pharma', 'BIOCON': 'Pharma',
+  'AUROPHARMA': 'Pharma', 'TORNTPHARM': 'Pharma', 'ALKEM': 'Pharma', 'ABBOTINDIA': 'Pharma',
+  'IPCALAB': 'Pharma', 'GLENMARK': 'Pharma', 'GRANULES': 'Pharma', 'NATCOPHARM': 'Pharma',
+  'PFIZER': 'Pharma', 'GLAXO': 'Pharma', 'LAURUSLABS': 'Pharma', 'SUVEN': 'Pharma',
+  'METROPOLIS': 'Healthcare', 'DRLAL': 'Healthcare', 'THYROCARE': 'Healthcare',
+
+  // FMCG & Consumer
+  'HINDUNILVR': 'FMCG', 'ITC': 'FMCG', 'NESTLEIND': 'FMCG', 'BRITANNIA': 'FMCG',
+  'TATACONSUM': 'FMCG', 'DABUR': 'FMCG', 'MARICO': 'FMCG', 'GODREJCP': 'FMCG',
+  'EMAMILTD': 'FMCG', 'VGUARD': 'FMCG', 'BAJAJCON': 'FMCG', 'COLPAL': 'FMCG',
+  'GILLETTE': 'FMCG', 'HATSUN': 'FMCG', 'BIKAJI': 'FMCG', 'DOMS': 'FMCG',
+
+  // Metals & Mining
+  'TATASTEEL': 'Metals', 'JSWSTEEL': 'Metals', 'HINDALCO': 'Metals', 'VEDL': 'Metals',
+  'COALINDIA': 'Mining', 'NMDC': 'Mining', 'MOIL': 'Mining', 'HINDCOPPER': 'Metals',
+  'SAIL': 'Metals', 'JINDALSTEE': 'Metals', 'WELCORP': 'Metals', 'RATNAMANI': 'Metals',
+  'APL': 'Metals', 'ASTRAL': 'Metals',
+
+  // Cement
+  'ULTRACEMCO': 'Cement', 'GRASIM': 'Cement', 'SHREECEM': 'Cement', 'AMBUJACEM': 'Cement',
+  'ACC': 'Cement', 'DALMIACEM': 'Cement', 'JKCEMENT': 'Cement', 'RAMCOCEM': 'Cement',
+  'HEIDELBERG': 'Cement', 'BIRLACORPN': 'Cement',
+
+  // Power & Energy
+  'NTPC': 'Power', 'POWERGRID': 'Power', 'TATAPOWER': 'Power', 'NHPC': 'Power',
+  'SJVN': 'Power', 'TORNTPOWER': 'Power', 'CESC': 'Power', 'ADANIGREEN': 'Power',
+  'SUZLON': 'Power', 'INOXGREEN': 'Power', 'GREENPANEL': 'Power', 'KPI': 'Power',
+  'IREDA': 'Power', 'PFC': 'Finance', 'RECL': 'Finance',
+
+  // Infrastructure & Construction
+  'LT': 'Infra', 'ADANIENT': 'Infra', 'ADANIPORTS': 'Infra', 'DLF': 'Real Estate',
+  'LODHA': 'Real Estate', 'GODREJPROP': 'Real Estate', 'OBEROIRLTY': 'Real Estate',
+  'PRESTIGE': 'Real Estate', 'BRIGADE': 'Real Estate', 'NCC': 'Infra',
+  'KNR': 'Infra', 'PNC': 'Infra', 'IRCON': 'Infra', 'RVNL': 'Infra',
+  'IRFC': 'Finance', 'HUDCO': 'Finance', 'HAL': 'Defence', 'BEL': 'Defence',
+  'BHEL': 'Capital Goods', 'COCHINSHIP': 'Defence', 'MAZDOCK': 'Defence',
+  'GRSE': 'Defence', 'BEML': 'Defence',
+
+  // Telecom
+  'BHARTIARTL': 'Telecom', 'VODAFONE': 'Telecom', 'INDIAMART': 'Telecom',
+
+  // Consumer Durables
+  'TITAN': 'Consumer', 'TRENT': 'Retail', 'DMART': 'Retail', 'NYKAA': 'Retail',
+  'ASIANPAINT': 'Consumer', 'PIDILITIND': 'Consumer', 'BERGER': 'Consumer',
+  'KANSAINER': 'Consumer', 'WHIRLPOOL': 'Consumer', 'VOLTAS': 'Consumer',
+  'BLUEDART': 'Logistics', 'APLAPOLLO': 'Consumer',
+
+  // New-Age Tech / Internet
+  'ZOMATO': 'Tech', 'PAYTM': 'Tech', 'IRCTC': 'Travel', 'INDIGO': 'Aviation',
+  'NAUKRI': 'Tech', 'JUSTDIAL': 'Tech', 'INFOEDGE': 'Tech',
+
+  // Specialty Chemicals
+  'UPL': 'Chemicals', 'SRF': 'Chemicals', 'PIIND': 'Chemicals', 'AARTI': 'Chemicals',
+  'DEEPAKNTR': 'Chemicals', 'NAVINFLUOR': 'Chemicals', 'FINEORG': 'Chemicals',
+  'TATACHEM': 'Chemicals', 'GNFC': 'Chemicals', 'NOCIL': 'Chemicals',
+
+  // Capital Goods
+  'ABB': 'Cap Goods', 'SIEMENS': 'Cap Goods', 'HAVELLS': 'Cap Goods',
+  'POLYCAB': 'Cap Goods', 'CUMMINSIND': 'Cap Goods', 'THERMAX': 'Cap Goods',
+  'BHARAT': 'Cap Goods', 'ELGIEQUIP': 'Cap Goods', 'GRINDWELL': 'Cap Goods',
+
+  // Miscellaneous
+  'CHOLAFIN': 'NBFC', 'M&MFIN': 'NBFC', 'SUNDARMFIN': 'NBFC',
+};
+
+const ALL_STOCKS = Object.keys(STOCK_UNIVERSE);
 
 function getDateOffset(days) {
   const d = new Date();
@@ -425,6 +521,7 @@ router.get('/stock-list', async (req, res) => {
     if (quote?.price) {
       results.push({
         symbol: sym,
+        sector: STOCK_UNIVERSE[sym] || 'Other',
         price: quote.price.toFixed(2),
         change: quote.change.toFixed(2),
         changePercent: quote.changePercent.toFixed(2),
