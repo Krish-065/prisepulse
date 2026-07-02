@@ -903,11 +903,23 @@ router.get('/stock-history/:symbol', async (req, res) => {
       symbol = `${symbol}.NS`;
     }
 
-    // Support dynamic ranges: 1mo, 3mo, 6mo, 1y. Default to 3mo
-    const allowedRanges = ['1mo', '3mo', '6mo', '1y'];
-    const range = allowedRanges.includes(req.query.range) ? req.query.range : '3mo';
+    // Support dynamic intervals: 1m, 5m, 1d. Default to 1d
+    const allowedIntervals = ['1m', '5m', '1d'];
+    const interval = allowedIntervals.includes(req.query.interval) ? req.query.interval : '1d';
 
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
+    let range = '3mo';
+    if (interval === '1m') {
+      const allowedRanges = ['1d', '5d', '7d'];
+      range = allowedRanges.includes(req.query.range) ? req.query.range : '1d';
+    } else if (interval === '5m') {
+      const allowedRanges = ['1d', '5d', '7d', '1mo'];
+      range = allowedRanges.includes(req.query.range) ? req.query.range : '5d';
+    } else {
+      const allowedRanges = ['1mo', '3mo', '6mo', '1y'];
+      range = allowedRanges.includes(req.query.range) ? req.query.range : '3mo';
+    }
+
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
     const response = await fetch(url, { headers: YAHOO_HEADERS });
     if (!response.ok) {
       return res.status(response.status).json({ error: 'Failed to fetch stock history' });

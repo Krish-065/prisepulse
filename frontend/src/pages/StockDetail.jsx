@@ -38,9 +38,21 @@ export default function StockDetail() {
   const [trendFilter, setTrendFilter] = useState(false);  // only buy when price > SMA50
 
   // Backtest Configurations & Parameters
-  const [timeRange, setTimeRange] = useState('3mo');             // '1mo', '3mo', '6mo', '1y'
+  const [chartInterval, setChartInterval] = useState('1d');       // '1m', '5m', '1d'
+  const [timeRange, setTimeRange] = useState('3mo');             // range adapts to interval (e.g. '1d' for '1m')
   const [tradeDirection, setTradeDirection] = useState('long');   // 'long' (buy first) or 'short' (sell first)
   const [strategyExplanation, setStrategyExplanation] = useState('');
+
+  const handleIntervalChange = (newInterval) => {
+    setChartInterval(newInterval);
+    if (newInterval === '1m') {
+      setTimeRange('1d');
+    } else if (newInterval === '5m') {
+      setTimeRange('5d');
+    } else {
+      setTimeRange('3mo');
+    }
+  };
 
   // Backtest Results
   const [signals, setSignals] = useState([]); 
@@ -125,7 +137,7 @@ export default function StockDetail() {
     else setRefreshing(true);
 
     try {
-      const histRes = await apiClient.get(`/market/stock-history/${symbol}?range=${timeRange}`);
+      const histRes = await apiClient.get(`/market/stock-history/${symbol}?range=${timeRange}&interval=${chartInterval}`);
       setHistory(histRes.data);
 
       const nsSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
@@ -155,7 +167,7 @@ export default function StockDetail() {
 
   useEffect(() => {
     fetchStockData();
-  }, [symbol, timeRange]);
+  }, [symbol, timeRange, chartInterval]);
 
   // Math functions for indicator values
   const computeIndicators = () => {
@@ -229,6 +241,17 @@ export default function StockDetail() {
       return null;
     };
 
+    const formatBarDate = (timeMs) => {
+      const dateObj = new Date(timeMs);
+      if (chartInterval === '1d') {
+        return dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      } else {
+        const dateStr = dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        return `${dateStr}, ${timeStr}`;
+      }
+    };
+
     const evaluateRule = (ind, operator, targetType, targetValInput, targetIndInput, idx) => {
       if (idx === 0) return false;
       const currVal = getValue(ind, idx);
@@ -258,14 +281,14 @@ export default function StockDetail() {
 
     const isLong = tradeDirection === 'long';
 
-    // ─── Walk through every daily bar ───
+    // ─── Walk through every candle/bar ───
     for (let i = 20; i < history.length; i++) {
       const price = history[i].close;
 
       if (!activeTrade) {
         // ─── Trend Filter Rule ───
-        // For LONG: only buy if price is ABOVE SMA50
-        // For SHORT: only sell if price is BELOW SMA50
+        // For LONG: only buy if price is ABOVE SMA50 (higher timeframe check)
+        // For SHORT: only sell if price is BELOW SMA50 (higher timeframe check)
         if (trendFilter && sma50[i] !== null) {
           if (isLong && price < sma50[i]) continue;
           if (!isLong && price > sma50[i]) continue;
@@ -281,7 +304,7 @@ export default function StockDetail() {
           generatedSignals[i] = isLong ? 'BUY' : 'SELL';
           activeTrade = {
             entryIndex: i,
-            entryDate:  new Date(history[i].time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+            entryDate:  formatBarDate(history[i].time),
             entryPrice: price,
           };
         }
@@ -310,7 +333,7 @@ export default function StockDetail() {
           executedTrades.push({
             ...activeTrade,
             exitIndex:  i,
-            exitDate:   new Date(history[i].time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+            exitDate:   formatBarDate(history[i].time),
             exitPrice:  price,
             pnl:        parseFloat(pnlPct.toFixed(2)),
             duration:   i - activeTrade.entryIndex,
@@ -333,7 +356,7 @@ export default function StockDetail() {
       executedTrades.push({
         ...activeTrade,
         exitIndex:  lastIdx,
-        exitDate:   new Date(history[lastIdx].time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        exitDate:   formatBarDate(history[lastIdx].time),
         exitPrice:  lastPrice,
         pnl:        parseFloat(pnl.toFixed(2)),
         duration:   lastIdx - activeTrade.entryIndex,
@@ -377,10 +400,20 @@ export default function StockDetail() {
       });
 
       // Generate clean summary text
-      const timeStr = timeRange === '1mo' ? '1 Month' : timeRange === '3mo' ? '3 Months' : timeRange === '6mo' ? '6 Months' : '1 Year';
+      const timeStrMap = {
+        '1d': '1 Day',
+        '5d': '5 Days',
+        '7d': '7 Days',
+        '1mo': '1 Month',
+        '3mo': '3 Months',
+        '6mo': '6 Months',
+        '1y': '1 Year'
+      };
+      const timeStr = timeStrMap[timeRange] || timeRange;
+      const durationUnit = chartInterval === '1d' ? 'days' : chartInterval === '5m' ? 'bars (5-min)' : 'bars (1-min)';
       const performanceType = netReturn >= 0 ? 'net positive return' : 'net negative return';
       setStrategyExplanation(
-        `During the backtest over the last ${timeStr}, the ${tradeDirection.toUpperCase()} strategy was executed ${executedTrades.length} times. The strategy finished with a ${performanceType} of ${netReturn.toFixed(1)}%. Out of the total executions, the strategy saw ${wins.length} profitable outcomes and ${losses.length} unprofitable outcomes, resulting in a Win Rate of ${winRateVal}%. The positions were held for an average of ${avgDuration} days. The maximum drawdown peak-to-trough experienced during the period was -${maxDrawdown.toFixed(1)}%, with the most successful position capturing +${bestTrade.toFixed(2)}% and the least successful losing ${worstTrade.toFixed(2)}%.`
+        `During the backtest over the last ${timeStr} with a ${chartInterval === '1d' ? 'Daily' : chartInterval} resolution, the ${tradeDirection.toUpperCase()} strategy was executed ${executedTrades.length} times. The strategy finished with a ${performanceType} of ${netReturn.toFixed(1)}%. Out of the total executions, the strategy saw ${wins.length} profitable outcomes and ${losses.length} unprofitable outcomes, resulting in a Win Rate of ${winRateVal}%. The positions were held for an average of ${avgDuration} ${durationUnit}. The maximum drawdown peak-to-trough experienced during the period was -${maxDrawdown.toFixed(1)}%, with the most successful position capturing +${bestTrade.toFixed(2)}% and the least successful losing ${worstTrade.toFixed(2)}%.`
       );
     } else {
       setPerformance({ totalTrades: 0, wins: 0, losses: 0, winRate: 0, netReturn: 0, avgDuration: 0, bestTrade: 0, worstTrade: 0, maxDrawdown: 0 });
@@ -403,23 +436,34 @@ export default function StockDetail() {
   // Strategy Presets Loader
   const applyPreset = (presetType) => {
     if (presetType === 'rsi_reversion') {
+      setChartInterval('1d'); setTimeRange('3mo'); setTradeDirection('long');
       setBuyIndicator('RSI'); setBuyOperator('lessThan'); setBuyTargetType('value'); setBuyTargetValue(35);
       setSellIndicator('RSI'); setSellOperator('greaterThan'); setSellTargetType('value'); setSellTargetValue(65);
       setStopLossPct(7); setTakeProfitPct(12); setTrendFilter(false);
     } else if (presetType === 'sma_crossover') {
+      setChartInterval('1d'); setTimeRange('3mo'); setTradeDirection('long');
       setBuyIndicator('Price'); setBuyOperator('crossesAbove'); setBuyTargetType('indicator'); setBuyTargetIndicator('SMA20');
       setSellIndicator('Price'); setSellOperator('crossesBelow'); setSellTargetType('indicator'); setSellTargetIndicator('SMA20');
       setStopLossPct(5); setTakeProfitPct(10); setTrendFilter(false);
-    } else if (presetType === 'momentum_trend') {
-      setBuyIndicator('Price'); setBuyOperator('crossesAbove'); setBuyTargetType('indicator'); setBuyTargetIndicator('SMA50');
-      setSellIndicator('Price'); setSellOperator('crossesBelow'); setSellTargetType('indicator'); setSellTargetIndicator('SMA50');
-      setStopLossPct(8); setTakeProfitPct(0); setTrendFilter(false);
-    } else if (presetType === 'smart_trend') {
-      // Smart Trend: RSI oversold + price must be ABOVE SMA50 (uptrend confirmed)
-      // This avoids buying into downtrends - the most common mistake in basic RSI strategies
-      setBuyIndicator('RSI'); setBuyOperator('lessThan'); setBuyTargetType('value'); setBuyTargetValue(40);
-      setSellIndicator('RSI'); setSellOperator('greaterThan'); setSellTargetType('value'); setSellTargetValue(60);
-      setStopLossPct(5); setTakeProfitPct(10); setTrendFilter(true); // KEY: trend filter ON
+    } else if (presetType === 'intraday_scalper') {
+      // 5-Min Quick Scalper (Long Mean Reversion)
+      setChartInterval('5m'); setTimeRange('5d'); setTradeDirection('long');
+      setBuyIndicator('RSI'); setBuyOperator('lessThan'); setBuyTargetType('value'); setBuyTargetValue(30);
+      setSellIndicator('RSI'); setSellOperator('greaterThan'); setSellTargetType('value'); setSellTargetValue(70);
+      setStopLossPct(1.5); setTakeProfitPct(3.0); setTrendFilter(false);
+    } else if (presetType === 'intraday_trend_rider') {
+      // Intraday Trend Rider (Momentum Alignment: Buy above SMA50, trigger on SMA20 crosses)
+      setChartInterval('5m'); setTimeRange('5d'); setTradeDirection('long');
+      setBuyIndicator('Price'); setBuyOperator('crossesAbove'); setBuyTargetType('indicator'); setBuyTargetIndicator('SMA20');
+      setSellIndicator('Price'); setSellOperator('crossesBelow'); setSellTargetType('indicator'); setSellTargetIndicator('SMA20');
+      setStopLossPct(2.0); setTakeProfitPct(5.0); setTrendFilter(true); // Must align with SMA50
+    } else if (presetType === 'intraday_short_scalp') {
+      // Short Seller Scalper (Counter-Trend shorting in Downtrends)
+      setChartInterval('5m'); setTimeRange('5d'); setTradeDirection('short');
+      // For short: entry rule is Sell rule (RSI overbought), exit rule is Buy rule (RSI oversold)
+      setBuyIndicator('RSI'); setBuyOperator('lessThan'); setBuyTargetType('value'); setBuyTargetValue(30);
+      setSellIndicator('RSI'); setSellOperator('greaterThan'); setSellTargetType('value'); setSellTargetValue(70);
+      setStopLossPct(1.5); setTakeProfitPct(3.0); setTrendFilter(true); // Short only if Price < SMA50
     }
   };
 
@@ -630,12 +674,35 @@ export default function StockDetail() {
                   PricePulse Backtesting Canvas
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
-                  Overlaying Buy (▲) & Sell (▼) triggers on daily candlesticks, with SMA 20 (<span style={{ color: '#00bcd4' }}>■</span>) & SMA 50 (<span style={{ color: '#ffb300' }}>■</span>) lines.
+                  Overlaying Buy (▲) & Sell (▼) triggers on candlesticks, with SMA 20 (<span style={{ color: '#00bcd4' }}>■</span>) & SMA 50 (<span style={{ color: '#ffb300' }}>■</span>) lines.
                 </p>
               </div>
 
-              {/* Timeframe & Direction Config selectors */}
-              <div style={{ display: 'flex', gap: '8px' }}>
+              {/* Resolution, Timeframe & Direction Config selectors */}
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                  <span style={{ fontSize: '9px', color: 'var(--text-secondary)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Resolution</span>
+                  <select 
+                    value={chartInterval}
+                    onChange={(e) => handleIntervalChange(e.target.value)}
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      color: '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value="1m">1 Min Intraday</option>
+                    <option value="5m">5 Min Intraday</option>
+                    <option value="1d">Daily Chart</option>
+                  </select>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
                   <span style={{ fontSize: '9px', color: 'var(--text-secondary)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Simulation Range</span>
                   <select 
@@ -653,10 +720,29 @@ export default function StockDetail() {
                       outline: 'none'
                     }}
                   >
-                    <option value="1mo">1 Month Simulation</option>
-                    <option value="3mo">3 Months Simulation</option>
-                    <option value="6mo">6 Months Simulation</option>
-                    <option value="1y">1 Year Simulation</option>
+                    {chartInterval === '1m' && (
+                      <>
+                        <option value="1d">1 Day History</option>
+                        <option value="5d">5 Days History</option>
+                        <option value="7d">7 Days History</option>
+                      </>
+                    )}
+                    {chartInterval === '5m' && (
+                      <>
+                        <option value="1d">1 Day History</option>
+                        <option value="5d">5 Days History</option>
+                        <option value="7d">7 Days History</option>
+                        <option value="1mo">1 Month History</option>
+                      </>
+                    )}
+                    {chartInterval === '1d' && (
+                      <>
+                        <option value="1mo">1 Month History</option>
+                        <option value="3mo">3 Months History</option>
+                        <option value="6mo">6 Months History</option>
+                        <option value="1y">1 Year History</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -974,7 +1060,7 @@ export default function StockDetail() {
                 >
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#e040fb', marginRight: '6px' }}></span>
-                    RSI Reversion
+                    RSI Reversion (1D)
                   </span>
                   <ChevronRight size={10} />
                 </button>
@@ -997,36 +1083,13 @@ export default function StockDetail() {
                 >
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#00bcd4', marginRight: '6px' }}></span>
-                    SMA(20) Cross
+                    SMA(20) Cross (1D)
                   </span>
                   <ChevronRight size={10} />
                 </button>
 
                 <button
-                  onClick={() => applyPreset('momentum_trend')}
-                  style={{
-                    padding: '8px',
-                    background: 'rgba(255, 179, 0, 0.08)',
-                    border: '1px solid rgba(255, 179, 0, 0.25)',
-                    borderRadius: '6px',
-                    color: '#ffb300',
-                    fontSize: '10px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <span style={{ display: 'flex', alignItems: 'center' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#ffb300', marginRight: '6px' }}></span>
-                    SMA(50) Rider
-                  </span>
-                  <ChevronRight size={10} />
-                </button>
-
-                <button
-                  onClick={() => applyPreset('smart_trend')}
+                  onClick={() => applyPreset('intraday_scalper')}
                   style={{
                     padding: '8px',
                     background: 'rgba(0, 255, 136, 0.08)',
@@ -1043,7 +1106,54 @@ export default function StockDetail() {
                 >
                   <span style={{ display: 'flex', alignItems: 'center' }}>
                     <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#00ff88', marginRight: '6px' }}></span>
-                    Smart Trend
+                    Scalper (5M Long)
+                  </span>
+                  <ChevronRight size={10} />
+                </button>
+
+                <button
+                  onClick={() => applyPreset('intraday_trend_rider')}
+                  style={{
+                    padding: '8px',
+                    background: 'rgba(255, 179, 0, 0.08)',
+                    border: '1px solid rgba(255, 179, 0, 0.25)',
+                    borderRadius: '6px',
+                    color: '#ffb300',
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#ffb300', marginRight: '6px' }}></span>
+                    Trend Rider (5M)
+                  </span>
+                  <ChevronRight size={10} />
+                </button>
+
+                <button
+                  onClick={() => applyPreset('intraday_short_scalp')}
+                  style={{
+                    padding: '8px',
+                    background: 'rgba(255, 68, 68, 0.08)',
+                    border: '1px solid rgba(255, 68, 68, 0.25)',
+                    borderRadius: '6px',
+                    color: '#ff4444',
+                    fontSize: '10px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gridColumn: 'span 2'
+                  }}
+                >
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#ff4444', marginRight: '6px' }}></span>
+                    Short Seller Scalper (5M Short)
                   </span>
                   <ChevronRight size={10} />
                 </button>
@@ -1299,7 +1409,7 @@ export default function StockDetail() {
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
                 <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700' }}>AVG HOLDING DURATION</div>
                 <div style={{ fontSize: '20px', fontWeight: '800', color: '#00bcd4', marginTop: '6px' }}>
-                  {performance.avgDuration} days
+                  {performance.avgDuration} {chartInterval === '1d' ? 'days' : chartInterval === '5m' ? 'bars (5m)' : 'bars (1m)'}
                 </div>
               </div>
 
@@ -1381,7 +1491,10 @@ export default function StockDetail() {
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>₹{trade.exitPrice.toLocaleString('en-IN')}</div>
                       </td>
                       <td style={{ padding: '12px', fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600' }}>
-                        {trade.duration !== undefined ? `${trade.duration} days` : 'N/A'}
+                        {trade.duration !== undefined 
+                          ? `${trade.duration} ${chartInterval === '1d' ? 'days' : chartInterval === '5m' ? 'bars (5m)' : 'bars (1m)'}` 
+                          : 'N/A'
+                        }
                       </td>
                       <td style={{ padding: '12px' }}>
                         <span style={{
