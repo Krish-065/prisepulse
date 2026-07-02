@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import { 
   TrendingUp, Activity, Play, RefreshCw, BarChart2, 
-  Settings, Award, ShieldAlert, CheckCircle, ChevronRight, HelpCircle
+  Settings, Award, ShieldAlert, CheckCircle, ChevronRight, HelpCircle, Sparkles
 } from 'lucide-react';
 
 export default function StockDetail() {
@@ -21,65 +21,66 @@ export default function StockDetail() {
 
   // Strategy Configurations
   const [buyIndicator, setBuyIndicator] = useState('RSI');
-  const [buyPeriod, setBuyPeriod] = useState(14);
   const [buyOperator, setBuyOperator] = useState('lessThan');
-  const [buyTarget, setBuyTarget] = useState(30);
+  const [buyTargetType, setBuyTargetType] = useState('value'); // 'value' or 'indicator'
+  const [buyTargetValue, setBuyTargetValue] = useState(35);
+  const [buyTargetIndicator, setBuyTargetIndicator] = useState('SMA20');
 
   const [sellIndicator, setSellIndicator] = useState('RSI');
-  const [sellPeriod, setSellPeriod] = useState(14);
   const [sellOperator, setSellOperator] = useState('greaterThan');
-  const [sellTarget, setSellTarget] = useState(70);
+  const [sellTargetType, setSellTargetType] = useState('value'); // 'value' or 'indicator'
+  const [sellTargetValue, setSellTargetValue] = useState(65);
+  const [sellTargetIndicator, setSellTargetIndicator] = useState('SMA20');
 
   // Backtest Results
-  const [signals, setSignals] = useState([]); // buy/sell indices
+  const [signals, setSignals] = useState([]); 
   const [trades, setTrades] = useState([]);
   const [performance, setPerformance] = useState(null);
 
   // Interactive Hover Crosshair
   const [hoverIndex, setHoverIndex] = useState(null);
 
-  // Load TV Widget
+  // Load TV Widget once when symbol changes
   useEffect(() => {
-    if (activeTab === 'tradingview') {
-      const script = document.createElement('script');
-      script.src = 'https://s3.tradingview.com/tv.js';
-      script.async = true;
-      script.onload = () => {
-        if (tvContainerRef.current) {
-          const cleanSymbol = symbol.replace('.NS', '').toUpperCase();
-          const tvSymbol = cleanSymbol === '^NSEI' || cleanSymbol === 'NSEI'
-            ? 'NSE:NIFTY'
-            : cleanSymbol === '^NSEBANK' || cleanSymbol === 'NSEBANK'
-            ? 'NSE:BANKNIFTY'
-            : `NSE:${cleanSymbol}`;
+    const script = document.createElement('script');
+    script.src = 'https://s3.tradingview.com/tv.js';
+    script.async = true;
+    script.onload = () => {
+      if (tvContainerRef.current) {
+        const cleanSymbol = symbol.replace('.NS', '').toUpperCase();
+        const tvSymbol = cleanSymbol === '^NSEI' || cleanSymbol === 'NSEI'
+          ? 'NSE:NIFTY'
+          : cleanSymbol === '^NSEBANK' || cleanSymbol === 'NSEBANK'
+          ? 'NSE:BANKNIFTY'
+          : `NSE:${cleanSymbol}`;
 
-          new window.TradingView.widget({
-            container_id: tvContainerRef.current.id,
-            symbol: tvSymbol,
-            interval: 'D',
-            timezone: 'Asia/Kolkata',
-            theme: 'dark',
-            style: '1',
-            locale: 'in',
-            toolbar_bg: '#101427',
-            enable_publishing: false,
-            hide_top_toolbar: false,
-            width: '100%',
-            height: 520,
-            studies: ['RSI@tv-basicstudies', 'MACD@tv-basicstudies']
-          });
-        }
-      };
-      document.head.appendChild(script);
-      return () => {
-        try {
-          document.head.removeChild(script);
-        } catch (e) {
-          // script already removed
-        }
-      };
-    }
-  }, [symbol, activeTab]);
+        // Clear existing widget content if any
+        tvContainerRef.current.innerHTML = '';
+
+        new window.TradingView.widget({
+          container_id: tvContainerRef.current.id,
+          symbol: tvSymbol,
+          interval: 'D',
+          timezone: 'Asia/Kolkata',
+          theme: 'dark',
+          style: '1',
+          locale: 'in',
+          toolbar_bg: '#101427',
+          enable_publishing: false,
+          hide_top_toolbar: false,
+          width: '100%',
+          height: 520,
+          studies: ['RSI@tv-basicstudies', 'MACD@tv-basicstudies']
+        });
+      }
+    };
+    document.head.appendChild(script);
+    return () => {
+      try {
+        document.head.removeChild(script);
+      } catch (e) {}
+    };
+  }, [symbol]);
 
   // Fetch Stock History
   const fetchStockData = async (isSilent = false) => {
@@ -87,13 +88,11 @@ export default function StockDetail() {
     else setRefreshing(true);
 
     try {
-      // Get historical series
       const histRes = await apiClient.get(`/market/stock-history/${symbol}`);
       setHistory(histRes.data);
 
-      // Get current quote
       const nsSymbol = symbol.endsWith('.NS') ? symbol : `${symbol}.NS`;
-      const quotesRes = await apiClient.get('/market/indices'); // fetches batch quotes
+      const quotesRes = await apiClient.get('/market/indices'); 
       const matched = quotesRes.data[nsSymbol] || quotesRes.data[symbol];
       if (matched && matched.price) {
         setStockInfo({
@@ -101,7 +100,6 @@ export default function StockDetail() {
           changePercent: matched.changePercent
         });
       } else if (histRes.data.length > 0) {
-        // Fallback quote from latest historical close
         const latest = histRes.data[histRes.data.length - 1];
         const prev = histRes.data[histRes.data.length - 2] || latest;
         const changePct = prev.close ? ((latest.close - prev.close) / prev.close) * 100 : 0;
@@ -124,7 +122,7 @@ export default function StockDetail() {
 
   // Math functions for indicator values
   const computeIndicators = () => {
-    if (history.length === 0) return {};
+    if (history.length === 0) return { sma20: [], sma50: [], rsi14: [] };
 
     // 1. Calculate SMA 20
     const sma20 = new Array(history.length).fill(null);
@@ -182,28 +180,31 @@ export default function StockDetail() {
     const sma50 = indicators.sma50;
     const rsi = indicators.rsi14;
 
-    const generatedSignals = new Array(history.length).fill(null); // 'BUY', 'SELL', or null
+    const generatedSignals = new Array(history.length).fill(null); 
     const executedTrades = [];
     let activeTrade = null;
 
-    // Helper to extract indicator value at index
-    const getValue = (indicator, period, idx) => {
+    const getValue = (indicator, idx) => {
       if (indicator === 'Price') return history[idx].close;
-      if (indicator === 'SMA' && period === 20) return sma20[idx];
-      if (indicator === 'SMA' && period === 50) return sma50[idx];
+      if (indicator === 'SMA20') return sma20[idx];
+      if (indicator === 'SMA50') return sma50[idx];
       if (indicator === 'RSI') return rsi[idx];
       return null;
     };
 
-    // Helper to evaluate mathematical expression
-    const evaluateRule = (ind, val, operator, target, idx) => {
+    const evaluateRule = (ind, operator, targetType, targetValInput, targetIndInput, idx) => {
       if (idx === 0) return false;
-      const currVal = getValue(ind, 20, idx);
-      const prevVal = getValue(ind, 20, idx - 1);
-      
-      const targetVal = parseFloat(target);
+      const currVal = getValue(ind, idx);
+      const prevVal = getValue(ind, idx - 1);
 
-      if (currVal === null || prevVal === null) return false;
+      let targetVal;
+      if (targetType === 'value') {
+        targetVal = parseFloat(targetValInput);
+      } else {
+        targetVal = getValue(targetIndInput, idx);
+      }
+
+      if (currVal === null || prevVal === null || targetVal === null || isNaN(targetVal)) return false;
 
       switch (operator) {
         case 'lessThan':
@@ -222,8 +223,7 @@ export default function StockDetail() {
     // Walk through historical ticks
     for (let i = 20; i < history.length; i++) {
       if (!activeTrade) {
-        // Evaluate Buy Conditions
-        const buyTriggered = evaluateRule(buyIndicator, buyPeriod, buyOperator, buyTarget, i);
+        const buyTriggered = evaluateRule(buyIndicator, buyOperator, buyTargetType, buyTargetValue, buyTargetIndicator, i);
         if (buyTriggered) {
           generatedSignals[i] = 'BUY';
           activeTrade = {
@@ -233,8 +233,7 @@ export default function StockDetail() {
           };
         }
       } else {
-        // Evaluate Sell Conditions
-        const sellTriggered = evaluateRule(sellIndicator, sellPeriod, sellOperator, sellTarget, i);
+        const sellTriggered = evaluateRule(sellIndicator, sellOperator, sellTargetType, sellTargetValue, sellTargetIndicator, i);
         if (sellTriggered) {
           generatedSignals[i] = 'SELL';
           const pnl = ((history[i].close - activeTrade.entryPrice) / activeTrade.entryPrice) * 100;
@@ -277,29 +276,77 @@ export default function StockDetail() {
     }
   };
 
-  // Run default backtest when history is fetched
+  // Run backtest automatically on config/history load
   useEffect(() => {
     if (history.length > 0) {
       runBacktest();
     }
-  }, [history]);
+  }, [
+    history, 
+    buyIndicator, buyOperator, buyTargetType, buyTargetValue, buyTargetIndicator,
+    sellIndicator, sellOperator, sellTargetType, sellTargetValue, sellTargetIndicator
+  ]);
+
+  // Strategy Presets Loader
+  const applyPreset = (presetType) => {
+    if (presetType === 'rsi_reversion') {
+      setBuyIndicator('RSI');
+      setBuyOperator('lessThan');
+      setBuyTargetType('value');
+      setBuyTargetValue(45); // highly triggered on daily
+      
+      setSellIndicator('RSI');
+      setSellOperator('greaterThan');
+      setSellTargetType('value');
+      setSellTargetValue(55);
+    } else if (presetType === 'sma_crossover') {
+      setBuyIndicator('Price');
+      setBuyOperator('crossesAbove');
+      setBuyTargetType('indicator');
+      setBuyTargetIndicator('SMA20');
+
+      setSellIndicator('Price');
+      setSellOperator('crossesBelow');
+      setSellTargetType('indicator');
+      setSellTargetIndicator('SMA20');
+    } else if (presetType === 'momentum_trend') {
+      setBuyIndicator('Price');
+      setBuyOperator('greaterThan');
+      setBuyTargetType('indicator');
+      setBuyTargetIndicator('SMA50');
+
+      setSellIndicator('Price');
+      setSellOperator('lessThan');
+      setSellTargetType('indicator');
+      setSellTargetIndicator('SMA50');
+    }
+  };
 
   // Coordinate math helpers for SVG plot
   const svgWidth = 720;
-  const svgHeight = 360;
+  const svgHeight = 280;
+  const rsiSvgHeight = 100;
+  
   const paddingLeft = 45;
   const paddingRight = 15;
   const paddingTop = 20;
-  const paddingBottom = 30;
+  const paddingBottom = 25;
 
   const chartWidth = svgWidth - paddingLeft - paddingRight;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
+  const rsiChartHeight = rsiSvgHeight - 20 - 20; // top/bottom padding 20
 
   const minPrice = history.length > 0 ? Math.min(...history.map(h => h.low)) * 0.985 : 0;
   const maxPrice = history.length > 0 ? Math.max(...history.map(h => h.high)) * 1.015 : 100;
 
   const getYCoord = (price) => {
     return svgHeight - paddingBottom - ((price - minPrice) / (maxPrice - minPrice)) * chartHeight;
+  };
+
+  const getRsiYCoord = (rsiVal) => {
+    // RSI scales 0 to 100
+    const val = rsiVal === null ? 50 : rsiVal;
+    return rsiSvgHeight - 20 - (val / 100) * rsiChartHeight;
   };
 
   const getXCoord = (index) => {
@@ -315,6 +362,16 @@ export default function StockDetail() {
     for (let i = 0; i < values.length; i++) {
       if (values[i] !== null) {
         points.push(`${getXCoord(i)},${getYCoord(values[i])}`);
+      }
+    }
+    return points.length > 0 ? `M ${points.join(' L ')}` : '';
+  };
+
+  const getRsiLinePath = (values) => {
+    const points = [];
+    for (let i = 0; i < values.length; i++) {
+      if (values[i] !== null) {
+        points.push(`${getXCoord(i)},${getRsiYCoord(values[i])}`);
       }
     }
     return points.length > 0 ? `M ${points.join(' L ')}` : '';
@@ -416,44 +473,70 @@ export default function StockDetail() {
         </button>
       </div>
 
-      {/* Tab Contents */}
-      {activeTab === 'tradingview' ? (
-        <div style={{
-          background: 'rgba(16, 20, 39, 0.95)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '16px',
-          padding: '16px',
-          overflow: 'hidden'
-        }}>
-          <div id="tradingview-chart-element" ref={tvContainerRef} style={{ height: '520px', borderRadius: '8px' }}></div>
-        </div>
-      ) : (
-        <div>
-          {/* Algo workspace layout grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '24px', alignItems: 'stretch', marginBottom: '24px' }}>
-            
-            {/* Split Left: SVG Interactive Chart */}
-            <div style={{
-              background: 'var(--bg-card-glass)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '16px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              position: 'relative'
-            }}>
-              <div>
-                <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  Algo Strategy candlestick Chart
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '11px', marginBottom: '16px' }}>
-                  Overlaying compiled Buy (▲) & Sell (▼) triggers on daily candlestick bars (3-Month Series).
-                </p>
-              </div>
+      {/* Tab Contents: Render both but toggle visibility to prevent script remnant overlay bugs */}
+      
+      {/* 1. TradingView Widget Block */}
+      <div style={{
+        display: activeTab === 'tradingview' ? 'block' : 'none',
+        background: 'rgba(16, 20, 39, 0.95)',
+        border: '1px solid var(--border-color)',
+        borderRadius: '16px',
+        padding: '16px',
+        overflow: 'hidden',
+        marginBottom: '24px'
+      }}>
+        <div id="tradingview-chart-element" ref={tvContainerRef} style={{ height: '520px', borderRadius: '8px' }}></div>
+      </div>
 
-              {/* Price Graph Canvas */}
-              {history.length > 0 ? (
+      {/* 2. Custom Strategy Lab Block */}
+      <div style={{ display: activeTab === 'algo' ? 'block' : 'none' }}>
+        
+        {/* Strategy Guide Note */}
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.04) 0%, rgba(10, 14, 39, 0.6) 100%)',
+          border: '1px solid rgba(0, 255, 136, 0.15)',
+          borderRadius: '16px',
+          padding: '24px',
+          marginBottom: '24px'
+        }}>
+          <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#00ff88', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <HelpCircle size={16} />
+            Educational Note: What is Algorithmic Strategy Backtesting?
+          </h4>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', lineHeight: '1.6' }}>
+            Backtesting is the process of testing a trading strategy or mathematical algorithm on historical price data to evaluate its performance and viability before risking capital. 
+            By setting **Buy** (Entry) and **Sell** (Exit) rules using indicators like **RSI** or **Simple Moving Averages (SMA)**, you can see where trades would have executed in the past, and measure key metrics like **Win Rate %** and **Net Return %**.
+          </p>
+        </div>
+
+        {/* Algo workspace layout grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'stretch', marginBottom: '24px' }}>
+          
+          {/* Split Left: SVG Interactive Chart */}
+          <div style={{
+            background: 'var(--bg-card-glass)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            position: 'relative'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                PricePulse Backtesting canvas
+              </h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
+                Overlaying Buy (▲) & Sell (▼) triggers on daily candlesticks, with EMA 20 (<span style={{ color: '#00bcd4' }}>■</span>) & EMA 50 (<span style={{ color: '#ffb300' }}>■</span>) lines.
+              </p>
+            </div>
+
+            {/* Price Graph Canvas */}
+            {history.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                
+                {/* 1. Candlestick Chart */}
                 <div style={{ position: 'relative' }}>
                   <svg 
                     width="100%" 
@@ -465,7 +548,6 @@ export default function StockDetail() {
                       const xPos = e.clientX - rect.left;
                       const relativeX = (xPos / rect.width) * svgWidth;
                       
-                      // Map back to stock data index
                       if (relativeX >= paddingLeft && relativeX <= svgWidth - paddingRight) {
                         const fraction = (relativeX - paddingLeft) / chartWidth;
                         const idx = Math.min(history.length - 1, Math.max(0, Math.round(fraction * (history.length - 1))));
@@ -520,14 +602,14 @@ export default function StockDetail() {
                       fill="none" 
                       stroke="#00bcd4" 
                       strokeWidth="1.2" 
-                      opacity="0.7" 
+                      opacity="0.8" 
                     />
                     <path 
                       d={getLinePath(indicators.sma50)} 
                       fill="none" 
                       stroke="#ffb300" 
                       strokeWidth="1.2" 
-                      opacity="0.7" 
+                      opacity="0.8" 
                     />
 
                     {/* Draw Candlesticks */}
@@ -546,7 +628,6 @@ export default function StockDetail() {
 
                       return (
                         <g key={idx}>
-                          {/* Candle Wick */}
                           <line 
                             x1={x} 
                             y1={yHigh} 
@@ -555,7 +636,6 @@ export default function StockDetail() {
                             stroke={color} 
                             strokeWidth={isSelected ? "1.8" : "1"} 
                           />
-                          {/* Candle Body */}
                           <rect
                             x={x - candleWidth * 0.35}
                             y={Math.min(yOpen, yClose)}
@@ -650,218 +730,386 @@ export default function StockDetail() {
                     )}
                   </svg>
                 </div>
-              ) : (
-                <div style={{ height: svgHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
-                  No historical data available.
-                </div>
-              )}
-            </div>
 
-            {/* Split Right: Strategy configuration Panel */}
-            <div style={{
-              background: 'var(--bg-card-glass)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '16px',
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px'
-            }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Settings size={18} style={{ color: '#00ff88' }} />
-                Strategy settings
-              </h3>
-
-              {/* Buy condition builder */}
-              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88', textTransform: 'uppercase' }}>🟢 Algo BUY RULE</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                  <select 
-                    value={buyIndicator} 
-                    onChange={(e) => setBuyIndicator(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
+                {/* 2. RSI Oscillator Sub-chart */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    <span>RSI Oscillator (14)</span>
+                    <span style={{ color: '#e040fb', fontWeight: '700' }}>
+                      {hoverIndex !== null && indicators.rsi14[hoverIndex] ? `RSI: ${indicators.rsi14[hoverIndex]}` : ''}
+                    </span>
+                  </div>
+                  <svg
+                    width="100%"
+                    height={rsiSvgHeight}
+                    viewBox={`0 0 ${svgWidth} ${rsiSvgHeight}`}
+                    style={{ background: 'rgba(10, 14, 39, 0.4)', borderRadius: '10px' }}
                   >
-                    <option value="RSI">RSI (Relative Strength)</option>
-                    <option value="Price">Close Price</option>
-                  </select>
+                    {/* Horizontal Reference Lines (30, 50, 70) */}
+                    <line x1={paddingLeft} y1={getRsiYCoord(70)} x2={svgWidth - paddingRight} y2={getRsiYCoord(70)} stroke="rgba(255, 68, 68, 0.25)" strokeDasharray="3 3" />
+                    <line x1={paddingLeft} y1={getRsiYCoord(50)} x2={svgWidth - paddingRight} y2={getRsiYCoord(50)} stroke="rgba(255, 255, 255, 0.1)" strokeDasharray="3 3" />
+                    <line x1={paddingLeft} y1={getRsiYCoord(30)} x2={svgWidth - paddingRight} y2={getRsiYCoord(30)} stroke="rgba(0, 255, 136, 0.25)" strokeDasharray="3 3" />
 
-                  <select 
-                    value={buyOperator} 
-                    onChange={(e) => setBuyOperator(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
-                  >
-                    <option value="lessThan">is Less Than</option>
-                    <option value="greaterThan">is Greater Than</option>
-                    <option value="crossesBelow">Crosses Below</option>
-                    <option value="crossesAbove">Crosses Above</option>
-                  </select>
+                    <text x={paddingLeft - 8} y={getRsiYCoord(70) + 3} fill="#ff4444" fontSize="7" textAnchor="end">70</text>
+                    <text x={paddingLeft - 8} y={getRsiYCoord(50) + 3} fill="var(--text-secondary)" fontSize="7" textAnchor="end">50</text>
+                    <text x={paddingLeft - 8} y={getRsiYCoord(30) + 3} fill="#00ff88" fontSize="7" textAnchor="end">30</text>
 
-                  <input 
-                    type="number" 
-                    value={buyTarget}
-                    onChange={(e) => setBuyTarget(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
-                  />
+                    {/* RSI Path */}
+                    <path
+                      d={getRsiLinePath(indicators.rsi14)}
+                      fill="none"
+                      stroke="#e040fb"
+                      strokeWidth="1.2"
+                    />
+
+                    {/* Hover vertical bar */}
+                    {hoverIndex !== null && (
+                      <line
+                        x1={getXCoord(hoverIndex)}
+                        y1={0}
+                        x2={getXCoord(hoverIndex)}
+                        y2={rsiSvgHeight}
+                        stroke="rgba(255, 255, 255, 0.15)"
+                        strokeWidth="1.2"
+                        strokeDasharray="2 2"
+                      />
+                    )}
+                  </svg>
                 </div>
+
               </div>
-
-              {/* Sell condition builder */}
-              <div>
-                <span style={{ fontSize: '11px', fontWeight: '800', color: '#ff4444', textTransform: 'uppercase' }}>🔴 Algo SELL RULE</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-                  <select 
-                    value={sellIndicator} 
-                    onChange={(e) => setSellIndicator(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
-                  >
-                    <option value="RSI">RSI (Relative Strength)</option>
-                    <option value="Price">Close Price</option>
-                  </select>
-
-                  <select 
-                    value={sellOperator} 
-                    onChange={(e) => setSellOperator(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
-                  >
-                    <option value="greaterThan">is Greater Than</option>
-                    <option value="lessThan">is Less Than</option>
-                    <option value="crossesAbove">Crosses Above</option>
-                    <option value="crossesBelow">Crosses Below</option>
-                  </select>
-
-                  <input 
-                    type="number" 
-                    value={sellTarget}
-                    onChange={(e) => setSellTarget(e.target.value)}
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
-                  />
-                </div>
+            ) : (
+              <div style={{ height: svgHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                No historical data available.
               </div>
-
-              {/* Run backtest action button */}
-              <button
-                onClick={runBacktest}
-                style={{
-                  marginTop: 'auto',
-                  padding: '12px',
-                  background: 'linear-gradient(135deg, #00ff88, #00bcd4)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#000000',
-                  fontWeight: '800',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 15px rgba(0, 255, 136, 0.25)'
-                }}
-              >
-                <Play size={14} fill="#000000" />
-                Compile & Run backtest
-              </button>
-            </div>
-
+            )}
           </div>
 
-          {/* Backtest Statistics Scorecard */}
-          {performance && (
-            <div style={{
-              background: 'var(--bg-card-glass)',
-              border: '1px solid rgba(0,255,136,0.15)',
-              borderRadius: '16px',
-              padding: '24px',
-              marginBottom: '24px'
-            }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Award size={18} style={{ color: '#ffb300' }} />
-                Backtest Performance Card (3-Month simulation)
-              </h3>
+          {/* Split Right: Strategy configuration Panel */}
+          <div style={{
+            background: 'var(--bg-card-glass)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={18} style={{ color: '#00ff88' }} />
+              Strategy settings
+            </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>STRATEGY NET RETURN</div>
-                  <div style={{ fontSize: '24px', fontWeight: '800', color: performance.netReturn >= 0 ? '#00ff88' : '#ff4444', marginTop: '4px' }}>
-                    {performance.netReturn >= 0 ? '+' : ''}{performance.netReturn}%
-                  </div>
-                </div>
+            {/* Quick Presets Block */}
+            <div>
+              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', fontWeight: '700', textTransform: 'uppercase' }}>Load Strategy Preset</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
+                <button
+                  onClick={() => applyPreset('rsi_reversion')}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'rgba(224, 64, 251, 0.08)',
+                    border: '1px solid rgba(224, 64, 251, 0.25)',
+                    borderRadius: '6px',
+                    color: '#e040fb',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span>💜 RSI Mean Reversion</span>
+                  <ChevronRight size={12} />
+                </button>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>WIN RATE PERCENTAGE</div>
-                  <div style={{ fontSize: '24px', fontWeight: '800', color: '#00bcd4', marginTop: '4px' }}>
-                    {performance.winRate}%
-                  </div>
-                </div>
+                <button
+                  onClick={() => applyPreset('sma_crossover')}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'rgba(0, 188, 212, 0.08)',
+                    border: '1px solid rgba(0, 188, 212, 0.25)',
+                    borderRadius: '6px',
+                    color: '#00bcd4',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span>💙 SMA(20) Crossover</span>
+                  <ChevronRight size={12} />
+                </button>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>TOTAL EXECUTED TRADES</div>
-                  <div style={{ fontSize: '24px', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>
-                    {performance.totalTrades}
-                  </div>
-                </div>
-
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
-                  <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>PROFITABLE VS LOSSES</div>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '12px' }}>
-                    🟢 {performance.wins} W / 🔴 {performance.losses} L
-                  </div>
-                </div>
-
+                <button
+                  onClick={() => applyPreset('momentum_trend')}
+                  style={{
+                    padding: '8px 12px',
+                    background: 'rgba(255, 179, 0, 0.08)',
+                    border: '1px solid rgba(255, 179, 0, 0.25)',
+                    borderRadius: '6px',
+                    color: '#ffb300',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span>💛 SMA(50) Trend Rider</span>
+                  <ChevronRight size={12} />
+                </button>
               </div>
             </div>
-          )}
 
-          {/* Trade logs list */}
-          {trades.length > 0 && (
-            <div style={{
-              background: 'var(--bg-card-glass)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '16px',
-              padding: '24px'
-            }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '16px' }}>
-                Algorithmic Trade Execution Log
-              </h3>
+            {/* Buy condition builder */}
+            <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88', textTransform: 'uppercase' }}>🟢 Algo BUY RULE</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                <select 
+                  value={buyIndicator} 
+                  onChange={(e) => setBuyIndicator(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
+                >
+                  <option value="RSI">RSI (Relative Strength)</option>
+                  <option value="Price">Close Price</option>
+                  <option value="SMA20">SMA 20</option>
+                  <option value="SMA50">SMA 50</option>
+                </select>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>TRADE ID</th>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>ENTRY DATE</th>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>ENTRY PRICE</th>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>EXIT DATE</th>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>EXIT PRICE</th>
-                      <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700', textAlign: 'right' }}>PROFIT / LOSS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trades.map((trade, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                        <td style={{ padding: '12px', color: '#9b9eac', fontSize: '12px' }}>#{idx + 1}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.entryDate}</td>
-                        <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.entryPrice.toLocaleString('en-IN')}</td>
-                        <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.exitDate}</td>
-                        <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.exitPrice.toLocaleString('en-IN')}</td>
-                        <td style={{ 
-                          padding: '12px', 
-                          textAlign: 'right', 
-                          fontWeight: '700', 
-                          color: trade.pnl >= 0 ? '#00ff88' : '#ff4444' 
-                        }}>
-                          {trade.pnl >= 0 ? '+' : ''}{trade.pnl}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <select 
+                  value={buyOperator} 
+                  onChange={(e) => setBuyOperator(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
+                >
+                  <option value="lessThan">is Less Than</option>
+                  <option value="greaterThan">is Greater Than</option>
+                  <option value="crossesBelow">Crosses Below</option>
+                  <option value="crossesAbove">Crosses Above</option>
+                </select>
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select
+                    value={buyTargetType}
+                    onChange={(e) => setBuyTargetType(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', flex: 1 }}
+                  >
+                    <option value="value">Value</option>
+                    <option value="indicator">Indicator</option>
+                  </select>
+
+                  {buyTargetType === 'value' ? (
+                    <input 
+                      type="number" 
+                      value={buyTargetValue}
+                      onChange={(e) => setBuyTargetValue(e.target.value)}
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', width: '70px' }}
+                    />
+                  ) : (
+                    <select
+                      value={buyTargetIndicator}
+                      onChange={(e) => setBuyTargetIndicator(e.target.value)}
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', flex: 1 }}
+                    >
+                      <option value="Price">Close Price</option>
+                      <option value="SMA20">SMA 20</option>
+                      <option value="SMA50">SMA 50</option>
+                      <option value="RSI">RSI</option>
+                    </select>
+                  )}
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Sell condition builder */}
+            <div>
+              <span style={{ fontSize: '11px', fontWeight: '800', color: '#ff4444', textTransform: 'uppercase' }}>🔴 Algo SELL RULE</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                <select 
+                  value={sellIndicator} 
+                  onChange={(e) => setSellIndicator(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
+                >
+                  <option value="RSI">RSI (Relative Strength)</option>
+                  <option value="Price">Close Price</option>
+                  <option value="SMA20">SMA 20</option>
+                  <option value="SMA50">SMA 50</option>
+                </select>
+
+                <select 
+                  value={sellOperator} 
+                  onChange={(e) => setSellOperator(e.target.value)}
+                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px' }}
+                >
+                  <option value="greaterThan">is Greater Than</option>
+                  <option value="lessThan">is Less Than</option>
+                  <option value="crossesAbove">Crosses Above</option>
+                  <option value="crossesBelow">Crosses Below</option>
+                </select>
+
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <select
+                    value={sellTargetType}
+                    onChange={(e) => setSellTargetType(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', flex: 1 }}
+                  >
+                    <option value="value">Value</option>
+                    <option value="indicator">Indicator</option>
+                  </select>
+
+                  {sellTargetType === 'value' ? (
+                    <input 
+                      type="number" 
+                      value={sellTargetValue}
+                      onChange={(e) => setSellTargetValue(e.target.value)}
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', width: '70px' }}
+                    />
+                  ) : (
+                    <select
+                      value={sellTargetIndicator}
+                      onChange={(e) => setSellTargetIndicator(e.target.value)}
+                      style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px', borderRadius: '4px', color: '#ffffff', fontSize: '12px', flex: 1 }}
+                    >
+                      <option value="Price">Close Price</option>
+                      <option value="SMA20">SMA 20</option>
+                      <option value="SMA50">SMA 50</option>
+                      <option value="RSI">RSI</option>
+                    </select>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Run backtest action button */}
+            <button
+              onClick={runBacktest}
+              style={{
+                marginTop: 'auto',
+                padding: '12px',
+                background: 'linear-gradient(135deg, #00ff88, #00bcd4)',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#000000',
+                fontWeight: '800',
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 15px rgba(0, 255, 136, 0.25)'
+              }}
+            >
+              <Play size={14} fill="#000000" />
+              Compile & Run backtest
+            </button>
+          </div>
+
         </div>
-      )}
+
+        {/* Backtest Statistics Scorecard */}
+        {performance && (
+          <div style={{
+            background: 'var(--bg-card-glass)',
+            border: '1px solid rgba(0,255,136,0.15)',
+            borderRadius: '16px',
+            padding: '24px',
+            marginBottom: '24px'
+          }}>
+            <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Award size={18} style={{ color: '#ffb300' }} />
+              Backtest Performance Card (3-Month simulation)
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+              
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>STRATEGY NET RETURN</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: performance.netReturn >= 0 ? '#00ff88' : '#ff4444', marginTop: '4px' }}>
+                  {performance.netReturn >= 0 ? '+' : ''}{performance.netReturn}%
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>WIN RATE PERCENTAGE</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: '#00bcd4', marginTop: '4px' }}>
+                  {performance.winRate}%
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>TOTAL EXECUTED TRADES</div>
+                <div style={{ fontSize: '24px', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>
+                  {performance.totalTrades}
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>PROFITABLE VS LOSSES</div>
+                <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginTop: '12px' }}>
+                  🟢 {performance.wins} W / 🔴 {performance.losses} L
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Trade logs list */}
+        {trades.length > 0 && (
+          <div style={{
+            background: 'var(--bg-card-glass)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '16px',
+            padding: '24px'
+          }}>
+            <h3 style={{ fontSize: '15px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '16px' }}>
+              Algorithmic Trade Execution Log
+            </h3>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>TRADE ID</th>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>ENTRY DATE</th>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>ENTRY PRICE</th>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>EXIT DATE</th>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700' }}>EXIT PRICE</th>
+                    <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '700', textAlign: 'right' }}>PROFIT / LOSS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.map((trade, idx) => (
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                      <td style={{ padding: '12px', color: '#9b9eac', fontSize: '12px' }}>#{idx + 1}</td>
+                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.entryDate}</td>
+                      <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.entryPrice.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.exitDate}</td>
+                      <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.exitPrice.toLocaleString('en-IN')}</td>
+                      <td style={{ 
+                        padding: '12px', 
+                        textAlign: 'right', 
+                        fontWeight: '700', 
+                        color: trade.pnl >= 0 ? '#00ff88' : '#ff4444' 
+                      }}>
+                        {trade.pnl >= 0 ? '+' : ''}{trade.pnl}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
     </div>
   );
