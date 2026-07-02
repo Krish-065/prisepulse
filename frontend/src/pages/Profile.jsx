@@ -112,12 +112,74 @@ const Card = styled.div`
   }
 `;
 
+const CardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 12px;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+`;
+
+const EditButton = styled.button`
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: #00ff88;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #00ff88;
+    color: #0a0e27;
+    box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+  }
+`;
+
+const ActionButtonGroup = styled.div`
+  display: flex;
+  gap: 8px;
+`;
+
+const CancelButton = styled.button`
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e1e3e6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+`;
+
 const InfoRow = styled.div`
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 12px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   font-size: 14px;
+  min-height: 48px;
+  box-sizing: border-box;
 
   &:last-child {
     border-bottom: none;
@@ -130,6 +192,26 @@ const InfoRow = styled.div`
   .value {
     color: #ffffff;
     font-weight: 600;
+    text-align: right;
+  }
+`;
+
+const RowInput = styled.input`
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #ffffff;
+  font-size: 14px;
+  width: 60%;
+  text-align: right;
+  outline: none;
+  transition: all 0.2s;
+
+  &:focus {
+    border-color: #00ff88;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.2);
   }
 `;
 
@@ -237,7 +319,7 @@ const PreferenceBtn = styled.button`
 `;
 
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile, changePassword } = useAuth();
   const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
@@ -245,11 +327,38 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState('');
   
   // Interactive Preferences
-  const [baseCurrency, setBaseCurrency] = useState(() => localStorage.getItem('baseCurrency') || 'INR');
-  const [refreshRate, setRefreshRate] = useState(() => localStorage.getItem('refreshRate') || '15s');
-  const [landingPage, setLandingPage] = useState(() => localStorage.getItem('landingPage') || 'Dashboard');
+  const [baseCurrency, setBaseCurrency] = useState('INR');
+  const [refreshRate, setRefreshRate] = useState('15s');
+  const [landingPage, setLandingPage] = useState('Dashboard');
 
-  const handlePasswordChange = (e) => {
+  // Edit states
+  const [isEditingPersonal, setIsEditingPersonal] = useState(false);
+  const [personalName, setPersonalName] = useState('');
+
+  const [isEditingDemat, setIsEditingDemat] = useState(false);
+  const [brokerCode, setBrokerCode] = useState('');
+  const [dematId, setDematId] = useState('');
+  const [dpName, setDpName] = useState('');
+  const [panId, setPanId] = useState('');
+  const [brokeragePlan, setBrokeragePlan] = useState('');
+
+  // Sync state with authenticated user
+  useEffect(() => {
+    if (user) {
+      setPersonalName(user.name || '');
+      setBrokerCode(user.broker_code || 'PRP065');
+      setDematId(user.demat_id || '1208160001094852');
+      setDpName(user.dp_name || 'PricePulse Securities Pvt Ltd');
+      setPanId(user.pan_id || 'ABCDE*****F');
+      setBrokeragePlan(user.brokerage_plan || '₹0 Equity Delivery / ₹20 F&O Intraday');
+
+      if (user.base_currency) setBaseCurrency(user.base_currency);
+      if (user.refresh_rate) setRefreshRate(user.refresh_rate);
+      if (user.landing_page) setLandingPage(user.landing_page);
+    }
+  }, [user]);
+
+  const handlePasswordChange = async (e) => {
     e.preventDefault();
     if (!currentPassword || !newPassword || !confirmPassword) {
       return toast.error('Please fill in all fields');
@@ -261,38 +370,54 @@ export default function Profile() {
       return toast.error('Password must be at least 8 characters long');
     }
     
-    // Simulate API call
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 1000)),
-      {
-        loading: 'Updating password...',
-        success: 'Password updated successfully!',
-        error: 'Error updating password.'
-      }
-    );
-
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
+    const res = await changePassword(currentPassword, newPassword);
+    if (res?.success) {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
   };
 
-  const handleCurrencyChange = (curr) => {
+  const handleCurrencyChange = async (curr) => {
     setBaseCurrency(curr);
     localStorage.setItem('baseCurrency', curr);
-    toast.success(`Base Currency updated to ${curr}`);
+    await updateProfile({ base_currency: curr });
   };
 
-  const handleRefreshChange = (rate) => {
+  const handleRefreshChange = async (rate) => {
     setRefreshRate(rate);
     localStorage.setItem('refreshRate', rate);
-    toast.success(`Data refresh rate set to ${rate}`);
+    await updateProfile({ refresh_rate: rate });
   };
 
-  const handleLandingPageChange = (e) => {
+  const handleLandingPageChange = async (e) => {
     const page = e.target.value;
     setLandingPage(page);
     localStorage.setItem('landingPage', page);
-    toast.success(`Default landing page set to ${page}`);
+    await updateProfile({ landing_page: page });
+  };
+
+  const handleSavePersonal = async () => {
+    if (!personalName.trim()) {
+      return toast.error('Name cannot be empty');
+    }
+    const success = await updateProfile({ name: personalName });
+    if (success) {
+      setIsEditingPersonal(false);
+    }
+  };
+
+  const handleSaveDemat = async () => {
+    const success = await updateProfile({
+      broker_code: brokerCode,
+      demat_id: dematId,
+      dp_name: dpName,
+      pan_id: panId,
+      brokerage_plan: brokeragePlan
+    });
+    if (success) {
+      setIsEditingDemat(false);
+    }
   };
 
   const userInitial = user?.name ? user.name.charAt(0) : (user?.email ? user.email.charAt(0) : 'U');
@@ -325,10 +450,25 @@ export default function Profile() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <Card>
-            <h3>👤 Personal & Account Details</h3>
+            <CardHeader>
+              <h3>👤 Personal & Account Details</h3>
+              {isEditingPersonal ? (
+                <ActionButtonGroup>
+                  <CancelButton onClick={() => { setIsEditingPersonal(false); setPersonalName(user?.name || ''); }}>Cancel</CancelButton>
+                  <EditButton onClick={handleSavePersonal}>Save</EditButton>
+                </ActionButtonGroup>
+              ) : (
+                <EditButton onClick={() => setIsEditingPersonal(true)}>Edit Details</EditButton>
+              )}
+            </CardHeader>
+
             <InfoRow>
               <span className="label">Full Name</span>
-              <span className="value">{user?.name || 'Investor'}</span>
+              {isEditingPersonal ? (
+                <RowInput value={personalName} onChange={(e) => setPersonalName(e.target.value)} />
+              ) : (
+                <span className="value">{user?.name || 'Investor'}</span>
+              )}
             </InfoRow>
             <InfoRow>
               <span className="label">Registered Email</span>
@@ -349,26 +489,64 @@ export default function Profile() {
           </Card>
 
           <Card>
-            <h3>📊 Demat & Brokerage Details</h3>
+            <CardHeader>
+              <h3>📊 Demat & Brokerage Details</h3>
+              {isEditingDemat ? (
+                <ActionButtonGroup>
+                  <CancelButton onClick={() => {
+                    setIsEditingDemat(false);
+                    setBrokerCode(user?.broker_code || 'PRP065');
+                    setDematId(user?.demat_id || '1208160001094852');
+                    setDpName(user?.dp_name || 'PricePulse Securities Pvt Ltd');
+                    setPanId(user?.pan_id || 'ABCDE*****F');
+                    setBrokeragePlan(user?.brokerage_plan || '₹0 Equity Delivery / ₹20 F&O Intraday');
+                  }}>Cancel</CancelButton>
+                  <EditButton onClick={handleSaveDemat}>Save</EditButton>
+                </ActionButtonGroup>
+              ) : (
+                <EditButton onClick={() => setIsEditingDemat(true)}>Edit Details</EditButton>
+              )}
+            </CardHeader>
+
             <InfoRow>
               <span className="label">Broker Code / Client Code</span>
-              <span className="value">PRP065</span>
+              {isEditingDemat ? (
+                <RowInput value={brokerCode} onChange={(e) => setBrokerCode(e.target.value)} />
+              ) : (
+                <span className="value">{user?.broker_code || 'PRP065'}</span>
+              )}
             </InfoRow>
             <InfoRow>
               <span className="label">Demat BO ID</span>
-              <span className="value" style={{ fontFamily: 'monospace' }}>1208160001094852</span>
+              {isEditingDemat ? (
+                <RowInput value={dematId} onChange={(e) => setDematId(e.target.value)} />
+              ) : (
+                <span className="value" style={{ fontFamily: 'monospace' }}>{user?.demat_id || '1208160001094852'}</span>
+              )}
             </InfoRow>
             <InfoRow>
               <span className="label">DP Name</span>
-              <span className="value">PricePulse Securities Pvt Ltd</span>
+              {isEditingDemat ? (
+                <RowInput value={dpName} onChange={(e) => setDpName(e.target.value)} />
+              ) : (
+                <span className="value">{user?.dp_name || 'PricePulse Securities Pvt Ltd'}</span>
+              )}
             </InfoRow>
             <InfoRow>
               <span className="label">PAN ID</span>
-              <span className="value" style={{ fontFamily: 'monospace' }}>ABCDE*****F</span>
+              {isEditingDemat ? (
+                <RowInput value={panId} onChange={(e) => setPanId(e.target.value)} />
+              ) : (
+                <span className="value" style={{ fontFamily: 'monospace' }}>{user?.pan_id || 'ABCDE*****F'}</span>
+              )}
             </InfoRow>
             <InfoRow>
               <span className="label">Brokerage Plan</span>
-              <span className="value" style={{ color: '#00bcd4' }}>₹0 Equity Delivery / ₹20 F&O Intraday</span>
+              {isEditingDemat ? (
+                <RowInput value={brokeragePlan} onChange={(e) => setBrokeragePlan(e.target.value)} />
+              ) : (
+                <span className="value" style={{ color: '#00bcd4' }}>{user?.brokerage_plan || '₹0 Equity Delivery / ₹20 F&O Intraday'}</span>
+              )}
             </InfoRow>
           </Card>
 

@@ -105,8 +105,31 @@ export function AuthProvider({ children }) {
     window.location.href = '/login';
   };
 
+  const updateProfile = async (profileData) => {
+    try {
+      const res = await apiClient.put('/user/profile', profileData);
+      setUser(res.data.user);
+      toast.success(res.data.message || 'Profile updated successfully');
+      return { success: true };
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Profile update failed');
+      return { success: false };
+    }
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    try {
+      const res = await apiClient.post('/auth/change-password', { currentPassword, newPassword });
+      toast.success(res.data.message || 'Password updated successfully');
+      return { success: true };
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Password update failed');
+      return { success: false };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, verify2FALogin, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, verify2FALogin, logout, updateProfile, changePassword }}>
       {children}
     </AuthContext.Provider>
   );

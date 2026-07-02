@@ -436,6 +436,39 @@ async function disableTwoFactor(req, res) {
   }
 }
 
+// CHANGE PASSWORD (AUTHENTICATED)
+async function changePassword(req, res) {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Please fill in all fields' });
+    }
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({ error: 'Password must be 8+ chars with uppercase, lowercase, number & special character' });
+    }
+
+    const userRes = await query(`SELECT password FROM users WHERE id = $1`, [req.user.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userRes.rows[0];
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await query(`UPDATE users SET password = $1 WHERE id = $2`, [hashed, req.user.id]);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('❌ Change password error:', error);
+    res.status(500).json({ error: 'Password update failed' });
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -448,4 +481,5 @@ module.exports = {
   setupTwoFactor,
   verifyAndEnableTwoFactor,
   disableTwoFactor,
+  changePassword,
 };

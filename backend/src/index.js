@@ -56,10 +56,72 @@ app.post('/api/auth/2fa/disable', authenticate, authRoutes.disableTwoFactor);
 // Market data
 app.use('/api/market', marketRoutes);
 
-// User profile
+// User profile & Password routes
+app.post('/api/auth/change-password', authenticate, authRoutes.changePassword);
+
 app.get('/api/user/profile', authenticate, async (req, res) => {
-  const result = await query(`SELECT id, email, name, theme, language, two_factor_enabled FROM users WHERE id = $1`, [req.user.id]);
-  res.json(result.rows[0]);
+  try {
+    const result = await query(
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan FROM users WHERE id = $1`, 
+      [req.user.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Get profile error:', error);
+    res.status(500).json({ error: 'Failed to retrieve profile' });
+  }
+});
+
+app.put('/api/user/profile', authenticate, async (req, res) => {
+  try {
+    const { 
+      name, theme, language, base_currency, refresh_rate, landing_page, 
+      broker_code, demat_id, dp_name, pan_id, brokerage_plan 
+    } = req.body;
+
+    const currentRes = await query(`SELECT * FROM users WHERE id = $1`, [req.user.id]);
+    if (currentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const current = currentRes.rows[0];
+
+    const updatedName = name !== undefined ? name : current.name;
+    const updatedTheme = theme !== undefined ? theme : current.theme;
+    const updatedLanguage = language !== undefined ? language : current.language;
+    const updatedBaseCurrency = base_currency !== undefined ? base_currency : current.base_currency;
+    const updatedRefreshRate = refresh_rate !== undefined ? refresh_rate : current.refresh_rate;
+    const updatedLandingPage = landing_page !== undefined ? landing_page : current.landing_page;
+    const updatedBrokerCode = broker_code !== undefined ? broker_code : current.broker_code;
+    const updatedDematId = demat_id !== undefined ? demat_id : current.demat_id;
+    const updatedDpName = dp_name !== undefined ? dp_name : current.dp_name;
+    const updatedPanId = pan_id !== undefined ? pan_id : current.pan_id;
+    const updatedBrokeragePlan = brokerage_plan !== undefined ? brokerage_plan : current.brokerage_plan;
+
+    await query(
+      `UPDATE users SET 
+        name = $1, theme = $2, language = $3, base_currency = $4, refresh_rate = $5, 
+        landing_page = $6, broker_code = $7, demat_id = $8, dp_name = $9, pan_id = $10, 
+        brokerage_plan = $11, updated_at = NOW() 
+       WHERE id = $12`,
+      [
+        updatedName, updatedTheme, updatedLanguage, updatedBaseCurrency, updatedRefreshRate,
+        updatedLandingPage, updatedBrokerCode, updatedDematId, updatedDpName, updatedPanId,
+        updatedBrokeragePlan, req.user.id
+      ]
+    );
+
+    const result = await query(
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan FROM users WHERE id = $1`, 
+      [req.user.id]
+    );
+    res.json({ message: 'Profile updated successfully', user: result.rows[0] });
+  } catch (error) {
+    console.error('❌ Update profile error:', error);
+    res.status(500).json({ error: 'Failed to update profile due to a system error.' });
+  }
 });
 
 // Watchlist

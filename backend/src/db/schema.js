@@ -16,10 +16,28 @@ async function createTables() {
       two_factor_enabled BOOLEAN DEFAULT FALSE,
       theme VARCHAR(50) DEFAULT 'dark',
       language VARCHAR(10) DEFAULT 'en',
+      base_currency VARCHAR(10) DEFAULT 'INR',
+      refresh_rate VARCHAR(10) DEFAULT '15s',
+      landing_page VARCHAR(50) DEFAULT 'Dashboard',
+      broker_code VARCHAR(50) DEFAULT 'PRP065',
+      demat_id VARCHAR(50) DEFAULT '1208160001094852',
+      dp_name VARCHAR(100) DEFAULT 'PricePulse Securities Pvt Ltd',
+      pan_id VARCHAR(50) DEFAULT 'ABCDE*****F',
+      brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Ensure these columns exist for existing databases
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS base_currency VARCHAR(10) DEFAULT 'INR'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_rate VARCHAR(10) DEFAULT '15s'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS landing_page VARCHAR(50) DEFAULT 'Dashboard'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS broker_code VARCHAR(50) DEFAULT 'PRP065'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS demat_id VARCHAR(50) DEFAULT '1208160001094852'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dp_name VARCHAR(100) DEFAULT 'PricePulse Securities Pvt Ltd'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pan_id VARCHAR(50) DEFAULT 'ABCDE*****F'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday'`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS sessions (
