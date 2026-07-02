@@ -72,6 +72,16 @@ export default function FnO() {
 
         const nearestStrike = Math.round(spotPrice / strikeInterval) * strikeInterval;
         
+        // Introduce dynamic PCR bias per symbol to move the gauge needle away from exact 1.0
+        let symbolBias = 1.0;
+        if (underlying === 'NIFTY') symbolBias = 1.14;       // Bullish bias
+        else if (underlying === 'BANKNIFTY') symbolBias = 0.88;  // Bearish bias
+        else if (underlying === 'RELIANCE') symbolBias = 1.28;   // Strong bullish bias
+        else if (underlying === 'TCS') symbolBias = 0.72;        // Strong bearish bias
+        
+        // Add random walk fluctuation to the bias for live ticks
+        const liveBias = symbolBias * (0.95 + Math.random() * 0.1);
+
         const strikesCount = 7;
         const startStrike = nearestStrike - Math.floor(strikesCount / 2) * strikeInterval;
         
@@ -91,7 +101,7 @@ export default function FnO() {
           
           // Call OI is higher above ATM (resistance), Put OI is higher below ATM (support)
           const ceOI = parseFloat((baseOI * (strike >= nearestStrike ? 1.5 : 0.5)).toFixed(1));
-          const peOI = parseFloat((baseOI * (strike <= nearestStrike ? 1.5 : 0.5)).toFixed(1));
+          const peOI = parseFloat((baseOI * (strike <= nearestStrike ? 1.5 : 0.5) * liveBias).toFixed(1));
           
           const ceChange = (strike >= nearestStrike ? '+' : '-') + (Math.abs((strike - nearestStrike) / (strikeInterval * 10)) * 50 * randomFactor).toFixed(1) + '%';
           const peChange = (strike <= nearestStrike ? '+' : '-') + (Math.abs((strike - nearestStrike) / (strikeInterval * 10)) * 50 * randomFactor).toFixed(1) + '%';
