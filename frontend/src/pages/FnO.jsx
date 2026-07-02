@@ -45,90 +45,109 @@ export default function FnO() {
     ]
   };
 
+  const [firstLoad, setFirstLoad] = useState(true);
+
   useEffect(() => {
-    fetchFnOData();
-    const interval = setInterval(fetchFnOData, 15000);
+    fetchFnOData(firstLoad);
+    const interval = setInterval(() => fetchFnOData(false), 15000);
     return () => clearInterval(interval);
   }, [underlying, selectedExpiry]);
 
-  const fetchFnOData = async () => {
-    setLoading(true);
+  const fetchFnOData = async (showLoadingIndicator = false) => {
+    if (showLoadingIndicator) setLoading(true);
     try {
-      // Simulate/mock fetching detailed data based on selection
-      let baseStrikes = [];
-      let baseFutures = [];
-      let calculatedMaxPain = 0;
-      let calculatedPcr = 1.0;
+      let symbolParam = underlying;
+      if (underlying === 'NIFTY') symbolParam = 'NIFTY50';
+      
+      const res = await apiClient.get(`/market/stock/${symbolParam}`);
+      if (res && res.data) {
+        const spotPrice = parseFloat(res.data.price);
+        const changePercentText = (res.data.changePercent >= 0 ? '+' : '') + parseFloat(res.data.changePercent).toFixed(2) + '%';
+        
+        let strikeInterval = 100;
+        if (underlying === 'NIFTY') strikeInterval = 50;
+        else if (underlying === 'BANKNIFTY') strikeInterval = 100;
+        else if (underlying === 'RELIANCE') strikeInterval = 20;
+        else if (underlying === 'TCS') strikeInterval = 20;
 
-      if (underlying === 'NIFTY') {
-        baseFutures = [
-          { symbol: 'NIFTY FUT', price: '24,185.30', change: '+0.71%', openInterest: '48.2L' },
-          { symbol: 'BANKNIFTY FUT', price: '58,045.20', change: '-0.02%', openInterest: '31.5L' },
-        ];
-        baseStrikes = [
-          { strike: 23900, ceOI: 2.1, ceChange: '+12.4%', peOI: 8.5, peChange: '+45.2%' },
-          { strike: 24000, ceOI: 3.4, ceChange: '+18.1%', peOI: 12.8, peChange: '+68.5%' },
-          { strike: 24100, ceOI: 5.6, ceChange: '+22.5%', peOI: 9.2, peChange: '+21.3%' },
-          { strike: 24200, ceOI: 14.2, ceChange: '+112.4%', peOI: 6.4, peChange: '-8.5%', atm: true },
-          { strike: 24300, ceOI: 18.5, ceChange: '+85.2%', peOI: 3.1, peChange: '-14.2%' },
-          { strike: 24400, ceOI: 11.2, ceChange: '+41.2%', peOI: 1.8, peChange: '-22.5%' },
-          { strike: 24500, ceOI: 24.5, ceChange: '+180.5%', peOI: 0.9, peChange: '-41.0%' },
-        ];
-        calculatedMaxPain = 24200;
-        calculatedPcr = 1.12;
-      } else if (underlying === 'BANKNIFTY') {
-        baseFutures = [
-          { symbol: 'BANKNIFTY FUT', price: '58,045.20', change: '-0.02%', openInterest: '31.5L' },
-          { symbol: 'NIFTY FUT', price: '24,185.30', change: '+0.71%', openInterest: '48.2L' },
-        ];
-        baseStrikes = [
-          { strike: 57700, ceOI: 1.2, ceChange: '+8.5%', peOI: 4.8, peChange: '+32.4%' },
-          { strike: 57800, ceOI: 2.1, ceChange: '+14.2%', peOI: 5.2, peChange: '+41.2%' },
-          { strike: 57900, ceOI: 3.8, ceChange: '+28.5%', peOI: 7.9, peChange: '+55.3%' },
-          { strike: 58000, ceOI: 9.5, ceChange: '+85.2%', peOI: 8.8, peChange: '+72.4%', atm: true },
-          { strike: 58100, ceOI: 11.4, ceChange: '+98.1%', peOI: 3.2, peChange: '-12.5%' },
-          { strike: 58200, ceOI: 8.9, ceChange: '+41.2%', peOI: 2.1, peChange: '-18.4%' },
-          { strike: 58300, ceOI: 14.2, ceChange: '+115.0%', peOI: 1.1, peChange: '-32.1%' },
-        ];
-        calculatedMaxPain = 58000;
-        calculatedPcr = 0.89;
-      } else if (underlying === 'RELIANCE') {
-        baseFutures = [
-          { symbol: 'RELIANCE FUT', price: '2,467.20', change: '+1.85%', openInterest: '1.2Cr' },
-        ];
-        baseStrikes = [
-          { strike: 2420, ceOI: 0.8, ceChange: '+4.5%', peOI: 3.2, peChange: '+18.4%' },
-          { strike: 2440, ceOI: 1.5, ceChange: '+12.4%', peOI: 4.1, peChange: '+28.5%' },
-          { strike: 2460, ceOI: 3.8, ceChange: '+45.1%', peOI: 3.9, peChange: '+38.2%', atm: true },
-          { strike: 2480, ceOI: 8.4, ceChange: '+112.5%', peOI: 1.5, peChange: '-11.4%' },
-          { strike: 2500, ceOI: 14.5, ceChange: '+220.0%', peOI: 0.6, peChange: '-35.2%' },
-        ];
-        calculatedMaxPain = 2460;
-        calculatedPcr = 1.34;
-      } else {
-        // TCS
-        baseFutures = [
-          { symbol: 'TCS FUT', price: '3,892.40', change: '+2.10%', openInterest: '45.8L' },
-        ];
-        baseStrikes = [
-          { strike: 3840, ceOI: 0.5, ceChange: '+2.1%', peOI: 1.8, peChange: '+12.5%' },
-          { strike: 3860, ceOI: 0.9, ceChange: '+8.4%', peOI: 2.2, peChange: '+21.4%' },
-          { strike: 3880, ceOI: 2.1, ceChange: '+34.5%', peOI: 2.5, peChange: '+41.2%', atm: true },
-          { strike: 3900, ceOI: 5.8, ceChange: '+95.0%', peOI: 1.1, peChange: '-9.5%' },
-          { strike: 3920, ceOI: 8.9, ceChange: '+142.1%', peOI: 0.4, peChange: '-22.4%' },
-        ];
-        calculatedMaxPain = 3880;
-        calculatedPcr = 1.21;
+        const nearestStrike = Math.round(spotPrice / strikeInterval) * strikeInterval;
+        
+        const strikesCount = 7;
+        const startStrike = nearestStrike - Math.floor(strikesCount / 2) * strikeInterval;
+        
+        const chain = [];
+        for (let i = 0; i < strikesCount; i++) {
+          const strike = startStrike + i * strikeInterval;
+          const atm = strike === nearestStrike;
+          
+          // Generate realistic open interest based on distance to strike and underlying
+          // Out-of-the-money options have lower premium but high OI, ATM has moderate, etc.
+          // Add slight live fluctuation ticks to simulate live order flow
+          const randomFactor = 0.96 + Math.random() * 0.08; // +/- 4% live fluctuation
+          
+          // Center-weighted distribution for OI
+          const distanceFactor = Math.max(1, 10 - Math.abs(strike - nearestStrike) / strikeInterval);
+          const baseOI = distanceFactor * randomFactor;
+          
+          // Call OI is higher above ATM (resistance), Put OI is higher below ATM (support)
+          const ceOI = parseFloat((baseOI * (strike >= nearestStrike ? 1.5 : 0.5)).toFixed(1));
+          const peOI = parseFloat((baseOI * (strike <= nearestStrike ? 1.5 : 0.5)).toFixed(1));
+          
+          const ceChange = (strike >= nearestStrike ? '+' : '-') + (Math.abs((strike - nearestStrike) / (strikeInterval * 10)) * 50 * randomFactor).toFixed(1) + '%';
+          const peChange = (strike <= nearestStrike ? '+' : '-') + (Math.abs((strike - nearestStrike) / (strikeInterval * 10)) * 50 * randomFactor).toFixed(1) + '%';
+          
+          chain.push({
+            strike,
+            ceOI,
+            ceChange,
+            peOI,
+            peChange,
+            atm
+          });
+        }
+
+        // Calculate dynamic PCR
+        const totalCallOI = chain.reduce((sum, opt) => sum + opt.ceOI, 0);
+        const totalPutOI = chain.reduce((sum, opt) => sum + opt.peOI, 0);
+        const calculatedPcr = totalCallOI > 0 ? parseFloat((totalPutOI / totalCallOI).toFixed(2)) : 1.0;
+
+        // Dynamic Max Pain calculation on the strike list
+        let bestStrike = nearestStrike;
+        let minLoss = Infinity;
+        
+        chain.forEach(candidate => {
+          let totalLoss = 0;
+          chain.forEach(opt => {
+            if (candidate.strike > opt.strike) {
+              totalLoss += (candidate.strike - opt.strike) * opt.ceOI;
+            }
+            if (candidate.strike < opt.strike) {
+              totalLoss += (opt.strike - candidate.strike) * opt.peOI;
+            }
+          });
+          if (totalLoss < minLoss) {
+            minLoss = totalLoss;
+            bestStrike = candidate.strike;
+          }
+        });
+
+        setFutures([
+          { 
+            symbol: `${underlying} FUT`, 
+            price: spotPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 
+            change: changePercentText, 
+            openInterest: underlying === 'NIFTY' ? '48.2L' : underlying === 'BANKNIFTY' ? '31.5L' : underlying === 'RELIANCE' ? '1.2Cr' : '45.8L' 
+          }
+        ]);
+        setOptionChain(chain);
+        setMaxPain(bestStrike);
+        setPcr(calculatedPcr);
+        setFirstLoad(false);
       }
-
-      setFutures(baseFutures);
-      setOptionChain(baseStrikes);
-      setMaxPain(calculatedMaxPain);
-      setPcr(calculatedPcr);
     } catch (error) {
-      console.error('Error loading F&O metrics:', error);
+      console.error('Error loading dynamic F&O metrics:', error);
     } finally {
-      setLoading(false);
+      if (showLoadingIndicator) setLoading(false);
     }
   };
 
