@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CandlestickBg from '../components/CandlestickBg';
+import { AlertCircle } from 'lucide-react';
 
 export default function Register() {
   const [email, setEmail] = useState('');
@@ -16,6 +17,7 @@ export default function Register() {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
+    loading; // placeholder
     setLoading(true);
     const result = await register(email, password, name);
     setLoading(false);
@@ -55,8 +57,9 @@ export default function Register() {
             <input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} required />
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <p style={{ fontSize: '11px', marginTop: '-12px', marginBottom: '20px', color: '#9b9eac', textAlign: 'left', lineHeight: '1.4' }}>
-              ⚠️ Password must be 8+ characters, with at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&amp;).
+            <p style={{ fontSize: '11px', marginTop: '-12px', marginBottom: '20px', color: '#9b9eac', textAlign: 'left', lineHeight: '1.4', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+              <AlertCircle size={14} style={{ color: '#00bcd4', flexShrink: 0, marginTop: '2px' }} />
+              <span>Password must be 8+ characters, with at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&amp;).</span>
             </p>
             <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'transform 0.2s, box-shadow 0.2s', width: '100%' }}>
               {loading ? 'Creating Account...' : 'Register'}
@@ -77,4 +80,4 @@ export default function Register() {
       </div>
     </div>
   );
-}
+}
