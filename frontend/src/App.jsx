@@ -20,6 +20,7 @@ import Screener from './pages/Screener';
 import IPOs from './pages/IPOs';
 import FnO from './pages/FnO';
 import SectorRotation from './pages/SectorRotation';
+import StockDetail from './pages/StockDetail';
 
 import Markets from './pages/Markets';
 import Tools from './pages/Tools';
@@ -50,6 +51,7 @@ function App() {
             <Route path="/ipos" element={<PrivateRoute><Layout><IPOs /></Layout></PrivateRoute>} />
             <Route path="/fno" element={<PrivateRoute><Layout><FnO /></Layout></PrivateRoute>} />
             <Route path="/sector-rotation" element={<PrivateRoute><Layout><SectorRotation /></Layout></PrivateRoute>} />
+            <Route path="/stock/:symbol" element={<PrivateRoute><Layout><StockDetail /></Layout></PrivateRoute>} />
 
             <Route path="/markets" element={<PrivateRoute><Layout><Markets /></Layout></PrivateRoute>} />
             <Route path="/tools" element={<PrivateRoute><Layout><Tools /></Layout></PrivateRoute>} />

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 import { ClipboardList } from 'lucide-react';
@@ -89,7 +90,16 @@ export default function Watchlist() {
             <tbody>
               {watchlist.map((stock, idx) => (
                 <tr key={idx}>
-                  <td>{stock.symbol}</td>
+                  <td>
+                    <Link 
+                      to={`/stock/${stock.symbol.replace('.NS', '')}`} 
+                      style={{ color: '#00ff88', textDecoration: 'none', fontWeight: '700' }}
+                      onMouseEnter={(e) => e.target.style.textDecoration = 'underline'}
+                      onMouseLeave={(e) => e.target.style.textDecoration = 'none'}
+                    >
+                      {stock.symbol}
+                    </Link>
+                  </td>
                   <td>₹{stock.price}</td>
                   <td className={stock.up ? 'positive' : 'negative'}>{stock.change >= 0 ? '+' : ''}{stock.change}</td>
                   <td className={stock.up ? 'positive' : 'negative'}>{stock.changePercent}%</td>
