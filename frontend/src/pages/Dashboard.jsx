@@ -3,6 +3,24 @@ import { apiClient } from '../services/api';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
 import { TrendingUp, TrendingDown, Newspaper } from 'lucide-react';
 
+const IconContainer = ({ children, color }) => (
+  <span style={{
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
+    borderRadius: '8px',
+    background: `${color}15`,
+    border: `1px solid ${color}30`,
+    color: color,
+    boxShadow: `0 0 10px ${color}12`,
+    flexShrink: 0
+  }}>
+    {children}
+  </span>
+);
+
 export default function Dashboard() {
   const [indices, setIndices] = useState({
     nifty: { value: '--', change: '--', percent: '--', up: true },
@@ -89,14 +107,14 @@ export default function Dashboard() {
         <div className="left-column">
           <div className="section-card">
             <div className="section-header">
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} style={{ color: '#00ff88' }} /> Top Gainers</h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><IconContainer color="#00ff88"><TrendingUp size={16} /></IconContainer> Top Gainers</h2>
               <span className="live-badge">LIVE</span>
             </div>
             <div className="movers-list">{topGainers.map((s,i) => <div key={i} className="mover-item"><span>{s.symbol}</span><span>₹{s.price}</span><span className="positive">{s.changePercent}%</span></div>)}</div>
           </div>
           <div className="section-card">
             <div className="section-header">
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingDown size={20} style={{ color: '#ff3366' }} /> Top Losers</h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><IconContainer color="#ff3366"><TrendingDown size={16} /></IconContainer> Top Losers</h2>
               <span className="live-badge">LIVE</span>
             </div>
             <div className="movers-list">{topLosers.map((s,i) => <div key={i} className="mover-item"><span>{s.symbol}</span><span>₹{s.price}</span><span className="negative">{s.changePercent}%</span></div>)}</div>
@@ -105,7 +123,7 @@ export default function Dashboard() {
         <div className="right-column">
           <div className="section-card">
             <div className="section-header">
-              <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Newspaper size={20} style={{ color: '#00bcd4' }} /> Market News</h2>
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><IconContainer color="#00bcd4"><Newspaper size={16} /></IconContainer> Market News</h2>
               <span className="live-badge">LIVE</span>
             </div>
             <div className="news-list">{news.map((n,i) => <a key={i} href={n.url} target="_blank" className="news-item"><span className="news-time">{n.time}</span><span className="news-title">{n.title}</span><span className="news-link">→</span></a>)}</div>

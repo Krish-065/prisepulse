@@ -148,6 +148,20 @@ const CardHeader = styled.div`
   }
 `;
 
+const IconContainer = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: ${props => props.$color ? `${props.$color}15` : 'rgba(255, 255, 255, 0.03)'};
+  border: 1px solid ${props => props.$color ? `${props.$color}30` : 'rgba(255, 255, 255, 0.08)'};
+  color: ${props => props.$color || '#ffffff'};
+  box-shadow: 0 0 10px ${props => props.$color ? `${props.$color}12` : 'transparent'};
+  flex-shrink: 0;
+`;
+
 const EditButton = styled.button`
   background: rgba(0, 255, 136, 0.1);
   border: 1px solid rgba(0, 255, 136, 0.3);
@@ -407,7 +421,7 @@ export default function Profile() {
           
           <Card>
             <CardHeader>
-              <h3><User size={18} style={{ color: '#00ff88' }} /> Personal & Account Details</h3>
+              <h3><IconContainer $color="#00ff88"><User size={16} /></IconContainer> Personal & Account Details</h3>
               {isEditingPersonal ? (
                 <ActionButtonGroup>
                   <CancelButton onClick={() => { setIsEditingPersonal(false); setPersonalName(user?.name || ''); }}>Cancel</CancelButton>
@@ -448,7 +462,7 @@ export default function Profile() {
 
           <Card>
             <CardHeader>
-              <h3><BarChart3 size={18} style={{ color: '#00bcd4' }} /> Demat & Brokerage Details</h3>
+              <h3><IconContainer $color="#00bcd4"><BarChart3 size={16} /></IconContainer> Demat & Brokerage Details</h3>
               {isEditingDemat ? (
                 <ActionButtonGroup>
                   <CancelButton onClick={() => {
@@ -513,7 +527,7 @@ export default function Profile() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <Card>
-            <h3><Link2 size={18} style={{ color: '#00ff88' }} /> Quick Links</h3>
+            <h3><IconContainer $color="#00ff88"><Link2 size={16} /></IconContainer> Quick Links</h3>
             <QuickLinks>
               <NavButton onClick={() => navigate('/portfolio')}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -537,7 +551,7 @@ export default function Profile() {
           </Card>
 
           <Card>
-            <h3><KeyRound size={18} style={{ color: '#00ff88' }} /> Change Password</h3>
+            <h3><IconContainer $color="#00ff88"><KeyRound size={16} /></IconContainer> Change Password</h3>
             <Form onSubmit={handlePasswordChange}>
               <input 
                 type="password" 
@@ -562,7 +576,7 @@ export default function Profile() {
           </Card>
 
           <Card>
-            <h3><Activity size={18} style={{ color: '#00bcd4' }} /> System Diagnostics</h3>
+            <h3><IconContainer $color="#00bcd4"><Activity size={16} /></IconContainer> System Diagnostics</h3>
             <InfoRow>
               <span className="label">Server Link</span>
               <span className="value" style={{ color: '#00ff88' }}>Connected</span>
