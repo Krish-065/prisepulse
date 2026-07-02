@@ -871,4 +871,47 @@ router.get('/sector-rotation', async (req, res) => {
   }
 });
 
+router.get('/stock-history/:symbol', async (req, res) => {
+  try {
+    let symbol = req.params.symbol.toUpperCase();
+    if (!symbol.endsWith('.NS') && symbol !== '^NSEI' && symbol !== '^BSESN' && symbol !== '^NSEBANK' && symbol !== '^CNXIT') {
+      symbol = `${symbol}.NS`;
+    }
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3mo&interval=1d`;
+    const response = await fetch(url, { headers: YAHOO_HEADERS });
+    if (!response.ok) {
+      return res.status(response.status).json({ error: 'Failed to fetch stock history' });
+    }
+    const data = await response.json();
+    const result = data?.chart?.result?.[0];
+    if (!result) {
+      return res.status(404).json({ error: 'No history found' });
+    }
+    const timestamps = result.timestamp || [];
+    const quotes = result.indicators?.quote?.[0] || {};
+    const opens = quotes.open || [];
+    const highs = quotes.high || [];
+    const lows = quotes.low || [];
+    const closes = quotes.close || [];
+    const volumes = quotes.volume || [];
+
+    const history = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (opens[i] !== null && closes[i] !== null) {
+        history.push({
+          time: timestamps[i] * 1000, // JavaScript time in ms
+          open: parseFloat(opens[i].toFixed(2)),
+          high: parseFloat(highs[i].toFixed(2)),
+          low: parseFloat(lows[i].toFixed(2)),
+          close: parseFloat(closes[i].toFixed(2)),
+          volume: Math.round(volumes[i] || 0)
+        });
+      }
+    }
+    res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
