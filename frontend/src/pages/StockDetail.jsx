@@ -197,11 +197,13 @@ export default function StockDetail() {
       const currVal = getValue(ind, idx);
       const prevVal = getValue(ind, idx - 1);
 
-      let targetVal;
+      let targetVal, prevTargetVal;
       if (targetType === 'value') {
         targetVal = parseFloat(targetValInput);
+        prevTargetVal = targetVal; // static value doesn't change
       } else {
         targetVal = getValue(targetIndInput, idx);
+        prevTargetVal = getValue(targetIndInput, idx - 1);
       }
 
       if (currVal === null || prevVal === null || targetVal === null || isNaN(targetVal)) return false;
@@ -212,9 +214,11 @@ export default function StockDetail() {
         case 'greaterThan':
           return currVal > targetVal;
         case 'crossesBelow':
-          return prevVal >= targetVal && currVal < targetVal;
+          // prev was above-or-equal, now below
+          return (prevVal >= (prevTargetVal ?? targetVal)) && currVal < targetVal;
         case 'crossesAbove':
-          return prevVal <= targetVal && currVal > targetVal;
+          // prev was below-or-equal, now above
+          return (prevVal <= (prevTargetVal ?? targetVal)) && currVal > targetVal;
         default:
           return false;
       }
@@ -247,6 +251,21 @@ export default function StockDetail() {
           activeTrade = null;
         }
       }
+    }
+
+    // ─── CRITICAL FIX: Auto-close any open trade at end of backtest window ───
+    // Without this, strategies that never hit the sell threshold show 0 trades.
+    if (activeTrade !== null) {
+      const lastIdx = history.length - 1;
+      const pnl = ((history[lastIdx].close - activeTrade.entryPrice) / activeTrade.entryPrice) * 100;
+      executedTrades.push({
+        ...activeTrade,
+        exitIndex: lastIdx,
+        exitDate: new Date(history[lastIdx].time).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+        exitPrice: history[lastIdx].close,
+        pnl: parseFloat(pnl.toFixed(2)),
+        isOpen: true // mark as still-open at period end
+      });
     }
 
     setSignals(generatedSignals);
@@ -290,16 +309,22 @@ export default function StockDetail() {
   // Strategy Presets Loader
   const applyPreset = (presetType) => {
     if (presetType === 'rsi_reversion') {
+      // Classic RSI Oversold/Overbought strategy
+      // BUY when RSI drops into oversold territory (<30)
+      // SELL when RSI reaches overbought territory (>70)
       setBuyIndicator('RSI');
       setBuyOperator('lessThan');
       setBuyTargetType('value');
-      setBuyTargetValue(45); // highly triggered on daily
+      setBuyTargetValue(35);  // slightly wider than 30 to generate more signals on 3-month data
       
       setSellIndicator('RSI');
       setSellOperator('greaterThan');
       setSellTargetType('value');
-      setSellTargetValue(55);
+      setSellTargetValue(65); // slightly tighter than 70 for 3-month period
     } else if (presetType === 'sma_crossover') {
+      // Golden/Death Cross: Price crossing SMA20 line
+      // BUY when price crosses UP through SMA20 (bullish signal)
+      // SELL when price crosses DOWN through SMA20 (bearish signal)
       setBuyIndicator('Price');
       setBuyOperator('crossesAbove');
       setBuyTargetType('indicator');
@@ -310,13 +335,16 @@ export default function StockDetail() {
       setSellTargetType('indicator');
       setSellTargetIndicator('SMA20');
     } else if (presetType === 'momentum_trend') {
+      // Trend following: stay in trade while price is above SMA50
+      // BUY when price moves above the long-term SMA50 (trend confirmation)
+      // SELL when price drops below SMA50 (trend reversal)
       setBuyIndicator('Price');
-      setBuyOperator('greaterThan');
+      setBuyOperator('crossesAbove');
       setBuyTargetType('indicator');
       setBuyTargetIndicator('SMA50');
 
       setSellIndicator('Price');
-      setSellOperator('lessThan');
+      setSellOperator('crossesBelow');
       setSellTargetType('indicator');
       setSellTargetIndicator('SMA50');
     }
@@ -1088,12 +1116,19 @@ export default function StockDetail() {
                 </thead>
                 <tbody>
                   {trades.map((trade, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
-                      <td style={{ padding: '12px', color: '#9b9eac', fontSize: '12px' }}>#{idx + 1}</td>
+                    <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)', background: trade.isOpen ? 'rgba(255, 179, 0, 0.03)' : 'transparent' }}>
+                      <td style={{ padding: '12px', color: '#9b9eac', fontSize: '12px' }}>
+                        #{idx + 1}
+                        {trade.isOpen && (
+                          <span style={{ marginLeft: '6px', fontSize: '9px', background: 'rgba(255,179,0,0.2)', color: '#ffb300', padding: '2px 5px', borderRadius: '3px', fontWeight: '700' }}>OPEN</span>
+                        )}
+                      </td>
                       <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.entryDate}</td>
                       <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.entryPrice.toLocaleString('en-IN')}</td>
-                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600' }}>{trade.exitDate}</td>
-                      <td style={{ padding: '12px', fontSize: '13px' }}>₹{trade.exitPrice.toLocaleString('en-IN')}</td>
+                      <td style={{ padding: '12px', fontSize: '13px', fontWeight: '600', color: trade.isOpen ? '#ffb300' : 'var(--text-primary)' }}>
+                        {trade.isOpen ? 'Period End' : trade.exitDate}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '13px', color: trade.isOpen ? '#ffb300' : 'var(--text-primary)' }}>₹{trade.exitPrice.toLocaleString('en-IN')}</td>
                       <td style={{ 
                         padding: '12px', 
                         textAlign: 'right', 
@@ -1101,6 +1136,7 @@ export default function StockDetail() {
                         color: trade.pnl >= 0 ? '#00ff88' : '#ff4444' 
                       }}>
                         {trade.pnl >= 0 ? '+' : ''}{trade.pnl}%
+                        {trade.isOpen && <span style={{ fontSize: '10px', color: '#ffb300', marginLeft: '4px' }}>(unrealised)</span>}
                       </td>
                     </tr>
                   ))}
