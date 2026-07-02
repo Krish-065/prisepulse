@@ -1323,30 +1323,6 @@ export default function StockDetail() {
                 </label>
               </div>
             </div>
-
-            {/* Run backtest action button */}
-            <button
-              onClick={runBacktest}
-              style={{
-                marginTop: '12px',
-                padding: '10px',
-                background: 'linear-gradient(135deg, #00ff88, #00bcd4)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#000000',
-                fontWeight: '800',
-                fontSize: '12px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 15px rgba(0, 255, 136, 0.25)'
-              }}
-            >
-              <Play size={12} fill="#000000" />
-              Compile & Run backtest
-            </button>
           </div>
 
         </div>
