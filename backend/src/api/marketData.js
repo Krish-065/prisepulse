@@ -229,7 +229,13 @@ let activeIpos = [
     lm: ['ICICI Securities', 'Axis Capital'],
     allotment: getDateOffset(0),
     listing: getDateOffset(2),
-    status: 'closed'
+    status: 'closed',
+    subQib: 116.4,
+    subNii: 53.2,
+    subRetail: 21.8,
+    subTotal: 58.6,
+    registrar: 'Link Intime India Private Ltd',
+    allotmentLink: 'https://linkintime.co.in/initial_offer/public-issues.html'
   },
   {
     id: 2,
@@ -245,7 +251,13 @@ let activeIpos = [
     lm: ['Hem Securities'],
     allotment: getDateOffset(3),
     listing: getDateOffset(6),
-    status: 'open'
+    status: 'open',
+    subQib: 12.5,
+    subNii: 45.1,
+    subRetail: 89.4,
+    subTotal: 56.2,
+    registrar: 'Bigshare Services Pvt Ltd',
+    allotmentLink: 'https://www.bigshareonline.com/ipo_Allotment.html'
   },
   {
     id: 3,
@@ -261,7 +273,13 @@ let activeIpos = [
     lm: ['Kotak Mahindra', 'Citi'],
     allotment: getDateOffset(7),
     listing: getDateOffset(10),
-    status: 'upcoming'
+    status: 'upcoming',
+    subQib: 0.0,
+    subNii: 0.0,
+    subRetail: 0.0,
+    subTotal: 0.0,
+    registrar: 'Link Intime India Private Ltd',
+    allotmentLink: 'https://linkintime.co.in/initial_offer/public-issues.html'
   },
   {
     id: 4,
@@ -277,7 +295,13 @@ let activeIpos = [
     lm: ['Morgan Stanley', 'JP Morgan'],
     allotment: getDateOffset(10),
     listing: getDateOffset(13),
-    status: 'upcoming'
+    status: 'upcoming',
+    subQib: 0.0,
+    subNii: 0.0,
+    subRetail: 0.0,
+    subTotal: 0.0,
+    registrar: 'KFin Technologies Limited',
+    allotmentLink: 'https://kosmic.kfintech.com/ipostatus/'
   },
   {
     id: 5,
@@ -293,7 +317,13 @@ let activeIpos = [
     lm: ['Beeline Capital'],
     allotment: getDateOffset(-4),
     listing: getDateOffset(-2),
-    status: 'closed'
+    status: 'closed',
+    subQib: 34.6,
+    subNii: 112.5,
+    subRetail: 165.4,
+    subTotal: 98.2,
+    registrar: 'KFin Technologies Limited',
+    allotmentLink: 'https://kosmic.kfintech.com/ipostatus/'
   }
 ];
 
@@ -434,6 +464,7 @@ router.get('/ipos', (req, res) => {
     
     const exists = activeIpos.some(ipo => ipo.company.toLowerCase() === candidate.company.toLowerCase());
     if (!exists) {
+      const isLinkIntime = Math.random() > 0.5;
       const newIpo = {
         id: nextIpoId++,
         company: candidate.company,
@@ -448,7 +479,13 @@ router.get('/ipos', (req, res) => {
         lm: candidate.lm,
         allotment: getDateOffset(6),
         listing: getDateOffset(9),
-        status: 'upcoming'
+        status: 'upcoming',
+        subQib: 0.0,
+        subNii: 0.0,
+        subRetail: 0.0,
+        subTotal: 0.0,
+        registrar: isLinkIntime ? 'Link Intime India Private Ltd' : 'KFin Technologies Limited',
+        allotmentLink: isLinkIntime ? 'https://linkintime.co.in/initial_offer/public-issues.html' : 'https://kosmic.kfintech.com/ipostatus/'
       };
       const basePrice = parseInt(newIpo.price.split('-')[0]) || 100;
       newIpo.gmpPercent = ((newIpo.gmp / basePrice) * 100).toFixed(1) + '%';
@@ -951,6 +988,152 @@ router.get('/stock-history/:symbol', async (req, res) => {
       }
     }
     res.json(history);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── MUTUAL FUNDS API INTEGRATION (api.mfapi.in) ───
+const MF_CACHE = {
+  allFunds: null,
+  lastFetched: 0
+};
+const MF_CACHE_TTL = 24 * 60 * 60 * 1000; // Cache for 24 hours since scheme names rarely change
+
+async function getMutualFundsList() {
+  const now = Date.now();
+  if (MF_CACHE.allFunds && (now - MF_CACHE.lastFetched < MF_CACHE_TTL)) {
+    return MF_CACHE.allFunds;
+  }
+  try {
+    const res = await fetch('https://api.mfapi.in/mf');
+    if (!res.ok) throw new Error('Failed to fetch from mfapi');
+    const data = await res.json();
+    MF_CACHE.allFunds = data;
+    MF_CACHE.lastFetched = now;
+    return data;
+  } catch (err) {
+    console.error('Error fetching MF list:', err);
+    return MF_CACHE.allFunds || [];
+  }
+}
+
+// Helper to calculate historical CAGR / Absolute returns
+function calculateMFReturns(navHistory) {
+  if (!navHistory || navHistory.length === 0) return { '1Y': '0.00%', '3Y': '0.00%', '5Y': '0.00%' };
+  const currentNav = parseFloat(navHistory[0].nav);
+  if (isNaN(currentNav) || currentNav <= 0) return { '1Y': '0.00%', '3Y': '0.00%', '5Y': '0.00%' };
+
+  const getReturnForDays = (days) => {
+    // Find index matching approximate business days
+    const index = Math.min(days, navHistory.length - 1);
+    const pastNav = parseFloat(navHistory[index].nav);
+    if (isNaN(pastNav) || pastNav <= 0) return '0.00%';
+    
+    const absoluteReturn = ((currentNav - pastNav) / pastNav) * 100;
+    if (days <= 260) {
+      // 1 Year is absolute return
+      return absoluteReturn.toFixed(2) + '%';
+    } else {
+      // Annualized returns (CAGR) for > 1 Year
+      const years = days / 260; // ~260 trading days in a year
+      const cagr = (Math.pow((currentNav / pastNav), (1 / years)) - 1) * 100;
+      return cagr.toFixed(2) + '%';
+    }
+  };
+
+  return {
+    '1Y': getReturnForDays(252),  // ~252 trading days/year
+    '3Y': getReturnForDays(756),
+    '5Y': getReturnForDays(1260)
+  };
+}
+
+// 1. Search Mutual Funds
+router.get('/mutual-funds/search', async (req, res) => {
+  try {
+    const queryStr = (req.query.query || '').trim().toLowerCase();
+    if (!queryStr || queryStr.length < 3) {
+      return res.json([]);
+    }
+    const allFunds = await getMutualFundsList();
+    const matches = allFunds
+      .filter(fund => fund.schemeName.toLowerCase().includes(queryStr))
+      .slice(0, 20)
+      .map(fund => ({
+        schemeCode: fund.schemeCode,
+        schemeName: fund.schemeName
+      }));
+    res.json(matches);
+  } catch (err) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+// 2. Fetch Mutual Fund Details & Charts
+router.get('/mutual-funds/:schemeCode', async (req, res) => {
+  try {
+    const { schemeCode } = req.params;
+    const response = await fetch(`https://api.mfapi.in/mf/${schemeCode}`);
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Fund not found' });
+    }
+    const data = await response.json();
+    if (data.status !== 'SUCCESS' || !data.meta || !data.data) {
+      return res.status(404).json({ error: 'Scheme data unavailable' });
+    }
+
+    const meta = data.meta;
+    const rawNav = data.data; // Array of { date, nav }
+    
+    // Sort NAVs chronologically if they are not already (usually mfapi returns newest first)
+    const navHistory = [...rawNav].map(item => ({
+      date: item.date,
+      nav: parseFloat(item.nav)
+    }));
+
+    const returns = calculateMFReturns(navHistory);
+    
+    // Format chart data for TradingView or Recharts
+    const chartData = navHistory.slice(0, 252).reverse().map(item => {
+      // Convert DD-MM-YYYY to YYYY-MM-DD or Unix timestamp
+      const parts = item.date.split('-');
+      const dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      return {
+        time: dateStr,
+        value: item.nav
+      };
+    });
+
+    // Determine Risk Profile based on Scheme Category heuristics
+    const category = (meta.scheme_category || '').toLowerCase();
+    let risk = 'moderate';
+    if (category.includes('small cap') || category.includes('mid cap') || category.includes('sectoral') || category.includes('thematic') || category.includes('equity')) {
+      risk = 'high';
+    } else if (category.includes('liquid') || category.includes('debt') || category.includes('gilt') || category.includes('overnight')) {
+      risk = 'low';
+    }
+
+    // Heuristics for ratings (3 to 5 stars)
+    let rating = 4;
+    const ret1Y = parseFloat(returns['1Y']);
+    if (ret1Y > 40) rating = 5;
+    else if (ret1Y < 15) rating = 3;
+
+    res.json({
+      schemeCode: meta.scheme_code,
+      name: meta.scheme_name,
+      category: meta.scheme_category || 'Equity: Growth',
+      fundHouse: meta.fund_house || 'Direct House',
+      type: meta.scheme_type || 'Direct Plan',
+      nav: navHistory[0]?.nav?.toFixed(2) || '0.00',
+      lastUpdated: navHistory[0]?.date || '',
+      returns,
+      risk,
+      rating,
+      aum: (Math.abs(Math.sin(parseInt(meta.scheme_code)) * 25000) + 1200).toFixed(0), // simulated AUM in Cr
+      chartData
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
