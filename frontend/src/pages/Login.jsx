@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CandlestickBg from '../components/CandlestickBg';
+import Logo from '../components/Logo';
 import toast from 'react-hot-toast';
 
 export default function Login() {
@@ -50,13 +51,17 @@ export default function Login() {
       <CandlestickBg />
       
       {!twoFactorRequired ? (
-        <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease' }}>
-          <h2 style={{ fontSize: '26px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px' }}>Welcome Back</h2>
-          <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>Sign in to continue to NonStock</p>
-          <form onSubmit={handleLoginSubmit}>
+        <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Logo size={60} showName={true} showTagline={true} alignment="column" nameSize="26px" />
+          </div>
+
+          <h2 style={{ fontSize: '22px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px', marginTop: '0' }}>Welcome Back</h2>
+          <p style={{ color: '#9b9eac', fontSize: '13px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>Sign in to continue to NonStock</p>
+          <form onSubmit={handleLoginSubmit} style={{ width: '100%' }}>
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', width: '100%' }}>
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
@@ -64,24 +69,28 @@ export default function Login() {
           <p style={{ marginTop: '10px' }}><Link to="/forgot-password" style={{ color: '#00bcd4', textDecoration: 'none', fontSize: '13px' }}>Forgot Password?</Link></p>
         </div>
       ) : (
-        <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease', border: '1px solid rgba(0, 255, 136, 0.4)' }}>
-          <h2 style={{ fontSize: '26px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px' }}>2FA Verification</h2>
-          <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0', lineHeight: '1.5' }}>
+        <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease', border: '1px solid rgba(0, 255, 136, 0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ marginBottom: '24px' }}>
+            <Logo size={60} showName={true} showTagline={true} alignment="column" nameSize="26px" />
+          </div>
+
+          <h2 style={{ fontSize: '22px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px', marginTop: '0' }}>2FA Verification</h2>
+          <p style={{ color: '#9b9eac', fontSize: '13px', marginBottom: '24px', textAlign: 'center', marginTop: '0', lineHeight: '1.5' }}>
             Enter the 6-digit code from your <br />
             <strong style={{ color: '#ffffff' }}>Google Authenticator</strong> app.
           </p>
           
-          <form onSubmit={handleTwoFactorSubmit}>
+          <form onSubmit={handleTwoFactorSubmit} style={{ width: '100%' }}>
             <input 
               type="text" 
               placeholder="000000" 
               value={twoFactorCode} 
               onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
               maxLength={6}
-              style={{ textAlign: 'center', letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', padding: '14px' }}
+              style={{ textAlign: 'center', letterSpacing: '8px', fontSize: '24px', fontWeight: 'bold', padding: '14px', width: '100%', boxSizing: 'border-box' }}
               required 
             />
-            <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', marginTop: '10px' }}>
+            <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s', marginTop: '10px', width: '100%' }}>
               {loading ? 'Verifying...' : 'Verify & Login'}
             </button>
           </form>

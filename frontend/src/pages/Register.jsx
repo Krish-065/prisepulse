@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import CandlestickBg from '../components/CandlestickBg';
+import Logo from '../components/Logo';
 import { AlertCircle } from 'lucide-react';
 
 export default function Register() {
@@ -44,16 +45,20 @@ export default function Register() {
     <div className="auth-container">
       <CandlestickBg />
       
-      <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease' }}>
-        <h2 style={{ fontSize: '26px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px' }}>
+      <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ marginBottom: '24px' }}>
+          <Logo size={60} showName={true} showTagline={true} alignment="column" nameSize="26px" />
+        </div>
+
+        <h2 style={{ fontSize: '22px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px', marginTop: '0' }}>
           {requiresVerification ? 'Verify Email' : 'Create Account'}
         </h2>
-        <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>
+        <p style={{ color: '#9b9eac', fontSize: '13px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>
           {requiresVerification ? 'Enter the OTP sent to your email' : 'Get started with NonStock'}
         </p>
         
         {!requiresVerification ? (
-          <form onSubmit={handleRegisterSubmit}>
+          <form onSubmit={handleRegisterSubmit} style={{ width: '100%' }}>
             <input type="text" placeholder="Full Name" value={name} onChange={(e) => setName(e.target.value)} required />
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
@@ -66,7 +71,7 @@ export default function Register() {
             </button>
           </form>
         ) : (
-          <form onSubmit={handleVerifySubmit}>
+          <form onSubmit={handleVerifySubmit} style={{ width: '100%' }}>
             <input type="text" placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} required style={{ letterSpacing: '4px', textAlign: 'center', fontSize: '18px', fontWeight: 'bold' }} />
             <button type="submit" disabled={loading} style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', border: 'none', color: '#0a0e27', padding: '14px', borderRadius: '10px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', transition: 'transform 0.2s, box-shadow 0.2s', width: '100%' }}>
               {loading ? 'Verifying...' : 'Verify Email'}

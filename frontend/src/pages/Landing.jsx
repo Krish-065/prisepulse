@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import Logo from '../components/Logo';
 import { TrendingUp, BarChart3, Search, FolderClosed, Activity, Calculator } from 'lucide-react';
 
 export default function Landing() {
@@ -12,6 +13,9 @@ export default function Landing() {
       <div className="landing-container">
         <div className="landing-content">
           <div className="hero-section">
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
+              <Logo size={120} showName={false} showTagline={false} />
+            </div>
             <h1 className="hero-title">Trade Smarter with <span className="gradient-text">NonStock</span></h1>
             <p className="hero-subtitle" style={{ fontSize: '24px', fontWeight: '800', color: '#00ff88', textShadow: '0 0 15px rgba(0, 255, 136, 0.4)', letterSpacing: '0.5px', marginBottom: '32px' }}>Be Nonstop with NonStock.</p>
             <div className="hero-buttons">

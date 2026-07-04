@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import PrivateRoute from './components/PrivateRoute';
 import Layout from './components/Layout';
+import BubbleCursor from './components/BubbleCursor';
 
 // Public pages
 import Landing from './pages/Landing';
@@ -34,6 +35,7 @@ function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <BubbleCursor />
           <Toaster position="top-right" />
           <Routes>
             {/* Public Routes */}

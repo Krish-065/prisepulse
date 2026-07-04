@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import Logo from './Logo';
 import { 
   LayoutDashboard, 
   TrendingUp, 
@@ -57,15 +58,12 @@ export default function Sidebar({ isMobile, isOpen, onClose }) {
     }}>
       <div style={{ 
         padding: '24px 20px', 
-        fontSize: '20px', 
-        fontWeight: 800, 
         borderBottom: '1px solid rgba(0, 255, 136, 0.15)', 
-        letterSpacing: '0.5px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>NonStock</span>
+        <Logo size={36} showName={true} showTagline={true} alignment="column" nameSize="20px" />
         {isMobile && (
           <button 
             onClick={onClose} 
