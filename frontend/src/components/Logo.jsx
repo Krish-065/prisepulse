@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Logo({ size = 48, showName = true, showTagline = true, alignment = 'row', nameSize = '24px', glowColor = 'rgba(0, 188, 212, 0.4)' }) {
+export default function Logo({ size = 48, showName = true, showTagline = true, alignment = 'row', nameSize = '24px', glowColor = 'rgba(0, 240, 255, 0.4)' }) {
   const isRow = alignment === 'row';
 
   return (
@@ -38,51 +38,47 @@ export default function Logo({ size = 48, showName = true, showTagline = true, a
           </filter>
         </defs>
 
-        {/* Left Green Candlestick (Wick & Body) */}
+        {/* Left Green Candlestick Wick */}
         <line 
-          x1="32" 
+          x1="36" 
           y1="14" 
-          x2="32" 
+          x2="36" 
           y2="86" 
           stroke="#00ff88" 
-          strokeWidth="4.5" 
+          strokeWidth="3.5" 
           strokeLinecap="round" 
           filter="url(#neon-glow-green)" 
         />
-        <rect 
-          x="23" 
-          y="26" 
-          width="18" 
-          height="48" 
-          rx="5" 
+        
+        {/* Left Green Candlestick Body (with bottom-left diagonal cut matching the logo) */}
+        <path 
+          d="M30 26 H42 V60 L30 72 Z" 
           fill="#00ff88" 
           filter="url(#neon-glow-green)" 
         />
 
-        {/* Right Cyan Candlestick (Wick & Body) */}
+        {/* Right Cyan Candlestick Wick */}
         <line 
-          x1="68" 
+          x1="64" 
           y1="14" 
-          x2="68" 
+          x2="64" 
           y2="86" 
           stroke="#00f0ff" 
-          strokeWidth="4.5" 
+          strokeWidth="3.5" 
           strokeLinecap="round" 
           filter="url(#neon-glow-cyan)" 
         />
-        <rect 
-          x="59" 
-          y="26" 
-          width="18" 
-          height="48" 
-          rx="5" 
+        
+        {/* Right Cyan Candlestick Body (with top-left diagonal cut matching the logo) */}
+        <path 
+          d="M58 38 L70 26 V72 H58 Z" 
           fill="#00f0ff" 
           filter="url(#neon-glow-cyan)" 
         />
 
-        {/* Diagonal Trendline Arrow */}
+        {/* Diagonal Zig-Zag Trendline (matches the custom lightning-bolt arrow) */}
         <path 
-          d="M16 75 L45 44 L55 52 L82 18" 
+          d="M25 72 L47 46 L55 54 L76 28" 
           stroke="#00f0ff" 
           strokeWidth="7" 
           strokeLinecap="round" 
@@ -90,9 +86,9 @@ export default function Logo({ size = 48, showName = true, showTagline = true, a
           filter="url(#neon-glow-cyan)" 
         />
         
-        {/* Glowing Arrowhead */}
+        {/* Arrowhead */}
         <path 
-          d="M64 18 H82 V36" 
+          d="M60 28 H76 V44" 
           stroke="#00f0ff" 
           strokeWidth="7" 
           strokeLinecap="round" 
