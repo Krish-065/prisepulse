@@ -348,11 +348,8 @@ export default function Portfolio() {
       const res = await apiClient.get('/portfolio');
       const items = res.data.portfolio || [];
       setConnectedBroker(res.data.connectedBroker || null);
-      const enriched = [];
-      let value = 0;
-      let invested = 0;
       
-      for (const item of items) {
+      const enriched = await Promise.all(items.map(async (item) => {
         const qty = parseFloat(item.quantity) || 0;
         const buyPrice = parseFloat(item.buy_price) || 0;
         try {
@@ -361,10 +358,9 @@ export default function Portfolio() {
           const cost = qty * buyPrice;
           const currentVal = qty * currentPrice;
           const pnl = currentVal - cost;
-          
           const meta = getStockMetadata(item.symbol);
           
-          enriched.push({
+          return {
             symbol: item.symbol,
             quantity: qty,
             buyPrice: buyPrice,
@@ -374,14 +370,11 @@ export default function Portfolio() {
             pnl,
             pnlPercent: cost > 0 ? (pnl / cost) * 100 : 0,
             ...meta
-          });
-          
-          value += currentVal;
-          invested += cost;
+          };
         } catch (err) {
           const cost = qty * buyPrice;
           const meta = getStockMetadata(item.symbol);
-          enriched.push({
+          return {
             symbol: item.symbol,
             quantity: qty,
             buyPrice: buyPrice,
@@ -391,11 +384,16 @@ export default function Portfolio() {
             pnl: 0,
             pnlPercent: 0,
             ...meta
-          });
-          value += cost;
-          invested += cost;
+          };
         }
-      }
+      }));
+      
+      let value = 0;
+      let invested = 0;
+      enriched.forEach(item => {
+        value += item.currentValue;
+        invested += item.invested;
+      });
       
       setHoldings(enriched);
       setTotalValue(value);
@@ -420,11 +418,36 @@ export default function Portfolio() {
   };
 
   const removeHolding = async (symbol) => {
+    // Keep reference to previous holdings for rollback
+    const previousHoldings = [...holdings];
+    const previousValue = totalValue;
+    const previousInvested = totalInvested;
+    const previousProfit = totalProfit;
+
+    // Optimistically update frontend state immediately
+    const filtered = holdings.filter(h => h.symbol !== symbol);
+    setHoldings(filtered);
+    
+    let newValue = 0;
+    let newInvested = 0;
+    filtered.forEach(item => {
+      newValue += item.currentValue;
+      newInvested += item.invested;
+    });
+    setTotalValue(newValue);
+    setTotalInvested(newInvested);
+    setTotalProfit(newValue - newInvested);
+
     try {
       await apiClient.delete(`/portfolio/${symbol}`);
       toast.success('Holding removed');
-      fetchPortfolio();
+      fetchPortfolio(); // Sync in background to verify latest quotes
     } catch (err) {
+      // Rollback on error
+      setHoldings(previousHoldings);
+      setTotalValue(previousValue);
+      setTotalInvested(previousInvested);
+      setTotalProfit(previousProfit);
       toast.error('Failed to remove holding');
     }
   };
