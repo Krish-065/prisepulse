@@ -65,7 +65,7 @@ export default function Sidebar({ isMobile, isOpen, onClose }) {
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>PricePulse</span>
+        <span style={{ background: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>NonStock</span>
         {isMobile && (
           <button 
             onClick={onClose} 

@@ -341,7 +341,7 @@ export default function Profile() {
       setPersonalName(user.name || '');
       setBrokerCode(user.broker_code || 'PRP065');
       setDematId(user.demat_id || '1208160001094852');
-      setDpName(user.dp_name || 'PricePulse Securities Pvt Ltd');
+      setDpName(user.dp_name || 'NonStock Securities Pvt Ltd');
       setPanId(user.pan_id || 'ABCDE*****F');
       setBrokeragePlan(user.brokerage_plan || '₹0 Equity Delivery / ₹20 F&O Intraday');
     }
@@ -398,7 +398,7 @@ export default function Profile() {
         <Avatar>{userInitial}</Avatar>
         <HeaderInfo>
           <h2>{user?.name || 'Investor Profile'}</h2>
-          <p>{user?.email || 'investor@prisepulse.com'}</p>
+          <p>{user?.email || 'investor@nonstock.com'}</p>
           <div className="badges">
             <Badge type="primary"><Check size={12} /> KYC Verified</Badge>
             <Badge type="secondary"><ShieldCheck size={12} /> Pro Account</Badge>
@@ -442,7 +442,7 @@ export default function Profile() {
             </InfoRow>
             <InfoRow>
               <span className="label">Registered Email</span>
-              <span className="value">{user?.email || 'investor@prisepulse.com'}</span>
+              <span className="value">{user?.email || 'investor@nonstock.com'}</span>
             </InfoRow>
             <InfoRow>
               <span className="label">KYC Verification Status</span>
@@ -469,7 +469,7 @@ export default function Profile() {
                     setIsEditingDemat(false);
                     setBrokerCode(user?.broker_code || 'PRP065');
                     setDematId(user?.demat_id || '1208160001094852');
-                    setDpName(user?.dp_name || 'PricePulse Securities Pvt Ltd');
+                    setDpName(user?.dp_name || 'NonStock Securities Pvt Ltd');
                     setPanId(user?.pan_id || 'ABCDE*****F');
                     setBrokeragePlan(user?.brokerage_plan || '₹0 Equity Delivery / ₹20 F&O Intraday');
                   }}>Cancel</CancelButton>
@@ -501,7 +501,7 @@ export default function Profile() {
               {isEditingDemat ? (
                 <RowInput value={dpName} onChange={(e) => setDpName(e.target.value)} />
               ) : (
-                <span className="value">{user?.dp_name || 'PricePulse Securities Pvt Ltd'}</span>
+                <span className="value">{user?.dp_name || 'NonStock Securities Pvt Ltd'}</span>
               )}
             </InfoRow>
             <InfoRow>

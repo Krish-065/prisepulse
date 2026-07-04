@@ -105,7 +105,7 @@ export default function Markets() {
   }, []);
 
   // Build TradingView widget URL
-  const widgetUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=${interval}&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=1&saveimage=0&toolbarbg=131722&studies=Volume%40tv-basicstudies&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%22paneProperties.background%22%3A%22%23131722%22%2C%22paneProperties.backgroundType%22%3A%22solid%22%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=prisepulse.vercel.app`;
+  const widgetUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tradingview_chart&symbol=${encodeURIComponent(symbol)}&interval=${interval}&hidesidetoolbar=0&hidetoptoolbar=0&symboledit=1&saveimage=0&toolbarbg=131722&studies=Volume%40tv-basicstudies&theme=dark&style=1&timezone=Asia%2FKolkata&studies_overrides=%7B%7D&overrides=%7B%22paneProperties.background%22%3A%22%23131722%22%2C%22paneProperties.backgroundType%22%3A%22solid%22%7D&enabled_features=%5B%5D&disabled_features=%5B%5D&locale=en&utm_source=nonstock.vercel.app`;
 
   const displayLabel = ALL_SYMBOLS.find(s => s.value === symbol)?.label || symbol;
 

@@ -137,7 +137,7 @@ export default function Layout({ children }) {
             <Menu size={24} />
           </button>
           <span style={{ fontSize: '18px', fontWeight: 800, background: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-            PricePulse
+            NonStock
           </span>
           <div style={{ width: '24px' }}></div>
         </div>

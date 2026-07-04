@@ -49,7 +49,7 @@ export default function Register() {
           {requiresVerification ? 'Verify Email' : 'Create Account'}
         </h2>
         <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>
-          {requiresVerification ? 'Enter the OTP sent to your email' : 'Get started with PricePulse'}
+          {requiresVerification ? 'Enter the OTP sent to your email' : 'Get started with NonStock'}
         </p>
         
         {!requiresVerification ? (

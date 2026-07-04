@@ -632,7 +632,7 @@ export default function News() {
                 <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'var(--text-secondary)' }}>{selectedArticle.description}</p>
               </div>
 
-              {/* PricePulse Market Takeaway analysis card */}
+              {/* NonStock Market Takeaway analysis card */}
               <div style={{
                 background: 'rgba(255, 179, 0, 0.05)',
                 border: '1px solid rgba(255, 179, 0, 0.25)',
@@ -644,7 +644,7 @@ export default function News() {
               }}>
                 <Sparkles size={20} style={{ color: '#ffb300', flexShrink: 0, marginTop: '2px' }} />
                 <div>
-                  <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#ffb300', marginBottom: '4px' }}>PricePulse Intelligence Takeaway</h4>
+                  <h4 style={{ fontSize: '13px', fontWeight: '700', color: '#ffb300', marginBottom: '4px' }}>NonStock Intelligence Takeaway</h4>
                   <p style={{ fontSize: '13px', lineHeight: '1.5', color: 'var(--text-primary)' }}>{selectedArticle.takeaway}</p>
                 </div>
               </div>

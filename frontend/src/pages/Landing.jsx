@@ -12,8 +12,8 @@ export default function Landing() {
       <div className="landing-container">
         <div className="landing-content">
           <div className="hero-section">
-            <h1 className="hero-title">Trade Smarter with <span className="gradient-text">PricePulse</span></h1>
-            <p className="hero-subtitle">Professional trading platform with real-time data, advanced charts, and AI-powered insights.</p>
+            <h1 className="hero-title">Trade Smarter with <span className="gradient-text">NonStock</span></h1>
+            <p className="hero-subtitle" style={{ fontSize: '24px', fontWeight: '800', color: '#00ff88', textShadow: '0 0 15px rgba(0, 255, 136, 0.4)', letterSpacing: '0.5px', marginBottom: '32px' }}>Be Nonstop with NonStock.</p>
             <div className="hero-buttons">
               <Link to="/register" className="btn-primary-hero">Get Started →</Link>
               <Link to="/login" className="btn-secondary-hero">Sign In</Link>
@@ -56,7 +56,7 @@ export default function Landing() {
 
           <div className="cta-section">
             <h2>Ready to start trading?</h2>
-            <p>Join PricePulse today and take control of your financial future</p>
+            <p>Join NonStock today and take control of your financial future</p>
             <Link to="/register" className="btn-cta">Create Free Account →</Link>
           </div>
         </div>

@@ -511,7 +511,7 @@ export default function SectorRotation() {
                 </div>
               </div>
 
-              {/* PricePulse AI Outlook */}
+              {/* NonStock AI Outlook */}
               <div style={{
                 background: 'rgba(0, 255, 136, 0.03)',
                 border: '1px solid rgba(0, 255, 136, 0.15)',
@@ -524,7 +524,7 @@ export default function SectorRotation() {
               }}>
                 <Sparkles size={16} style={{ color: '#00ff88', marginTop: '2px', flexShrink: 0 }} />
                 <div>
-                  <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#00ff88' }}>PricePulse Intelligence Outlook</h4>
+                  <h4 style={{ fontSize: '12px', fontWeight: '700', color: '#00ff88' }}>NonStock Intelligence Outlook</h4>
                   <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', lineHeight: '1.4' }}>
                     {selectedSector.quadrant === 'Leading' && `Sector shows persistent block accumulation. Institutional flow index at ${selectedSector.flowIndex} signals potential breakout continuation. Focus on top outperformer: ${selectedSector.topStock}.`}
                     {selectedSector.quadrant === 'Improving' && `Structural recovery via short covering. Price turning upward on low volume. Potential early entries developing on dips.`}

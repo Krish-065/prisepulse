@@ -541,7 +541,7 @@ export default function Portfolio() {
           <Info size={18} />
         </div>
         <div>
-          <strong>How this works:</strong> This is a secure, read-only analytics dashboard. By connecting your broker or manually adding stocks, PrisePulse scans your assets and maps them to our <strong>Institutional Flow Quadrants</strong>. This shows you whether institutions are accumulating (Leading) or liquidating (Lagging) the sectors you own, helping you manage risks proactively.
+          <strong>How this works:</strong> This is a secure, read-only analytics dashboard. By connecting your broker or manually adding stocks, NonStock scans your assets and maps them to our <strong>Institutional Flow Quadrants</strong>. This shows you whether institutions are accumulating (Leading) or liquidating (Lagging) the sectors you own, helping you manage risks proactively.
         </div>
       </InfoBox>
 
@@ -755,7 +755,7 @@ export default function Portfolio() {
               <HelperBox>
                 <ShieldCheck size={18} style={{ color: '#00ff88', flexShrink: 0 }} />
                 <div>
-                  <strong>Read-Only Access Enabled:</strong> PrisePulse only requests read-only holdings permission. Our servers are physically blocked from placing any trade or requesting funds. Your login credentials are encrypted locally on your browser.
+                  <strong>Read-Only Access Enabled:</strong> NonStock only requests read-only holdings permission. Our servers are physically blocked from placing any trade or requesting funds. Your login credentials are encrypted locally on your browser.
                 </div>
               </HelperBox>
 

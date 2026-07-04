@@ -21,7 +21,7 @@ async function createTables() {
       landing_page VARCHAR(50) DEFAULT 'Dashboard',
       broker_code VARCHAR(50) DEFAULT 'PRP065',
       demat_id VARCHAR(50) DEFAULT '1208160001094852',
-      dp_name VARCHAR(100) DEFAULT 'PricePulse Securities Pvt Ltd',
+      dp_name VARCHAR(100) DEFAULT 'NonStock Securities Pvt Ltd',
       pan_id VARCHAR(50) DEFAULT 'ABCDE*****F',
       brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -35,7 +35,7 @@ async function createTables() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS landing_page VARCHAR(50) DEFAULT 'Dashboard'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS broker_code VARCHAR(50) DEFAULT 'PRP065'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS demat_id VARCHAR(50) DEFAULT '1208160001094852'`);
-  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dp_name VARCHAR(100) DEFAULT 'PricePulse Securities Pvt Ltd'`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dp_name VARCHAR(100) DEFAULT 'NonStock Securities Pvt Ltd'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pan_id VARCHAR(50) DEFAULT 'ABCDE*****F'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connected_broker VARCHAR(100)`);

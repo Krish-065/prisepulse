@@ -52,7 +52,7 @@ export default function Login() {
       {!twoFactorRequired ? (
         <div className="auth-card" style={{ animation: 'fadeIn 0.5s ease' }}>
           <h2 style={{ fontSize: '26px', fontWeight: '800', backgroundImage: 'linear-gradient(135deg, #00ff88, #00bcd4)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent', marginBottom: '8px' }}>Welcome Back</h2>
-          <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>Sign in to continue to PricePulse</p>
+          <p style={{ color: '#9b9eac', fontSize: '14px', marginBottom: '24px', textAlign: 'center', marginTop: '0' }}>Sign in to continue to NonStock</p>
           <form onSubmit={handleLoginSubmit}>
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />

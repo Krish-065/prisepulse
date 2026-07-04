@@ -1,7 +1,7 @@
 {
-  "name": "prisepulse-backend",
+  "name": "nonstock-backend",
   "version": "1.0.0",
-  "description": "Backend for PricePulse - Stock Market Platform",
+  "description": "Backend for NonStock - Stock Market Platform",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

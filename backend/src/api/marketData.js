@@ -702,7 +702,7 @@ const FALLBACK_NEWS = [
     time: "10:15 AM",
     date: "02 Jul 2026",
     url: "https://finance.yahoo.com/quote/RELIANCE.NS",
-    source: "PricePulse Research",
+    source: "NonStock Research",
     image: "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?w=800&auto=format&fit=crop&q=60",
     category: "Equity",
     sentiment: "Bullish",

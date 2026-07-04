@@ -988,7 +988,7 @@ export default function StockDetail() {
           }}
         >
           <Settings size={16} />
-          PricePulse Algorithmic Strategy Lab
+          NonStock Algorithmic Strategy Lab
         </button>
       </div>
 
@@ -1045,7 +1045,7 @@ export default function StockDetail() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: '800', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  PricePulse Backtesting Canvas
+                  NonStock Backtesting Canvas
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '11px' }}>
                   Overlaying Buy (▲) & Sell (▼) triggers on candlesticks, with SMA 20 (<span style={{ color: '#00bcd4' }}>■</span>) & SMA 50 (<span style={{ color: '#ffb300' }}>■</span>) lines.

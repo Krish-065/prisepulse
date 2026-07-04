@@ -33,7 +33,7 @@ transporter.verify((error, success) => {
 async function sendVerificationEmail(email, otp) {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 24px; border: 1px solid rgba(0, 255, 136, 0.25); border-radius: 16px; background-color: #0a0e27; color: #ffffff; margin: 0 auto; box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
-      <h2 style="color: #00ff88; margin-top: 0; font-size: 22px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; text-align: center;">PricePulse Verification</h2>
+      <h2 style="color: #00ff88; margin-top: 0; font-size: 22px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 12px; text-align: center;">NonStock Verification</h2>
       <p style="font-size: 15px; color: #e1e3e6; line-height: 1.5; text-align: center; margin-top: 16px;">
         Please verify your email address to complete your registration. Your one-time verification password (OTP) is:
       </p>
@@ -54,11 +54,11 @@ async function sendVerificationEmail(email, otp) {
       const apiResult = await new Promise((resolve, reject) => {
         const postData = JSON.stringify({
           sender: {
-            name: process.env.FROM_NAME || 'PricePulse',
+            name: process.env.FROM_NAME || 'NonStock',
             email: process.env.FROM_EMAIL
           },
           to: [{ email }],
-          subject: 'Verify your email - PricePulse',
+          subject: 'Verify your email - NonStock',
           htmlContent: html
         });
 
@@ -112,7 +112,7 @@ async function sendVerificationEmail(email, otp) {
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: email,
-    subject: 'Verify your email - PricePulse',
+    subject: 'Verify your email - NonStock',
     html,
   });
 }
@@ -120,14 +120,14 @@ async function sendVerificationEmail(email, otp) {
 async function sendResetEmail(email, resetUrl) {
   const html = `
     <div style="font-family: Arial, sans-serif;">
-      <h2>Reset your PricePulse password</h2>
+      <h2>Reset your NonStock password</h2>
       <p>Click <a href="${resetUrl}">here</a> to reset your password. This link is valid for 1 hour.</p>
     </div>
   `;
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: email,
-    subject: 'Reset your password - PricePulse',
+    subject: 'Reset your password - NonStock',
     html,
   });
 }
@@ -140,7 +140,7 @@ async function sendPasswordChangeNotificationEmail(email, userName) {
         Hello ${userName || 'Investor'},
       </p>
       <p style="font-size: 15px; color: #e1e3e6; line-height: 1.5;">
-        This email confirms that the password for your <strong>PricePulse</strong> account has been successfully updated.
+        This email confirms that the password for your <strong>NonStock</strong> account has been successfully updated.
       </p>
       <div style="background: rgba(255, 51, 102, 0.08); border-left: 4px solid #ff3366; border-radius: 4px; padding: 12px; margin: 20px 0; color: #e1e3e6; font-size: 14px;">
         <strong>Details:</strong><br />
@@ -164,11 +164,11 @@ async function sendPasswordChangeNotificationEmail(email, userName) {
       console.log('Attempting to send password change notification via Brevo HTTP API...');
       const postData = JSON.stringify({
         sender: {
-          name: process.env.FROM_NAME || 'PricePulse',
+          name: process.env.FROM_NAME || 'NonStock',
           email: process.env.FROM_EMAIL
         },
         to: [{ email }],
-        subject: 'Security Alert: Password Changed - PricePulse',
+        subject: 'Security Alert: Password Changed - NonStock',
         htmlContent: html
       });
 
@@ -222,7 +222,7 @@ async function sendPasswordChangeNotificationEmail(email, userName) {
   await transporter.sendMail({
     from: `"${process.env.FROM_NAME}" <${process.env.FROM_EMAIL}>`,
     to: email,
-    subject: 'Security Alert: Password Changed - PricePulse',
+    subject: 'Security Alert: Password Changed - NonStock',
     html,
   });
 }
@@ -481,7 +481,7 @@ async function logoutSession(req, res) {
 // 2FA SETUP
 async function setupTwoFactor(req, res) {
   try {
-    const secret = speakeasy.generateSecret({ name: `PricePulse (${req.user.email})` });
+    const secret = speakeasy.generateSecret({ name: `NonStock (${req.user.email})` });
     await query(`UPDATE users SET two_factor_secret = $1 WHERE id = $2`, [secret.base32, req.user.id]);
     res.json({
       secret: secret.base32,

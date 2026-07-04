@@ -156,34 +156,129 @@ app.post('/api/portfolio', authenticate, async (req, res) => {
   await query(`INSERT INTO portfolio_items (id, user_id, symbol, quantity, buy_price) VALUES ($1,$2,$3,$4,$5)`, [require('crypto').randomUUID(), req.user.id, symbol, quantity, buyPrice]);
   res.json({ success: true });
 });
+// Angel One SmartAPI Connector
+async function syncAngelOne(clientCode, pin, totp) {
+  const apiKey = process.env.ANGEL_ONE_API_KEY;
+  if (!apiKey) {
+    throw new Error('ANGEL_ONE_API_KEY is not configured in the backend environment.');
+  }
+
+  // 1. Authenticate / Login
+  const loginUrl = 'https://apiconnect.angelone.in/rest/auth/angelbroking/user/v1/loginByPassword';
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'X-UserType': 'USER',
+    'X-SourceID': 'WEB',
+    'X-ClientLocalIP': '127.0.0.1',
+    'X-ClientPublicIP': '127.0.0.1',
+    'X-MACAddress': '00:00:00:00:00:00',
+    'X-PrivateKey': apiKey
+  };
+
+  const loginRes = await fetch(loginUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      clientcode: clientCode,
+      password: pin,
+      totp: totp || ''
+    })
+  });
+
+  const loginData = await loginRes.json();
+  if (!loginData.status || !loginData.data || !loginData.data.jwtToken) {
+    throw new Error(loginData.message || 'Authentication failed. Check your Client Code, PIN, and TOTP.');
+  }
+
+  const jwtToken = loginData.data.jwtToken;
+
+  // 2. Fetch Holdings
+  const holdingsUrl = 'https://apiconnect.angelone.in/rest/secure/angelbroking/portfolio/v1/getHolding';
+  const holdingsRes = await fetch(holdingsUrl, {
+    method: 'GET',
+    headers: {
+      ...headers,
+      'Authorization': `Bearer ${jwtToken}`
+    }
+  });
+
+  const holdingsData = await holdingsRes.json();
+  if (!holdingsData.status || !holdingsData.data) {
+    throw new Error(holdingsData.message || 'Failed to retrieve holdings from Angel One.');
+  }
+
+  // Map holdings to our format
+  return (holdingsData.data || []).map(h => {
+    let symbol = h.tradingsymbol || '';
+    if (symbol.endsWith('-EQ')) {
+      symbol = symbol.replace('-EQ', '');
+    }
+    if (!symbol.includes('.') && !symbol.includes('-') && !symbol.includes('=')) {
+      symbol = `${symbol}.NS`;
+    }
+    return {
+      symbol,
+      quantity: parseInt(h.quantity) || 0,
+      buyPrice: parseFloat(h.averageprice) || parseFloat(h.pnlprice) || 0
+    };
+  });
+}
+
 app.post('/api/portfolio/sync-broker', authenticate, async (req, res) => {
-  const { broker, clientCode } = req.body;
+  const { broker, clientCode, pin, totp } = req.body;
   try {
     // Clear existing holdings first
     await query(`DELETE FROM portfolio_items WHERE user_id = $1`, [req.user.id]);
     
-    // Seed high-fidelity stock holdings
-    const holdingsSeed = [
-      { symbol: 'RELIANCE', quantity: 15, buyPrice: 2450.50 },
-      { symbol: 'TCS', quantity: 10, buyPrice: 3890.00 },
-      { symbol: 'INFY', quantity: 25, buyPrice: 1420.00 },
-      { symbol: 'HDFCBANK', quantity: 30, buyPrice: 1510.00 },
-      { symbol: 'TATAMOTORS', quantity: 40, buyPrice: 920.00 },
-      { symbol: 'SBIN', quantity: 50, buyPrice: 740.00 }
-    ];
+    const isSandbox = ['DEMO', 'MOCK', 'TEST', 'SANDBOX'].some(kw => (clientCode || '').toUpperCase().includes(kw));
     
-    for (const item of holdingsSeed) {
-      const nsSymbol = `${item.symbol}.NS`;
+    let holdingsToStore = [];
+    let message = '';
+
+    if (isSandbox) {
+      // Seed high-fidelity stock holdings for sandbox testing
+      holdingsToStore = [
+        { symbol: 'RELIANCE.NS', quantity: 15, buyPrice: 2450.50 },
+        { symbol: 'TCS.NS', quantity: 10, buyPrice: 3890.00 },
+        { symbol: 'INFY.NS', quantity: 25, buyPrice: 1420.00 },
+        { symbol: 'HDFCBANK.NS', quantity: 30, buyPrice: 1510.00 },
+        { symbol: 'TATAMOTORS.NS', quantity: 40, buyPrice: 920.00 },
+        { symbol: 'SBIN.NS', quantity: 50, buyPrice: 740.00 }
+      ];
+      message = `Sandbox Connected. Synced ${holdingsToStore.length} demo holdings.`;
+    } else {
+      // Real API connection
+      if (broker !== 'Angel One') {
+        return res.status(400).json({ 
+          error: `Direct API connection is currently only supported for Angel One (SmartAPI). For Zerodha, Groww, or Upstox, please use Client Code 'DEMO' to simulate sandbox holdings.` 
+        });
+      }
+
+      // Sync from Angel One
+      try {
+        holdingsToStore = await syncAngelOne(clientCode, pin, totp);
+        message = `Successfully connected to Angel One. Synced ${holdingsToStore.length} holdings.`;
+      } catch (apiErr) {
+        console.error('Broker API integration error:', apiErr);
+        return res.status(400).json({ 
+          error: `Broker Connection Failed: ${apiErr.message}` 
+        });
+      }
+    }
+    
+    // Insert holdings into the database
+    for (const item of holdingsToStore) {
       await query(
         `INSERT INTO portfolio_items (id, user_id, symbol, quantity, buy_price) VALUES ($1,$2,$3,$4,$5)`,
-        [require('crypto').randomUUID(), req.user.id, nsSymbol, item.quantity, item.buyPrice]
+        [require('crypto').randomUUID(), req.user.id, item.symbol, item.quantity, item.buyPrice]
       );
     }
 
     // Save connection status in user record
     await query(`UPDATE users SET connected_broker = $1 WHERE id = $2`, [broker, req.user.id]);
     
-    res.json({ success: true, count: holdingsSeed.length, message: `Successfully connected with ${broker || 'Broker'}` });
+    res.json({ success: true, count: holdingsToStore.length, message });
   } catch (err) {
     console.error('Broker sync error:', err);
     res.status(500).json({ error: 'Failed to sync broker assets' });
