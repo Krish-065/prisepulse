@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
-import { createChart } from 'lightweight-charts';
+import { createChart, AreaSeries } from 'lightweight-charts';
 import { apiClient } from '../services/api';
 import { 
   Search, Calculator, BarChart2, Plus, Trash2, 
@@ -400,7 +400,7 @@ export default function MutualFunds() {
     });
     chartRef.current = chart;
 
-    const areaSeries = chart.addAreaSeries({
+    const areaSeries = chart.addSeries(AreaSeries, {
       lineColor: '#00ff88',
       topColor: 'rgba(0, 255, 136, 0.2)',
       bottomColor: 'rgba(0, 255, 136, 0.0)',

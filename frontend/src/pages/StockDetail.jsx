@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { createChart } from 'lightweight-charts';
+import { createChart, CandlestickSeries, LineSeries, createSeriesMarkers } from 'lightweight-charts';
 import { 
   TrendingUp, Activity, Play, RefreshCw, BarChart2, 
   Settings, Award, ShieldAlert, CheckCircle, ChevronRight, HelpCircle, Sparkles
@@ -641,7 +641,7 @@ export default function StockDetail() {
     });
     priceChartRef.current = priceChart;
 
-    const candlestickSeries = priceChart.addCandlestickSeries({
+    const candlestickSeries = priceChart.addSeries(CandlestickSeries, {
       upColor: '#00ff88',
       downColor: '#ff4444',
       borderVisible: false,
@@ -650,13 +650,13 @@ export default function StockDetail() {
     });
     priceSeriesRef.current = candlestickSeries;
 
-    const sma20Series = priceChart.addLineSeries({
+    const sma20Series = priceChart.addSeries(LineSeries, {
       color: '#00bcd4',
       lineWidth: 1.5,
     });
     sma20SeriesRef.current = sma20Series;
 
-    const sma50Series = priceChart.addLineSeries({
+    const sma50Series = priceChart.addSeries(LineSeries, {
       color: '#ffb300',
       lineWidth: 1.5,
     });
@@ -674,7 +674,7 @@ export default function StockDetail() {
     });
     rsiChartRef.current = rsiChart;
 
-    const rsiLineSeries = rsiChart.addLineSeries({
+    const rsiLineSeries = rsiChart.addSeries(LineSeries, {
       color: '#e040fb',
       lineWidth: 1.5,
     });
@@ -760,7 +760,7 @@ export default function StockDetail() {
         });
       }
     }
-    candlestickSeries.setMarkers(markers);
+    createSeriesMarkers(candlestickSeries, markers);
 
     // 6. Synchronize Zoom/Pan ranges
     let isSyncing = false;
