@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📈 PrisePulse
+# 📈 NonStock
 
 ### *Your Professional Financial Dashboard for Indian Markets*
 
