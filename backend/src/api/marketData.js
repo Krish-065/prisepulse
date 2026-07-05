@@ -1177,29 +1177,7 @@ router.get('/stock-history/:symbol', async (req, res) => {
 });
 
 // ─── MUTUAL FUNDS API INTEGRATION (api.mfapi.in) ───
-const MF_CACHE = {
-  allFunds: null,
-  lastFetched: 0
-};
-const MF_CACHE_TTL = 24 * 60 * 60 * 1000; // Cache for 24 hours since scheme names rarely change
 
-async function getMutualFundsList() {
-  const now = Date.now();
-  if (MF_CACHE.allFunds && (now - MF_CACHE.lastFetched < MF_CACHE_TTL)) {
-    return MF_CACHE.allFunds;
-  }
-  try {
-    const res = await fetch('https://api.mfapi.in/mf');
-    if (!res.ok) throw new Error('Failed to fetch from mfapi');
-    const data = await res.json();
-    MF_CACHE.allFunds = data;
-    MF_CACHE.lastFetched = now;
-    return data;
-  } catch (err) {
-    console.error('Error fetching MF list:', err);
-    return MF_CACHE.allFunds || [];
-  }
-}
 
 // Helper to calculate historical CAGR / Absolute returns
 function calculateMFReturns(navHistory) {
@@ -1235,20 +1213,20 @@ function calculateMFReturns(navHistory) {
 // 1. Search Mutual Funds
 router.get('/mutual-funds/search', async (req, res) => {
   try {
-    const queryStr = (req.query.query || '').trim().toLowerCase();
+    const queryStr = (req.query.query || '').trim();
     if (!queryStr || queryStr.length < 3) {
       return res.json([]);
     }
-    const allFunds = await getMutualFundsList();
-    const matches = allFunds
-      .filter(fund => fund.schemeName.toLowerCase().includes(queryStr))
-      .slice(0, 20)
-      .map(fund => ({
-        schemeCode: fund.schemeCode,
-        schemeName: fund.schemeName
-      }));
+    const response = await fetch(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(queryStr)}`);
+    if (!response.ok) throw new Error('Failed to query mfapi search');
+    const data = await response.json();
+    const matches = data.slice(0, 20).map(fund => ({
+      schemeCode: String(fund.schemeCode),
+      schemeName: fund.schemeName
+    }));
     res.json(matches);
   } catch (err) {
+    console.error('Mutual Fund search failed:', err);
     res.status(500).json({ error: 'Search failed' });
   }
 });
