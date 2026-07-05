@@ -18,7 +18,8 @@ import {
   LogOut,
   X,
   Activity,
-  Compass
+  Compass,
+  Award
 } from 'lucide-react';
 
 export default function Sidebar({ isMobile, isOpen, onClose }) {
@@ -35,6 +36,7 @@ export default function Sidebar({ isMobile, isOpen, onClose }) {
     { path: '/portfolio', label: 'Portfolio', icon: <Briefcase size={16} /> },
     { path: '/ipos', label: 'IPOs', icon: <LineChart size={16} /> },
     { path: '/crypto', label: 'Crypto', icon: <Coins size={16} /> },
+    { path: '/mutual-funds', label: 'Mutual Funds', icon: <Award size={16} /> },
     { path: '/news', label: 'News', icon: <Newspaper size={16} /> },
     { path: '/tools', label: 'Tools', icon: <Calculator size={16} /> },
     { path: '/profile', label: 'My Profile', icon: <User size={16} /> },

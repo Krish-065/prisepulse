@@ -14,7 +14,8 @@ import {
   Star, 
   Search, 
   ArrowRight,
-  ShieldCheck
+  ShieldCheck,
+  Award
 } from 'lucide-react';
 
 const ProfileContainer = styled.div`
@@ -509,6 +510,12 @@ export default function Profile() {
               <NavButton onClick={() => navigate('/screener')}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Search size={16} style={{ color: '#9b9eac' }} /> Go to Screener
+                </span>
+                <span className="icon"><ArrowRight size={16} /></span>
+              </NavButton>
+              <NavButton onClick={() => navigate('/mutual-funds')}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Award size={16} style={{ color: '#9b9eac' }} /> Go to Mutual Funds
                 </span>
                 <span className="icon"><ArrowRight size={16} /></span>
               </NavButton>
