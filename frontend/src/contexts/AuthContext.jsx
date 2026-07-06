@@ -4,6 +4,22 @@ import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
 
+function decodeJWT(token) {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -12,19 +28,43 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem('token');
     if (token) {
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchUser();
+      
+      const payload = decodeJWT(token);
+      if (payload && payload.exp * 1000 > Date.now()) {
+        setUser({
+          id: payload.id,
+          email: payload.email,
+          name: payload.name || payload.email.split('@')[0]
+        });
+        // Set loading to false so the user gets access to the dashboard immediately
+        setLoading(false);
+      } else {
+        localStorage.removeItem('token');
+        delete apiClient.defaults.headers.common['Authorization'];
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+      
+      fetchUser(false); // background verification
     } else {
       setLoading(false);
     }
   }, []);
 
-  const fetchUser = async () => {
+  const fetchUser = async (setLoadingState = true) => {
+    if (setLoadingState) setLoading(true);
     try {
       const res = await apiClient.get('/user/profile');
       setUser(res.data);
     } catch (err) {
-      localStorage.removeItem('token');
-      delete apiClient.defaults.headers.common['Authorization'];
+      console.error('Failed to verify session profile:', err);
+      // Only clear token if it is a definitive authentication failure (401 or 403)
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        localStorage.removeItem('token');
+        delete apiClient.defaults.headers.common['Authorization'];
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }
