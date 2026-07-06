@@ -1048,14 +1048,25 @@ router.get('/stock-history/:symbol', async (req, res) => {
   try {
     let symbol = req.params.symbol.toUpperCase();
 
+    // Strip prefix if any (e.g. NSE:RELIANCE -> RELIANCE, NSE:NIFTY -> NIFTY)
+    if (symbol.includes(':')) {
+      symbol = symbol.split(':')[1];
+    }
+
+    // Normalize index symbol names to official Yahoo Finance tickers
+    if (symbol === 'NIFTY' || symbol === 'NSEI') symbol = '^NSEI';
+    else if (symbol === 'SENSEX' || symbol === 'BSESN') symbol = '^BSESN';
+    else if (symbol === 'BANKNIFTY' || symbol === 'NSEBANK') symbol = '^NSEBANK';
+    else if (symbol === 'CNXIT') symbol = '^CNXIT';
+
     // ─── Smart Symbol Resolver ───
     // Do NOT blindly append .NS — only do so for real Indian equity tickers
     const isIndex = symbol.startsWith('^') ||
                     ['NSEI', 'BSESN', 'NSEBANK', 'CNXIT', 'NIFTY', 'SENSEX', 'BANKNIFTY'].includes(symbol);
     const isCrypto = symbol.endsWith('-USD') || symbol.endsWith('-USDT') ||
                      ['BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'ADA', 'SHIB', 'AVAX', 'TRX'].includes(symbol);
-    const isForex  = symbol.endsWith('=X') || symbol.includes('USD') || symbol.includes('INR') && !symbol.endsWith('.NS');
-    const alreadySuffixed = symbol.endsWith('.NS') || symbol.endsWith('.BO') || symbol.endsWith('=X') || symbol.endsWith('-USD') || symbol.endsWith('-USDT');
+    const isForex  = symbol.endsWith('=X') || symbol.includes('USD') || (symbol.includes('INR') && !symbol.endsWith('.NS'));
+    const alreadySuffixed = symbol.endsWith('.NS') || symbol.endsWith('.BO') || symbol.endsWith('=X') || symbol.endsWith('-USD') || symbol.endsWith('-USDT') || symbol.startsWith('^');
 
     if (isCrypto && !alreadySuffixed) {
       // e.g. BTC → BTC-USD (Yahoo Finance format for crypto)
