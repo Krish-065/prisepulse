@@ -353,8 +353,8 @@ export default function Portfolio() {
     }
   };
 
-  const fetchPortfolio = async () => {
-    setLoading(true);
+  const fetchPortfolio = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const res = await apiClient.get('/portfolio');
       const items = res.data.portfolio || [];
@@ -489,6 +489,10 @@ export default function Portfolio() {
 
   useEffect(() => {
     fetchPortfolio();
+    const interval = setInterval(() => {
+      fetchPortfolio(true);
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   // Compute sector allocations & quadrant risk

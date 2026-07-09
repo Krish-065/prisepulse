@@ -49,7 +49,7 @@ export default function FnO() {
 
   useEffect(() => {
     fetchFnOData(firstLoad);
-    const interval = setInterval(() => fetchFnOData(false), 15000);
+    const interval = setInterval(() => fetchFnOData(false), 1000);
     return () => clearInterval(interval);
   }, [underlying, selectedExpiry]);
 

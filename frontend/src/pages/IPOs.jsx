@@ -344,7 +344,7 @@ export default function IPOs() {
 
   useEffect(() => {
     fetchIpos();
-    const interval = setInterval(fetchIpos, 15000);
+    const interval = setInterval(fetchIpos, 1000);
     return () => clearInterval(interval);
   }, []);
 

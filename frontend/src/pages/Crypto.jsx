@@ -13,7 +13,7 @@ export default function Crypto() {
       } catch (err) { console.error(err); } finally { setLoading(false); }
     };
     fetchCrypto();
-    const interval = setInterval(fetchCrypto, 60000);
+    const interval = setInterval(fetchCrypto, 1000);
     return () => clearInterval(interval);
   }, []);
 

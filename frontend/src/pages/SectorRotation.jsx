@@ -83,8 +83,8 @@ export default function SectorRotation() {
 
   useEffect(() => {
     fetchRotationData();
-    // 15 seconds real-time polling interval
-    const timer = setInterval(() => fetchRotationData(true), 15000);
+    // 1 second real-time polling interval
+    const timer = setInterval(() => fetchRotationData(true), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -170,7 +170,7 @@ export default function SectorRotation() {
           </button>
 
           <span style={{ fontSize: '11px', color: refreshing ? '#00ff88' : 'var(--text-secondary)', transition: '0.2s' }}>
-            {refreshing ? 'Refreshing quote engine...' : 'Live auto-updating (15s)'}
+            {refreshing ? 'Refreshing quote engine...' : 'Live auto-updating (1s)'}
           </span>
           <button
             onClick={() => fetchRotationData()}

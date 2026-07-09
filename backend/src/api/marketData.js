@@ -11,7 +11,7 @@ const YAHOO_HEADERS = {
 };
 
 const quoteCache = {};
-const CACHE_TTL = 15000; // 15 seconds
+const CACHE_TTL = 1000; // 1 second
 
 async function fetchYahooQuote(symbol) {
   try {

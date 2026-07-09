@@ -8,7 +8,8 @@ export default function Watchlist() {
   const [watchlist, setWatchlist] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchWatchlist = async () => {
+  const fetchWatchlist = async (isSilent = false) => {
+    if (!isSilent) setLoading(true);
     try {
       const res = await apiClient.get('/watchlist');
       const items = res.data.watchlist || [];
@@ -61,6 +62,10 @@ export default function Watchlist() {
 
   useEffect(() => {
     fetchWatchlist();
+    const interval = setInterval(() => {
+      fetchWatchlist(true);
+    }, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   return (

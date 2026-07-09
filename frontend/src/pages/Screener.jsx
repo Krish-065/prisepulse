@@ -38,7 +38,7 @@ export default function Screener() {
 
   useEffect(() => {
     fetchStocks();
-    const interval = setInterval(fetchStocks, 30000);
+    const interval = setInterval(fetchStocks, 1000);
     return () => clearInterval(interval);
   }, []);
 

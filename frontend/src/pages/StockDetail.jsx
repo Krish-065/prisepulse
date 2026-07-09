@@ -228,7 +228,7 @@ export default function StockDetail() {
     // Start silent polling for live updates every 10 seconds
     const intervalId = setInterval(() => {
       fetchStockData(true);
-    }, 10000);
+    }, 1000);
 
     return () => clearInterval(intervalId);
   }, [symbol, timeRange, chartInterval]);

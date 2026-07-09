@@ -37,7 +37,7 @@ export default function Dashboard() {
     const interval = setInterval(() => {
       fetchMovers();
       fetchCrypto();
-    }, 15000);
+    }, 1000);
     
     const timeInt = setInterval(() => setCurrentTime(new Date()), 1000);
     

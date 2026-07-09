@@ -92,7 +92,7 @@ export default function Layout({ children }) {
     const interval = setInterval(() => {
       fetchIndices();
       updateMarketStatus();
-    }, 15000);
+    }, 1000);
 
     const handleResize = () => {
       const mobile = window.innerWidth < 1024;
