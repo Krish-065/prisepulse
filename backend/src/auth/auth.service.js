@@ -411,7 +411,11 @@ async function forgotPassword(req, res) {
     const expiry = new Date(Date.now() + 60 * 60 * 1000);
     await query(`UPDATE users SET email_verify_token = $1, email_verify_expiry = $2 WHERE email = $3`, [resetToken, expiry, email]);
 
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&email=${email}`;
+    let origin = req.headers.origin || process.env.FRONTEND_URL || 'http://localhost:5173';
+    if (!origin.startsWith('http')) {
+      origin = `https://${origin}`;
+    }
+    const resetUrl = `${origin}/reset-password?token=${resetToken}&email=${email}`;
     
     // Send reset email asynchronously in the background so the client doesn't hang!
     sendResetEmail(email, resetUrl).catch(mailError => {
