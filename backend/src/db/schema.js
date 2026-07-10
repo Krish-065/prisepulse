@@ -11,7 +11,7 @@ async function createTables() {
       name VARCHAR(255),
       is_email_verified BOOLEAN DEFAULT FALSE,
       email_verify_token VARCHAR(255),
-      email_verify_expiry TIMESTAMP,
+      email_verify_expiry TIMESTAMPTZ,
       two_factor_secret VARCHAR(255),
       two_factor_enabled BOOLEAN DEFAULT FALSE,
       theme VARCHAR(50) DEFAULT 'dark',
@@ -39,6 +39,13 @@ async function createTables() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pan_id VARCHAR(50) DEFAULT 'ABCDE*****F'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connected_broker VARCHAR(100)`);
+
+  // Migrate existing column type to TIMESTAMPTZ
+  try {
+    await query(`ALTER TABLE users ALTER COLUMN email_verify_expiry TYPE TIMESTAMPTZ`);
+  } catch (err) {
+    console.warn('Migration warning (email_verify_expiry):', err.message);
+  }
 
   await query(`
     CREATE TABLE IF NOT EXISTS sessions (
