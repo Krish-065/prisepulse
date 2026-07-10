@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
 
 export default function Crypto() {
   const [crypto, setCrypto] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchCrypto = async () => {
@@ -24,7 +26,12 @@ export default function Crypto() {
       <h1>Cryptocurrency</h1>
       <div className="crypto-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
         {crypto.map(coin => (
-          <div key={coin.symbol} className="index-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          <div 
+            key={coin.symbol} 
+            className="index-card" 
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+            onClick={() => navigate(`/stock/${coin.symbol}`)}
+          >
             {coin.image && <img src={coin.image} alt={coin.name} style={{ width: '48px', height: '48px', borderRadius: '50%' }} />}
             <div className="crypto-symbol" style={{ fontWeight: 'bold', fontSize: '18px' }}>{coin.name}</div>
             <div className="crypto-name" style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>{coin.symbol}</div>
