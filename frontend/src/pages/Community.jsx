@@ -28,12 +28,22 @@ export default function Community() {
   const [contests, setContests] = useState([]);
   const [loadingEdu, setLoadingEdu] = useState(false);
 
-  // Discuss Groups
-  const [activeGroupId, setActiveGroupId] = useState('nifty'); // nifty | options | basics | crypto
+  // Discuss Groups & Custom Channels
+  const [activeGroupId, setActiveGroupId] = useState('nifty'); // nifty | options | basics | crypto | UUID
   const [chatMessages, setChatMessages] = useState([]);
   const [loadingChat, setLoadingChat] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  const [groups, setGroups] = useState([]);
+  const [invitations, setInvitations] = useState([]);
+  const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupFeatures, setNewGroupFeatures] = useState('all-can-chat');
+  const [inviteEmails, setInviteEmails] = useState('');
+  const [isManageGroupOpen, setIsManageGroupOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   const chatEndRef = useRef(null);
 
@@ -47,9 +57,17 @@ export default function Community() {
     } else if (tab === 'educator') {
       fetchEducatorData();
     } else if (tab === 'chats') {
+      fetchGroups();
+      fetchInvitations();
       fetchChatMessages(activeGroupId);
     }
   }, [tab, activeGroupId]);
+
+  useEffect(() => {
+    if (tab === 'chats' && activeGroupId && isManageGroupOpen) {
+      fetchGroupMembers(activeGroupId);
+    }
+  }, [tab, activeGroupId, isManageGroupOpen]);
 
   useEffect(() => {
     if (tab === 'chats') {
@@ -163,21 +181,130 @@ export default function Community() {
     }
   };
 
-  // Group Chat API
+  // Group Chat & Group Management API
+  const fetchGroups = async () => {
+    try {
+      const res = await apiClient.get('/community/groups');
+      setGroups(res.data);
+      if (res.data.length > 0) {
+        const activeExists = res.data.some(g => g.id === activeGroupId);
+        if (!activeExists) {
+          setActiveGroupId(res.data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch groups:', err);
+    }
+  };
+
+  const fetchInvitations = async () => {
+    try {
+      const res = await apiClient.get('/community/invitations');
+      setInvitations(res.data);
+    } catch (err) {
+      console.error('Failed to fetch invitations:', err);
+    }
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) {
+      toast.error('Group name is required');
+      return;
+    }
+    try {
+      const res = await apiClient.post('/community/groups', {
+        name: newGroupName,
+        features: newGroupFeatures
+      });
+      toast.success(`Group "${newGroupName}" created successfully!`);
+      setNewGroupName('');
+      setNewGroupFeatures('all-can-chat');
+      setIsCreateGroupOpen(false);
+      await fetchGroups();
+      setActiveGroupId(res.data.id);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create group');
+    }
+  };
+
+  const handleSendInvite = async (e) => {
+    e.preventDefault();
+    if (!inviteEmails.trim()) {
+      toast.error('Please enter at least one email');
+      return;
+    }
+    try {
+      const res = await apiClient.post(`/community/groups/${activeGroupId}/invite`, {
+        emails: inviteEmails
+      });
+      if (res.data.invited && res.data.invited.length > 0) {
+        toast.success(`Sent invitation to: ${res.data.invited.join(', ')}`);
+        setInviteEmails('');
+      }
+      if (res.data.errors && res.data.errors.length > 0) {
+        res.data.errors.forEach(err => toast.error(err));
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to send invite');
+    }
+  };
+
+  const handleAcceptInvite = async (inviteId, groupName) => {
+    try {
+      await apiClient.post(`/community/invitations/${inviteId}/accept`);
+      toast.success(`Accepted invitation to join "${groupName}"!`);
+      await fetchInvitations();
+      await fetchGroups();
+    } catch (err) {
+      toast.error('Failed to accept invitation');
+    }
+  };
+
+  const handleRejectInvite = async (inviteId, groupName) => {
+    try {
+      await apiClient.post(`/community/invitations/${inviteId}/reject`);
+      toast.success(`Rejected invitation to join "${groupName}"`);
+      await fetchInvitations();
+    } catch (err) {
+      toast.error('Failed to reject invitation');
+    }
+  };
+
+  const fetchGroupMembers = async (groupId) => {
+    setLoadingMembers(true);
+    try {
+      const res = await apiClient.get(`/community/groups/${groupId}/members`);
+      setGroupMembers(res.data);
+    } catch (err) {
+      console.error('Failed to fetch group members:', err);
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handlePromoteMember = async (userId, userName) => {
+    try {
+      await apiClient.post(`/community/groups/${activeGroupId}/members/${userId}/role`, {
+        role: 'admin'
+      });
+      toast.success(`${userName} has been promoted to Admin!`);
+      fetchGroupMembers(activeGroupId);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to promote member');
+    }
+  };
+
   const fetchChatMessages = async (groupId) => {
     setLoadingChat(true);
     try {
       const res = await apiClient.get(`/community/chat/${groupId}`);
-      setMessagesWithAnimation(res.data);
+      setChatMessages(res.data);
     } catch (err) {
       console.error('Failed to fetch chat messages:', err);
     } finally {
       setLoadingChat(false);
     }
-  };
-
-  const setMessagesWithAnimation = (msgs) => {
-    setChatMessages(msgs);
   };
 
   const handleSendChatMessage = async (e) => {
@@ -191,7 +318,7 @@ export default function Community() {
       setChatMessages(prev => [...prev, res.data]);
       setChatInput('');
     } catch (err) {
-      toast.error('Failed to send message');
+      toast.error(err.response?.data?.error || 'Failed to send message');
     } finally {
       setSendingMsg(false);
     }
@@ -712,46 +839,194 @@ export default function Community() {
       )}
 
       {tab === 'chats' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px', alignItems: 'stretch' }}>
-          {/* Chat Groups Sidebar */}
-          <div style={{
-            background: 'var(--bg-card-glass)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '16px',
-            padding: '16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px'
-          }}>
-            <h3 style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-secondary)', letterSpacing: '0.8px', textTransform: 'uppercase', margin: '0 0 8px 6px' }}>
-              Discussion Rooms
-            </h3>
-            {[
-              { id: 'nifty', name: 'Nifty & BankNifty Tips' },
-              { id: 'options', name: 'F&O Strategies' },
-              { id: 'basics', name: 'Basics for Beginners' },
-              { id: 'crypto', name: 'Crypto Wizards' }
-            ].map(room => (
-              <button
-                key={room.id}
-                onClick={() => setActiveGroupId(room.id)}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '12px 14px',
-                  background: activeGroupId === room.id ? 'rgba(0, 255, 136, 0.1)' : 'transparent',
-                  color: activeGroupId === room.id ? '#00ff88' : '#e0e0e0',
-                  fontWeight: activeGroupId === room.id ? '800' : '500',
-                  fontSize: '12px',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: '0.2s'
-                }}
-              >
-                # {room.name}
-              </button>
-            ))}
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px', alignItems: 'stretch' }}>
+          {/* Chat Groups & Invites Sidebar */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            
+            {/* Sidebar main card */}
+            <div style={{
+              background: 'var(--bg-card-glass)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px',
+              minHeight: '450px'
+            }}>
+              
+              {/* Public Rooms */}
+              <div>
+                <h3 style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88', letterSpacing: '0.8px', textTransform: 'uppercase', margin: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Public Rooms</span>
+                  <Sparkles size={12} style={{ color: '#00ff88' }} />
+                </h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {groups.filter(g => g.created_by === null).map(room => (
+                    <button
+                      key={room.id}
+                      onClick={() => {
+                        setActiveGroupId(room.id);
+                        setIsManageGroupOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '10px 12px',
+                        background: activeGroupId === room.id ? 'rgba(0, 255, 136, 0.1)' : 'transparent',
+                        color: activeGroupId === room.id ? '#00ff88' : '#e0e0e0',
+                        fontWeight: activeGroupId === room.id ? '800' : '500',
+                        fontSize: '12px',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        transition: '0.2s'
+                      }}
+                    >
+                      # {room.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Private Groups */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ fontSize: '11px', fontWeight: '800', color: '#00bcd4', letterSpacing: '0.8px', textTransform: 'uppercase', margin: 0 }}>
+                    My Groups
+                  </h3>
+                  <button
+                    onClick={() => setIsCreateGroupOpen(true)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#00bcd4',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0
+                    }}
+                    title="Create custom group"
+                  >
+                    <PlusCircle size={16} />
+                  </button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '220px', overflowY: 'auto' }}>
+                  {groups.filter(g => g.created_by !== null).length === 0 ? (
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 6px', fontStyle: 'italic' }}>
+                      No custom groups yet.
+                    </span>
+                  ) : (
+                    groups.filter(g => g.created_by !== null).map(group => (
+                      <button
+                        key={group.id}
+                        onClick={() => {
+                          setActiveGroupId(group.id);
+                          setIsManageGroupOpen(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          background: activeGroupId === group.id ? 'rgba(0, 188, 212, 0.15)' : 'transparent',
+                          color: activeGroupId === group.id ? '#00bcd4' : '#e0e0e0',
+                          fontWeight: activeGroupId === group.id ? '800' : '500',
+                          fontSize: '12px',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          transition: '0.2s',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <span style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: '180px' }}>
+                          👥 {group.name}
+                        </span>
+                        {group.my_role === 'admin' && (
+                          <span style={{ fontSize: '9px', background: 'rgba(0, 255, 136, 0.1)', color: '#00ff88', padding: '1px 4px', borderRadius: '4px' }}>
+                            Admin
+                          </span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Invitations Box */}
+            {invitations.length > 0 && (
+              <div style={{
+                background: 'rgba(255, 179, 0, 0.05)',
+                border: '1px solid rgba(255, 179, 0, 0.2)',
+                borderRadius: '16px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <h4 style={{ fontSize: '11px', fontWeight: '800', color: '#ffb300', textTransform: 'uppercase', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Award size={14} />
+                  Pending Invites ({invitations.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {invitations.map(invite => (
+                    <div
+                      key={invite.id}
+                      style={{
+                        background: 'rgba(10, 14, 39, 0.6)',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        borderRadius: '8px',
+                        padding: '10px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '11px', fontWeight: '700' }}>{invite.group_name}</span>
+                      <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>Invited by: {invite.inviter_name}</span>
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                        <button
+                          onClick={() => handleAcceptInvite(invite.id, invite.group_name)}
+                          style={{
+                            flex: 1,
+                            background: '#00ff88',
+                            color: '#0a0e27',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px',
+                            fontSize: '10px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => handleRejectInvite(invite.id, invite.group_name)}
+                          style={{
+                            flex: 1,
+                            background: 'rgba(255,255,255,0.05)',
+                            color: '#ff4444',
+                            border: '1px solid rgba(255,68,68,0.3)',
+                            borderRadius: '4px',
+                            padding: '4px',
+                            fontSize: '10px',
+                            fontWeight: '800',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Group Chat Canvas */}
@@ -762,81 +1037,400 @@ export default function Community() {
             padding: '24px',
             display: 'flex',
             flexDirection: 'column',
-            height: '560px'
+            height: '600px',
+            position: 'relative'
           }}>
-            <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px', marginBottom: '16px' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>
-                # {activeGroupId === 'nifty' ? 'Nifty & BankNifty Tips' : activeGroupId === 'options' ? 'F&O Strategies' : activeGroupId === 'basics' ? 'Basics for Beginners' : 'Crypto Wizards'}
-              </h2>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Share and debate investing configurations in real-time</span>
-            </div>
-
-            {/* Message Area */}
-            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
-              {loadingChat && chatMessages.length === 0 ? (
-                <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                  <RefreshCw className="animate-spin" />
-                </div>
-              ) : (
-                chatMessages.map(msg => (
-                  <div key={msg.id} style={{
-                    alignSelf: 'flex-start',
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                    borderRadius: '12px',
-                    padding: '12px 16px',
-                    maxWidth: '85%',
-                    lineHeight: '1.4'
-                  }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88' }}>{msg.author_name}</span>
-                      <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
-                        {new Date(msg.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p style={{ fontSize: '12px', color: '#e0e0e0', margin: 0 }}>{msg.message}</p>
+            {/* Header info */}
+            {(() => {
+              const activeGroup = groups.find(g => g.id === activeGroupId) || { name: 'Loading...', created_by: null, features: 'all-can-chat' };
+              const isPrivate = activeGroup.created_by !== null;
+              const isAdmin = activeGroup.my_role === 'admin';
+              
+              return (
+                <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '16px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h2 style={{ fontSize: '18px', fontWeight: '900', margin: '0 0 4px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isPrivate ? `👥 ${activeGroup.name}` : `# ${activeGroup.name}`}
+                      {isPrivate && (
+                        <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '500' }}>
+                          Private
+                        </span>
+                      )}
+                      {activeGroup.features === 'admin-only-chat' && (
+                        <span style={{ fontSize: '10px', background: 'rgba(255,68,68,0.1)', color: '#ff4444', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                          Announcement Only
+                        </span>
+                      )}
+                    </h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '11px', margin: 0 }}>
+                      {isPrivate ? `Created by ${activeGroup.creator_name}` : 'Share and debate investing configurations in real-time'}
+                    </p>
                   </div>
-                ))
+                  
+                  {isPrivate && isAdmin && (
+                    <button
+                      onClick={() => setIsManageGroupOpen(prev => !prev)}
+                      style={{
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                        padding: '8px 14px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: '0.2s'
+                      }}
+                    >
+                      {isManageGroupOpen ? 'Close Settings' : 'Manage Group'}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Message Area & Settings Side-by-Side */}
+            <div style={{ display: 'flex', flex: 1, gap: '20px', minHeight: 0, marginBottom: '16px' }}>
+              
+              {/* Messages list */}
+              <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {loadingChat && chatMessages.length === 0 ? (
+                  <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+                    <RefreshCw className="animate-spin" style={{ marginRight: '8px' }} /> Loading chat messages...
+                  </div>
+                ) : chatMessages.length === 0 ? (
+                  <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '12px', fontStyle: 'italic' }}>
+                    No messages in this group yet. Say hello!
+                  </div>
+                ) : (
+                  chatMessages.map(msg => (
+                    <div key={msg.id} style={{
+                      alignSelf: 'flex-start',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.04)',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                      maxWidth: '85%',
+                      lineHeight: '1.4'
+                    }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88' }}>{msg.author_name}</span>
+                        <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+                          {new Date(msg.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#e0e0e0', margin: 0, whiteSpace: 'pre-wrap' }}>{msg.message}</p>
+                    </div>
+                  ))
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Group Settings / Admin Panel */}
+              {isManageGroupOpen && (
+                <div style={{
+                  width: '320px',
+                  background: 'rgba(10, 14, 39, 0.4)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  overflowY: 'auto'
+                }}>
+                  {/* Invite Users Form */}
+                  <div>
+                    <h4 style={{ fontSize: '12px', fontWeight: '800', color: '#00bcd4', margin: '0 0 10px 0' }}>Invite Members</h4>
+                    <form onSubmit={handleSendInvite} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <input
+                        type="text"
+                        placeholder="e.g. user1@mail.com, user2@mail.com"
+                        value={inviteEmails}
+                        onChange={(e) => setInviteEmails(e.target.value)}
+                        style={{
+                          background: 'rgba(255,255,255,0.02)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '6px',
+                          padding: '8px 10px',
+                          color: '#ffffff',
+                          fontSize: '11px',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: '#0a0e27',
+                          padding: '8px',
+                          fontWeight: '800',
+                          fontSize: '11px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Send Invite(s)
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* Members List */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <h4 style={{ fontSize: '12px', fontWeight: '800', color: '#00ff88', margin: '0 0 4px 0' }}>Group Members</h4>
+                    
+                    {loadingMembers ? (
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Loading members list...</span>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {groupMembers.map(member => (
+                          <div
+                            key={member.id}
+                            style={{
+                              background: 'rgba(255,255,255,0.02)',
+                              borderRadius: '6px',
+                              padding: '8px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '11px', fontWeight: '700' }}>{member.name}</span>
+                              <span style={{ fontSize: '9px', color: 'var(--text-secondary)', textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '160px' }}>{member.email}</span>
+                            </div>
+                            
+                            {member.role === 'admin' ? (
+                              <span style={{ fontSize: '9px', color: '#00ff88', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                <ShieldCheck size={10} /> Admin
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handlePromoteMember(member.id, member.name)}
+                                style={{
+                                  background: 'rgba(0, 255, 136, 0.1)',
+                                  border: '1px solid rgba(0, 255, 136, 0.2)',
+                                  borderRadius: '4px',
+                                  color: '#00ff88',
+                                  padding: '2px 6px',
+                                  fontSize: '9px',
+                                  fontWeight: '800',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Promote
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
-              <div ref={chatEndRef} />
             </div>
 
-            {/* Chat Input */}
-            <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={`Type a tip in # ${activeGroupId}...`}
-                style={{
-                  flex: 1,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  color: '#ffffff',
-                  fontSize: '12px',
-                  outline: 'none'
-                }}
-              />
-              <button
-                type="submit"
-                disabled={sendingMsg}
-                style={{
-                  background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#0a0e27',
-                  padding: '10px 20px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: sendingMsg ? 0.6 : 1
-                }}
-              >
-                <Send size={14} />
-              </button>
+            {/* Chat Input or Warning Panel */}
+            {(() => {
+              const activeGroup = groups.find(g => g.id === activeGroupId) || { created_by: null, features: 'all-can-chat' };
+              const isAnnouncementOnly = activeGroup.features === 'admin-only-chat';
+              const isAdmin = activeGroup.my_role === 'admin';
+              const isPrivate = activeGroup.created_by !== null;
+              const canChat = !isPrivate || !isAnnouncementOnly || isAdmin;
+
+              if (!canChat) {
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    background: 'rgba(255, 68, 68, 0.05)',
+                    border: '1px solid rgba(255, 68, 68, 0.15)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    color: '#ff4444',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}>
+                    🔒 Only group admins can send messages in this announcement channel.
+                  </div>
+                );
+              }
+
+              return (
+                <form onSubmit={handleSendChatMessage} style={{ display: 'flex', gap: '10px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder={isAnnouncementOnly ? "Post an announcement..." : `Send a message in this group...`}
+                    style={{
+                      flex: 1,
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      padding: '12px 14px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sendingMsg}
+                    style={{
+                      background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      color: '#0a0e27',
+                      padding: '10px 20px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: sendingMsg ? 0.6 : 1
+                    }}
+                  >
+                    <Send size={14} />
+                  </button>
+                </form>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Create Group Modal Overlay */}
+      {isCreateGroupOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 14, 39, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #11152a 0%, #171c3b 100%)',
+            border: '1px solid rgba(0, 255, 136, 0.2)',
+            borderRadius: '16px',
+            padding: '28px',
+            width: '400px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '950', margin: '0 0 6px 0', color: '#ffffff' }}>Create Discussion Group</h3>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>Establish a new hub and invite members by email.</p>
+            </div>
+            
+            <form onSubmit={handleCreateGroup} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Group Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. F&O Mastermind"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Posting Permissions</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewGroupFeatures('all-can-chat')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: newGroupFeatures === 'all-can-chat' ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255,255,255,0.02)',
+                      border: newGroupFeatures === 'all-can-chat' ? '1px solid #00ff88' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      color: newGroupFeatures === 'all-can-chat' ? '#00ff88' : '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      transition: '0.2s'
+                    }}
+                  >
+                    All Can Chat
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewGroupFeatures('admin-only-chat')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: newGroupFeatures === 'admin-only-chat' ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255,255,255,0.02)',
+                      border: newGroupFeatures === 'admin-only-chat' ? '1px solid #ff4444' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      color: newGroupFeatures === 'admin-only-chat' ? '#ff4444' : '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      transition: '0.2s'
+                    }}
+                  >
+                    Admins Only
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsCreateGroupOpen(false)}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#0a0e27',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Create
+                </button>
+              </div>
             </form>
           </div>
         </div>

@@ -232,11 +232,59 @@ async function createTables() {
     )
   `);
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS discussion_groups (
+      id VARCHAR(255) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+      features VARCHAR(50) DEFAULT 'all-can-chat',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_members (
+      id VARCHAR(255) PRIMARY KEY,
+      group_id VARCHAR(255) REFERENCES discussion_groups(id) ON DELETE CASCADE,
+      user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+      role VARCHAR(50) DEFAULT 'member',
+      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(group_id, user_id)
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_invitations (
+      id VARCHAR(255) PRIMARY KEY,
+      group_id VARCHAR(255) REFERENCES discussion_groups(id) ON DELETE CASCADE,
+      invited_by VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+      email VARCHAR(255) NOT NULL,
+      status VARCHAR(50) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(group_id, email, status)
+    )
+  `);
+
+  // Seed default discussion groups if empty
+  const groupCount = await query('SELECT COUNT(*) FROM discussion_groups');
+  if (parseInt(groupCount.rows[0].count) === 0) {
+    console.log('Seeding default public discussion groups...');
+    const defaultGroups = [
+      ['nifty', 'Nifty & BankNifty Tips', null, 'all-can-chat'],
+      ['options', 'F&O Strategies', null, 'all-can-chat'],
+      ['basics', 'Basics for Beginners', null, 'all-can-chat'],
+      ['crypto', 'Crypto Wizards', null, 'all-can-chat']
+    ];
+    for (const g of defaultGroups) {
+      await query('INSERT INTO discussion_groups (id, name, created_by, features) VALUES ($1,$2,$3,$4)', g);
+    }
+  }
+
   // Create group_messages table
   await query(`
     CREATE TABLE IF NOT EXISTS group_messages (
       id VARCHAR(255) PRIMARY KEY,
-      group_id VARCHAR(50) NOT NULL,
+      group_id VARCHAR(255) REFERENCES discussion_groups(id) ON DELETE CASCADE,
       user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
       author_name VARCHAR(255) NOT NULL,
       message TEXT NOT NULL,
