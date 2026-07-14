@@ -1202,10 +1202,26 @@ router.get('/stock-history/:symbol', async (req, res) => {
         return x - Math.floor(x);
       };
 
-      let currPrice = basePrice;
-      const simulatedHistory = [];
-      const dataPointsCount = interval === '1d' ? 60 : 30;
-      const timeStep = interval === '1m' ? 60000 : interval === '5m' ? 300000 : oneDay;
+       let currPrice = basePrice;
+       const simulatedHistory = [];
+       
+       let dataPointsCount = 100;
+       if (interval === '1d') dataPointsCount = 250;
+       else if (interval === '60m') dataPointsCount = 150;
+       else if (interval === '15m') dataPointsCount = 120;
+       else if (interval === '5m') dataPointsCount = 100;
+       else if (interval === '1m') dataPointsCount = 80;
+
+       const timeStepMap = {
+         '1m': 60000,
+         '5m': 300000,
+         '15m': 900000,
+         '60m': 3600000,
+         '1d': 86400000,
+         '1wk': 604800000,
+         '1mo': 2592000000
+       };
+       const timeStep = timeStepMap[interval] || 86400000;
 
       for (let i = 0; i < dataPointsCount; i++) {
         const time = now - i * timeStep;

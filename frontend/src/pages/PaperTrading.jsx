@@ -306,7 +306,17 @@ export default function PaperTrading() {
         querySymbol = `${selectedSymbol}-USD`;
       }
       
-      const range = interval === '1d' ? '1y' : '5d';
+      const getRangeForInterval = (intv) => {
+        switch (intv) {
+          case '1m': return '5d';
+          case '5m': return '5d';
+          case '15m': return '5d';
+          case '60m': return '1mo';
+          case '1d': return '1y';
+          default: return '1y';
+        }
+      };
+      const range = getRangeForInterval(interval);
       const res = await apiClient.get(`/market/stock-history/${querySymbol}`, {
         params: { interval, range }
       });
@@ -608,25 +618,111 @@ export default function PaperTrading() {
       const candle = lastCandleRef.current;
       if (!candle) return;
 
-      const pctChange = (Math.random() - 0.5) * 0.003;
-      const delta = candle.close * pctChange;
-      const newPrice = Math.max(0.01, candle.close + delta);
+      const nowSec = Math.floor(Date.now() / 1000);
+      const stepSec = interval === '1m' ? 60 : interval === '5m' ? 300 : interval === '15m' ? 900 : interval === '60m' ? 3600 : 86400;
 
-      candle.close = newPrice;
-      if (newPrice > candle.high) candle.high = newPrice;
-      if (newPrice < candle.low) candle.low = newPrice;
+      let activeCandle = candle;
+      if (nowSec >= candle.time + stepSec) {
+        const newTime = candle.time + stepSec;
+        const newCandle = {
+          time: newTime,
+          open: candle.close,
+          high: candle.close,
+          low: candle.close,
+          close: candle.close,
+          volume: 0
+        };
+        lastCandleRef.current = newCandle;
+        activeCandle = newCandle;
+      }
+
+      const pctChange = (Math.random() - 0.5) * 0.002;
+      const delta = activeCandle.close * pctChange;
+      const newPrice = Math.max(0.01, activeCandle.close + delta);
+
+      activeCandle.close = newPrice;
+      if (newPrice > activeCandle.high) activeCandle.high = newPrice;
+      if (newPrice < activeCandle.low) activeCandle.low = newPrice;
 
       setLivePrice(newPrice);
       livePriceRef.current = newPrice;
 
-      candlestickSeriesRef.current.update(candle);
+      candlestickSeriesRef.current.update(activeCandle);
 
       checkPendingOrders(newPrice);
       checkSlTpLevels(newPrice);
     }, 800);
 
     return () => clearInterval(intervalId);
-  }, [chartData]);
+  }, [chartData, interval]);
+
+  // Live Price Polling from Yahoo Finance
+  useEffect(() => {
+    if (!selectedSymbol) return;
+
+    let querySymbol = selectedSymbol;
+    const popularInfo = POPULAR_WATCHLIST.find(p => p.symbol === selectedSymbol);
+    if (popularInfo && popularInfo.category === 'Indian Stock') {
+      querySymbol = `${selectedSymbol}.NS`;
+    } else if (popularInfo && popularInfo.category === 'Crypto') {
+      querySymbol = `${selectedSymbol}-USD`;
+    }
+
+    const pollLivePrice = async () => {
+      try {
+        const res = await apiClient.get(`/market/stock/${querySymbol}`);
+        if (res.data && res.data.price) {
+          const realPrice = parseFloat(res.data.price);
+          
+          setLivePrice(realPrice);
+          livePriceRef.current = realPrice;
+
+          // Update chart last candle if present
+          if (candlestickSeriesRef.current && lastCandleRef.current) {
+            const candle = lastCandleRef.current;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const stepSec = interval === '1m' ? 60 : interval === '5m' ? 300 : interval === '15m' ? 900 : interval === '60m' ? 3600 : 86400;
+
+            let activeCandle = candle;
+            if (nowSec >= candle.time + stepSec) {
+              const newTime = candle.time + stepSec;
+              const newCandle = {
+                time: newTime,
+                open: realPrice,
+                high: realPrice,
+                low: realPrice,
+                close: realPrice,
+                volume: 0
+              };
+              lastCandleRef.current = newCandle;
+              activeCandle = newCandle;
+            } else {
+              activeCandle.close = realPrice;
+              if (realPrice > activeCandle.high) activeCandle.high = realPrice;
+              if (realPrice < activeCandle.low) activeCandle.low = realPrice;
+            }
+
+            candlestickSeriesRef.current.update(activeCandle);
+          }
+
+          checkPendingOrders(realPrice);
+          checkSlTpLevels(realPrice);
+
+          if (res.data.change !== undefined) {
+            setPriceChange(parseFloat(res.data.change));
+          }
+          if (res.data.changePercent !== undefined) {
+            setPriceChangePercent(parseFloat(res.data.changePercent));
+          }
+        }
+      } catch (err) {
+        console.warn('Live price polling error:', err.message);
+      }
+    };
+
+    const intervalId = setInterval(pollLivePrice, 5000);
+    return () => clearInterval(intervalId);
+  }, [selectedSymbol, interval]);
 
   // Check Limit/Stop Loss pending orders
   const checkPendingOrders = (currentPrice) => {
