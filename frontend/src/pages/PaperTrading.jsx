@@ -70,7 +70,7 @@ const getLotMultiplier = (sym) => {
 export default function PaperTrading() {
   // Navigation & Page State
   const [selectedSymbol, setSelectedSymbol] = useState('BTC');
-  const [interval, setInterval] = useState('1d');
+  const [chartInterval, setChartInterval] = useState('1d');
   const [activeConsoleTab, setActiveConsoleTab] = useState('positions');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -316,9 +316,9 @@ export default function PaperTrading() {
           default: return '1y';
         }
       };
-      const range = getRangeForInterval(interval);
+      const range = getRangeForInterval(chartInterval);
       const res = await apiClient.get(`/market/stock-history/${querySymbol}`, {
-        params: { interval, range }
+        params: { interval: chartInterval, range }
       });
       
       if (res.data && res.data.length > 0) {
@@ -367,7 +367,7 @@ export default function PaperTrading() {
     fetchLeaderboard();
     fetchPendingOrders();
     fetchBalanceHistory();
-  }, [selectedSymbol, interval]);
+  }, [selectedSymbol, chartInterval]);
 
   // Main Chart Creation & Update
   useEffect(() => {
@@ -419,6 +419,7 @@ export default function PaperTrading() {
     });
     candlestickSeries.setData(chartData);
     candlestickSeriesRef.current = candlestickSeries;
+    chart.timeScale().fitContent();
 
     lastCandleRef.current = { ...chartData[chartData.length - 1] };
 
@@ -465,6 +466,7 @@ export default function PaperTrading() {
       const rsiData = calculateRSI(chartData, 14);
       rsiLineSeries.setData(rsiData);
       rsiSeriesRef.current = rsiLineSeries;
+      rsiChart.timeScale().fitContent();
 
       rsiLineSeries.createPriceLine({ price: 70, color: 'rgba(255, 68, 68, 0.3)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Overbought' });
       rsiLineSeries.createPriceLine({ price: 30, color: 'rgba(0, 255, 136, 0.3)', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'Oversold' });
@@ -521,13 +523,28 @@ export default function PaperTrading() {
       }
     }
 
-    // Historical Trade execution markers
+    // Historical Trade execution markers snapped to chart candle times
+    const findClosestCandleTime = (targetSec) => {
+      if (chartData.length === 0) return targetSec;
+      let closest = chartData[0].time;
+      let minDiff = Math.abs(targetSec - closest);
+      for (const candle of chartData) {
+        const diff = Math.abs(targetSec - candle.time);
+        if (diff < minDiff) {
+          minDiff = diff;
+          closest = candle.time;
+        }
+      }
+      return closest;
+    };
+
     const markers = orderHistory
       .filter(trade => trade.symbol === selectedSymbol)
       .map(trade => {
         const tradeTime = Math.floor(new Date(trade.timestamp).getTime() / 1000);
+        const snappedTime = findClosestCandleTime(tradeTime);
         return {
-          time: tradeTime,
+          time: snappedTime,
           position: trade.action === 'BUY' ? 'belowBar' : 'aboveBar',
           color: trade.action === 'BUY' ? '#00ff88' : '#ff4444',
           shape: trade.action === 'BUY' ? 'arrowUp' : 'arrowDown',
@@ -614,12 +631,12 @@ export default function PaperTrading() {
   useEffect(() => {
     if (chartData.length === 0 || !candlestickSeriesRef.current) return;
 
-    const intervalId = setInterval(() => {
+    const intervalId = window.setInterval(() => {
       const candle = lastCandleRef.current;
       if (!candle) return;
 
       const nowSec = Math.floor(Date.now() / 1000);
-      const stepSec = interval === '1m' ? 60 : interval === '5m' ? 300 : interval === '15m' ? 900 : interval === '60m' ? 3600 : 86400;
+      const stepSec = chartInterval === '1m' ? 60 : chartInterval === '5m' ? 300 : chartInterval === '15m' ? 900 : chartInterval === '60m' ? 3600 : 86400;
 
       let activeCandle = candle;
       if (nowSec >= candle.time + stepSec) {
@@ -653,8 +670,8 @@ export default function PaperTrading() {
       checkSlTpLevels(newPrice);
     }, 800);
 
-    return () => clearInterval(intervalId);
-  }, [chartData, interval]);
+    return () => window.clearInterval(intervalId);
+  }, [chartData, chartInterval]);
 
   // Live Price Polling from Yahoo Finance
   useEffect(() => {
@@ -681,7 +698,7 @@ export default function PaperTrading() {
           if (candlestickSeriesRef.current && lastCandleRef.current) {
             const candle = lastCandleRef.current;
             const nowSec = Math.floor(Date.now() / 1000);
-            const stepSec = interval === '1m' ? 60 : interval === '5m' ? 300 : interval === '15m' ? 900 : interval === '60m' ? 3600 : 86400;
+            const stepSec = chartInterval === '1m' ? 60 : chartInterval === '5m' ? 300 : chartInterval === '15m' ? 900 : chartInterval === '60m' ? 3600 : 86400;
 
             let activeCandle = candle;
             if (nowSec >= candle.time + stepSec) {
@@ -720,9 +737,9 @@ export default function PaperTrading() {
       }
     };
 
-    const intervalId = setInterval(pollLivePrice, 5000);
-    return () => clearInterval(intervalId);
-  }, [selectedSymbol, interval]);
+    const intervalId = window.setInterval(pollLivePrice, 5000);
+    return () => window.clearInterval(intervalId);
+  }, [selectedSymbol, chartInterval]);
 
   // Check Limit/Stop Loss pending orders
   const checkPendingOrders = (currentPrice) => {
@@ -1251,11 +1268,11 @@ export default function PaperTrading() {
               {['1m', '5m', '15m', '60m', '1d'].map(i => (
                 <button
                   key={i}
-                  onClick={() => setInterval(i)}
+                  onClick={() => setChartInterval(i)}
                   style={{
-                    background: interval === i ? 'rgba(0, 255, 136, 0.08)' : 'transparent',
+                    background: chartInterval === i ? 'rgba(0, 255, 136, 0.08)' : 'transparent',
                     border: 'none',
-                    color: interval === i ? '#00ff88' : '#9b9eac',
+                    color: chartInterval === i ? '#00ff88' : '#9b9eac',
                     padding: '6px 12px',
                     borderRadius: '6px',
                     fontSize: '11px',
