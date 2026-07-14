@@ -470,37 +470,43 @@ export default function PaperTrading() {
     // Average Price, Stop Loss, and Take Profit lines
     const symbolHolding = holdings.find(h => h.symbol === selectedSymbol);
     if (symbolHolding) {
+      const avgPrice = parseFloat(symbolHolding.buyPrice || 0);
+      const slPrice = symbolHolding.stopLoss ? parseFloat(symbolHolding.stopLoss) : null;
+      const tpPrice = symbolHolding.takeProfit ? parseFloat(symbolHolding.takeProfit) : null;
+
       // 1. Avg Buy Price line
-      avgPriceLineRef.current = candlestickSeries.createPriceLine({
-        price: symbolHolding.buyPrice,
-        color: '#00ff88',
-        lineWidth: 1.5,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title: `Avg Buy: ${symbolHolding.buyPrice.toFixed(2)}`
-      });
+      if (avgPrice > 0) {
+        avgPriceLineRef.current = candlestickSeries.createPriceLine({
+          price: avgPrice,
+          color: '#00ff88',
+          lineWidth: 1.5,
+          lineStyle: 2,
+          axisLabelVisible: true,
+          title: `Avg Buy: ${avgPrice.toFixed(2)}`
+        });
+      }
 
       // 2. Stop Loss line
-      if (symbolHolding.stopLoss) {
+      if (slPrice && slPrice > 0) {
         slPriceLineRef.current = candlestickSeries.createPriceLine({
-          price: symbolHolding.stopLoss,
+          price: slPrice,
           color: '#ff4444',
           lineWidth: 1.5,
           lineStyle: 2,
           axisLabelVisible: true,
-          title: `SL: ${symbolHolding.stopLoss.toFixed(2)}`
+          title: `SL: ${slPrice.toFixed(2)}`
         });
       }
 
       // 3. Take Profit line
-      if (symbolHolding.takeProfit) {
+      if (tpPrice && tpPrice > 0) {
         tpPriceLineRef.current = candlestickSeries.createPriceLine({
-          price: symbolHolding.takeProfit,
+          price: tpPrice,
           color: '#2196f3',
           lineWidth: 1.5,
           lineStyle: 2,
           axisLabelVisible: true,
-          title: `TP: ${symbolHolding.takeProfit.toFixed(2)}`
+          title: `TP: ${tpPrice.toFixed(2)}`
         });
       }
     }
@@ -1139,7 +1145,7 @@ export default function PaperTrading() {
                 <span style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>{selectedSymbol}</span>
                 <span style={{ fontSize: '16px', fontWeight: 700, color: '#ffffff' }}>{formatPrice(livePrice, selectedSymbol)}</span>
                 <span style={{ fontSize: '12px', fontWeight: 600, color: priceChange >= 0 ? '#00ff88' : '#ff4444' }}>
-                  {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+                  {priceChange >= 0 ? '▲' : '▼'} {Math.abs(parseFloat(priceChange || 0)).toFixed(2)} ({parseFloat(priceChangePercent || 0).toFixed(2)}%)
                 </span>
               </div>
             </div>
@@ -1522,7 +1528,7 @@ export default function PaperTrading() {
                   min="0.01"
                   step="any"
                   value={limitPrice}
-                  placeholder={livePrice.toFixed(2)}
+                  placeholder={parseFloat(livePrice || 0).toFixed(2)}
                   onChange={e => setLimitPrice(e.target.value)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.03)',
@@ -1549,7 +1555,7 @@ export default function PaperTrading() {
                   min="0.01"
                   step="any"
                   value={triggerPrice}
-                  placeholder={livePrice.toFixed(2)}
+                  placeholder={parseFloat(livePrice || 0).toFixed(2)}
                   onChange={e => setTriggerPrice(e.target.value)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.03)',
@@ -1696,8 +1702,8 @@ export default function PaperTrading() {
                       const isHoldingInd = isIndianSymbol(h.symbol);
                       
                       // Aggregates valuation in USD
-                      const valuationUsd = h.quantity * (isHoldingInd ? curPrice / usdInrRate : curPrice);
-                      const costUsd = h.quantity * (isHoldingInd ? h.buyPrice / usdInrRate : h.buyPrice);
+                      const valuationUsd = parseFloat(h.quantity || 0) * (isHoldingInd ? parseFloat(curPrice || 0) / usdInrRate : parseFloat(curPrice || 0));
+                      const costUsd = parseFloat(h.quantity || 0) * (isHoldingInd ? parseFloat(h.buyPrice || 0) / usdInrRate : parseFloat(h.buyPrice || 0));
                       const pnlUsd = valuationUsd - costUsd;
                       const pnlPct = costUsd > 0 ? (pnlUsd / costUsd) * 100 : 0;
                       

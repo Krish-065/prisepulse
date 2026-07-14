@@ -18,7 +18,6 @@ export default function Layout({ children }) {
   const navItems = [
     { path: '/watchlist', label: 'Watchlist', icon: <Star size={14} /> },
     { path: '/portfolio', label: 'Portfolio', icon: <Briefcase size={14} /> },
-    { path: '/paper-trading', label: 'Paper Trading', icon: <LineChart size={14} /> },
     { path: '/news', label: 'News Hub', icon: <Newspaper size={14} /> },
     { path: '/screener', label: 'Screener', icon: <Search size={14} /> },
     { path: '/crypto', label: 'Crypto', icon: <Coins size={14} /> },
