@@ -2,7 +2,7 @@
 
 # 📈 NonStock
 
-### *Your Professional Financial Dashboard for Indian Markets*
+### *Your Professional Financial Learning Dashboard for Indian Markets*
 
 [![🚀 Launch App](https://img.shields.io/badge/🚀%20Launch%20App-nonstock.vercel.app-00ff88?style=for-the-badge)](https://nonstock.vercel.app/)
 [![Status](https://img.shields.io/badge/Status-Live-brightgreen?style=for-the-badge)]()

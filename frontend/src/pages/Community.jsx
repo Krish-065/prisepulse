@@ -2,13 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '../services/api';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   Users, Award, Copy, Share2, Play, Star, Sparkles, TrendingUp, 
   TrendingDown, RefreshCw, Trophy, ShieldCheck, Flame, MessageSquare,
-  BookOpen, ThumbsUp, PlusCircle, ExternalLink, Send
+  BookOpen, ThumbsUp, PlusCircle, ExternalLink, Send, Search, Lock,
+  Globe, AlertCircle, CheckCircle, XCircle
 } from 'lucide-react';
 
 export default function Community() {
+  const { user } = useAuth();
   const [tab, setTab] = useState('systems'); // systems | feed | educator | chats
   
   // Shared Strategies & Leaderboard
@@ -28,6 +31,21 @@ export default function Community() {
   const [courses, setCourses] = useState([]);
   const [contests, setContests] = useState([]);
   const [loadingEdu, setLoadingEdu] = useState(false);
+  const [eduSearchQuery, setEduSearchQuery] = useState('');
+
+  // Host a Contest Request State
+  const [isHostContestOpen, setIsHostContestOpen] = useState(false);
+  const [newContestTitle, setNewContestTitle] = useState('');
+  const [newContestDesc, setNewContestDesc] = useState('');
+  const [newContestPrize, setNewContestPrize] = useState('');
+  const [newContestStart, setNewContestStart] = useState('');
+  const [newContestEnd, setNewContestEnd] = useState('');
+  const [newContestProofs, setNewContestProofs] = useState('');
+  const [submittingContest, setSubmittingContest] = useState(false);
+
+  // Admin Pending Contests List
+  const [pendingContests, setPendingContests] = useState([]);
+  const [loadingPendingContests, setLoadingPendingContests] = useState(false);
 
   // Discuss Groups & Custom Channels
   const [activeGroupId, setActiveGroupId] = useState('nifty'); // nifty | options | basics | crypto | UUID
@@ -35,6 +53,19 @@ export default function Community() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
+
+  // Public Channel Search & Previews
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+
+  // Create Public Room Modal State
+  const [isCreatePublicRoomOpen, setIsCreatePublicRoomOpen] = useState(false);
+  const [newRoomId, setNewRoomId] = useState('');
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomFeatures, setNewRoomFeatures] = useState('admin-only-chat');
+  const [creatingRoom, setCreatingRoom] = useState(false);
 
   const [groups, setGroups] = useState([]);
   const [invitations, setInvitations] = useState([]);
@@ -199,10 +230,25 @@ export default function Community() {
       const contestRes = await apiClient.get('/community/contests');
       setCourses(courseRes.data);
       setContests(contestRes.data);
+      if (user?.is_admin) {
+        fetchPendingContests();
+      }
     } catch (err) {
       console.error('Failed to fetch educator data:', err);
     } finally {
       setLoadingEdu(false);
+    }
+  };
+
+  const fetchPendingContests = async () => {
+    setLoadingPendingContests(true);
+    try {
+      const res = await apiClient.get('/community/contests/pending');
+      setPendingContests(res.data);
+    } catch (err) {
+      console.error('Failed to fetch pending contests:', err);
+    } finally {
+      setLoadingPendingContests(false);
     }
   };
 
@@ -339,6 +385,125 @@ export default function Community() {
       console.error('Failed to fetch chat messages:', err);
     } finally {
       setLoadingChat(false);
+    }
+  };
+
+  // Search public channels debouncer
+  useEffect(() => {
+    if (tab !== 'chats' || !searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const delayDebounce = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await apiClient.get(`/community/groups/search?q=${encodeURIComponent(searchQuery)}`);
+        setSearchResults(res.data);
+      } catch (err) {
+        console.error('Failed to search public channels:', err);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery, tab]);
+
+  // Join a public room
+  const handleJoinPublicRoom = async (groupId) => {
+    try {
+      await apiClient.post(`/community/groups/${groupId}/join`);
+      toast.success('Successfully joined public room/channel!');
+      await fetchGroups();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to join group');
+    }
+  };
+
+  // Create a public room
+  const handleCreatePublicRoom = async (e) => {
+    e.preventDefault();
+    if (!newRoomName.trim() || !newRoomId.trim()) {
+      toast.error('Room Name and Room ID are required');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(newRoomId)) {
+      toast.error('Room ID must contain only alphanumeric characters and underscores');
+      return;
+    }
+    setCreatingRoom(true);
+    try {
+      const res = await apiClient.post('/community/groups', {
+        name: newRoomName,
+        roomId: newRoomId,
+        features: newRoomFeatures,
+        isPublic: true
+      });
+      toast.success(`Public room #${newRoomName} created!`);
+      setNewRoomName('');
+      setNewRoomId('');
+      setNewRoomFeatures('admin-only-chat');
+      setIsCreatePublicRoomOpen(false);
+      await fetchGroups();
+      setActiveGroupId(res.data.id);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to create public room');
+    } finally {
+      setCreatingRoom(false);
+    }
+  };
+
+  // Submit contest request
+  const handleHostContest = async (e) => {
+    e.preventDefault();
+    if (!newContestTitle.trim() || !newContestDesc.trim() || !newContestPrize.trim() || !newContestStart || !newContestEnd || !newContestProofs.trim()) {
+      toast.error('All fields, including verification proofs, are required');
+      return;
+    }
+    setSubmittingContest(true);
+    try {
+      await apiClient.post('/community/contests', {
+        title: newContestTitle,
+        description: newContestDesc,
+        prizePool: newContestPrize,
+        startDate: newContestStart,
+        endDate: newContestEnd,
+        proofs: newContestProofs
+      });
+      toast.success('Contest request submitted and is pending admin approval.');
+      setIsHostContestOpen(false);
+      setNewContestTitle('');
+      setNewContestDesc('');
+      setNewContestPrize('');
+      setNewContestStart('');
+      setNewContestEnd('');
+      setNewContestProofs('');
+      fetchEducatorData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to submit contest request');
+    } finally {
+      setSubmittingContest(false);
+    }
+  };
+
+  // Admin Approve Contest
+  const handleApproveContest = async (id, title) => {
+    try {
+      await apiClient.post(`/community/contests/${id}/approve`);
+      toast.success(`Contest "${title}" approved and live!`);
+      fetchEducatorData();
+    } catch (err) {
+      toast.error('Failed to approve contest');
+    }
+  };
+
+  // Admin Reject Contest
+  const handleRejectContest = async (id, title) => {
+    try {
+      await apiClient.post(`/community/contests/${id}/reject`);
+      toast.success(`Contest "${title}" request rejected.`);
+      fetchEducatorData();
+    } catch (err) {
+      toast.error('Failed to reject contest');
     }
   };
 
@@ -749,10 +914,173 @@ export default function Community() {
             )}
           </div>
         </div>
-      )}
-
-      {tab === 'educator' && (
+      )}      {tab === 'educator' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          
+          {/* Top Actions: Search Filter & Host Contest Button */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '16px',
+            flexWrap: 'wrap',
+            background: 'rgba(255,255,255,0.01)',
+            border: '1px solid rgba(255,255,255,0.05)',
+            borderRadius: '12px',
+            padding: '16px 20px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '10px 16px', width: '360px' }}>
+              <Search size={16} style={{ color: 'var(--text-secondary)' }} />
+              <input
+                type="text"
+                placeholder="Filter contests or course playlists..."
+                value={eduSearchQuery}
+                onChange={(e) => setEduSearchQuery(e.target.value)}
+                style={{ background: 'transparent', border: 'none', color: '#ffffff', fontSize: '13px', outline: 'none', width: '100%' }}
+              />
+            </div>
+            
+            <button
+              onClick={() => setIsHostContestOpen(true)}
+              style={{
+                background: 'linear-gradient(135deg, #ffb300 0%, #ff8f00 100%)',
+                border: 'none',
+                borderRadius: '8px',
+                color: '#0a0e27',
+                padding: '12px 24px',
+                fontWeight: '800',
+                fontSize: '13px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 15px rgba(255, 179, 0, 0.25)',
+                transition: '0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+              onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+            >
+              <Trophy size={16} />
+              Host a Contest
+            </button>
+          </div>
+
+          {/* Admin Pending Requests Dashboard */}
+          {user?.is_admin && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.08) 0%, rgba(255, 179, 0, 0.02) 100%)',
+              border: '1px solid rgba(255, 179, 0, 0.25)',
+              borderRadius: '16px',
+              padding: '24px'
+            }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '850', color: '#ffb300', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <ShieldCheck size={20} />
+                Contest Host Review Panel (Admin Dashboard)
+              </h2>
+              {loadingPendingContests ? (
+                <div style={{ color: 'var(--text-secondary)', display: 'flex', gap: '8px', alignItems: 'center', padding: '12px 0' }}>
+                  <RefreshCw className="animate-spin" size={14} /> Loading pending contest requests...
+                </div>
+              ) : pendingContests.length === 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '13px', fontStyle: 'italic', padding: '8px 0' }}>
+                  No pending contest verification requests.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {pendingContests.map(req => (
+                    <div key={req.id} style={{
+                      background: 'rgba(10, 14, 39, 0.6)',
+                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                        <div>
+                          <h3 style={{ fontSize: '15px', fontWeight: '800', margin: '0 0 4px 0', color: '#ffffff' }}>{req.title}</h3>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            Requested by: <strong>{req.host_name}</strong> ({req.host_email})
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '10px', background: 'rgba(255, 179, 0, 0.1)', color: '#ffb300', padding: '4px 10px', borderRadius: '6px', fontWeight: '800', border: '1px solid rgba(255, 179, 0, 0.2)' }}>
+                          PENDING APPROVAL
+                        </span>
+                      </div>
+                      <p style={{ fontSize: '12px', color: '#d0d2dd', margin: 0, lineHeight: '1.5' }}>{req.description}</p>
+                      
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: '8px', fontSize: '11px' }}>
+                        <div>
+                          <span style={{ display: 'block', color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '9px', marginBottom: '2px' }}>Prize Pool</span>
+                          <strong style={{ color: '#00ff88', fontSize: '13px' }}>{req.prize_pool}</strong>
+                        </div>
+                        <div>
+                          <span style={{ display: 'block', color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '9px', marginBottom: '2px' }}>Timeline</span>
+                          <strong>{req.start_date} - {req.end_date}</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px', marginTop: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#ffb300', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
+                          <ShieldCheck size={12} /> Host Credentials & Background Verification:
+                        </span>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, whiteSpace: 'pre-wrap', fontStyle: 'italic', lineHeight: '1.4' }}>
+                          {req.proofs}
+                        </p>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                        <button
+                          onClick={() => handleRejectContest(req.id, req.title)}
+                          style={{
+                            background: 'rgba(255, 68, 68, 0.1)',
+                            border: '1px solid rgba(255, 68, 68, 0.25)',
+                            borderRadius: '6px',
+                            color: '#ff4444',
+                            padding: '8px 16px',
+                            fontWeight: '800',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: '0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 68, 68, 0.18)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 68, 68, 0.1)'}
+                        >
+                          <XCircle size={13} /> Reject Request
+                        </button>
+                        <button
+                          onClick={() => handleApproveContest(req.id, req.title)}
+                          style={{
+                            background: 'rgba(0, 255, 136, 0.1)',
+                            border: '1px solid rgba(0, 255, 136, 0.25)',
+                            borderRadius: '6px',
+                            color: '#00ff88',
+                            padding: '8px 16px',
+                            fontWeight: '800',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            transition: '0.2s'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(0, 255, 136, 0.18)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'rgba(0, 255, 136, 0.1)'}
+                        >
+                          <CheckCircle size={13} /> Approve & Publish
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Contests Block */}
           <div>
             <h2 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -764,9 +1092,27 @@ export default function Community() {
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw className="animate-spin" />
               </div>
+            ) : contests.filter(ct => 
+              ct.title.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+              ct.description.toLowerCase().includes(eduSearchQuery.toLowerCase())
+            ).length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card-glass)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '32px',
+                textAlign: 'center',
+                color: 'var(--text-secondary)',
+                fontSize: '13px'
+              }}>
+                No active contests found matching filters.
+              </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: '16px' }}>
-                {contests.map(ct => (
+                {contests.filter(ct => 
+                  ct.title.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+                  ct.description.toLowerCase().includes(eduSearchQuery.toLowerCase())
+                ).map(ct => (
                   <div key={ct.id} style={{
                     background: 'var(--bg-card-glass)',
                     border: '1px solid rgba(255, 179, 0, 0.25)',
@@ -777,9 +1123,14 @@ export default function Community() {
                     gap: '12px'
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#ffffff' }}>{ct.title}</h3>
-                      <span style={{ fontSize: '10px', background: 'rgba(255, 179, 0, 0.1)', color: '#ffb300', padding: '2px 8px', borderRadius: '4px', fontWeight: '800' }}>
-                        ACTIVE
+                      <div>
+                        <h3 style={{ fontSize: '16px', fontWeight: '800', margin: 0, color: '#ffffff' }}>{ct.title}</h3>
+                        <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+                          Hosted by: <strong>{ct.host_name}</strong>
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '10px', background: ct.status === 'approved' ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 179, 0, 0.1)', color: ct.status === 'approved' ? '#00ff88' : '#ffb300', padding: '2px 8px', borderRadius: '4px', fontWeight: '800' }}>
+                        {ct.status ? ct.status.toUpperCase() : 'ACTIVE'}
                       </span>
                     </div>
                     <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>{ct.description}</p>
@@ -797,21 +1148,23 @@ export default function Community() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Participants: <strong>{ct.participants} students</strong></span>
-                      <button
-                        onClick={() => handleJoinContest(ct.id, ct.title)}
-                        style={{
-                          background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: '#0a0e27',
-                          padding: '8px 16px',
-                          fontWeight: '800',
-                          fontSize: '11px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Join Contest
-                      </button>
+                      {ct.status === 'approved' && (
+                        <button
+                          onClick={() => handleJoinContest(ct.id, ct.title)}
+                          style={{
+                            background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: '#0a0e27',
+                            padding: '8px 16px',
+                            fontWeight: '800',
+                            fontSize: '11px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Join Contest
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -830,9 +1183,29 @@ export default function Community() {
               <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                 <RefreshCw className="animate-spin" />
               </div>
+            ) : courses.filter(course => 
+              course.title.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+              course.description.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+              course.category.toLowerCase().includes(eduSearchQuery.toLowerCase())
+            ).length === 0 ? (
+              <div style={{
+                background: 'var(--bg-card-glass)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '16px',
+                padding: '32px',
+                textAlign: 'center',
+                color: 'var(--text-secondary)',
+                fontSize: '13px'
+              }}>
+                No courses found matching filters.
+              </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-                {courses.map(course => (
+                {courses.filter(course => 
+                  course.title.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+                  course.description.toLowerCase().includes(eduSearchQuery.toLowerCase()) ||
+                  course.category.toLowerCase().includes(eduSearchQuery.toLowerCase())
+                ).map(course => (
                   <div key={course.id} style={{
                     background: 'var(--bg-card-glass)',
                     border: '1px solid var(--border-color)',
@@ -872,7 +1245,6 @@ export default function Community() {
           </div>
         </div>
       )}
-
       {tab === 'chats' && (
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px', alignItems: 'stretch' }}>
           {/* Chat Groups & Invites Sidebar */}
@@ -890,14 +1262,111 @@ export default function Community() {
               minHeight: '450px'
             }}>
               
+              {/* Search Public Channels */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '8px 12px' }}>
+                  <Search size={14} style={{ color: 'var(--text-secondary)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search rooms/channels..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      outline: 'none',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+                {searchQuery.trim() && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '42px',
+                    left: 0,
+                    right: 0,
+                    background: '#11152a',
+                    border: '1px solid rgba(0, 255, 136, 0.2)',
+                    borderRadius: '8px',
+                    padding: '8px',
+                    zIndex: 100,
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                    backdropFilter: 'blur(10px)'
+                  }}>
+                    {searching ? (
+                      <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        Searching...
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div style={{ padding: '8px', textAlign: 'center', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        No public rooms found
+                      </div>
+                    ) : (
+                      searchResults.map(group => (
+                        <button
+                          key={group.id}
+                          onClick={() => {
+                            const joined = groups.find(g => g.id === group.id);
+                            if (!joined) {
+                              setSearchResults(prev => prev.some(p => p.id === group.id) ? prev : [...prev, group]);
+                            }
+                            setActiveGroupId(group.id);
+                            setSearchQuery('');
+                          }}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '8px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span># {group.name}</span>
+                          <span style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+                            @{group.room_id}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Public Rooms */}
               <div>
                 <h3 style={{ fontSize: '11px', fontWeight: '800', color: '#00ff88', letterSpacing: '0.8px', textTransform: 'uppercase', margin: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Public Rooms</span>
-                  <Sparkles size={12} style={{ color: '#00ff88' }} />
+                  <button
+                    onClick={() => setIsCreatePublicRoomOpen(true)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: '#00ff88',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: 0
+                    }}
+                    title="Create public room/channel"
+                  >
+                    <PlusCircle size={14} />
+                  </button>
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {groups.filter(g => g.created_by === null).map(room => (
+                  {groups.filter(g => g.created_by === null || g.is_public === true).map(room => (
                     <button
                       key={room.id}
                       onClick={() => {
@@ -915,12 +1384,48 @@ export default function Community() {
                         border: 'none',
                         borderRadius: '8px',
                         cursor: 'pointer',
-                        transition: '0.2s'
+                        transition: '0.2s',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
                       }}
                     >
-                      # {room.name}
+                      <span># {room.name}</span>
+                      {room.features === 'admin-only-chat' && (
+                        <span style={{ fontSize: '9px', background: 'rgba(255, 68, 68, 0.1)', color: '#ff4444', padding: '1px 4px', borderRadius: '4px' }}>
+                          Channel
+                        </span>
+                      )}
                     </button>
                   ))}
+                  {/* Also show any active preview group if selected and not joined */}
+                  {!groups.some(g => g.id === activeGroupId) && searchResults.some(g => g.id === activeGroupId) && (
+                    (() => {
+                      const prevRoom = searchResults.find(g => g.id === activeGroupId);
+                      return (
+                        <button
+                          key={prevRoom.id}
+                          style={{
+                            width: '100%',
+                            textAlign: 'left',
+                            padding: '10px 12px',
+                            background: 'rgba(0, 255, 136, 0.05)',
+                            color: '#00ff88',
+                            fontWeight: '800',
+                            fontSize: '12px',
+                            border: '1px dashed rgba(0, 255, 136, 0.3)',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <span># {prevRoom.name} (Preview)</span>
+                        </button>
+                      );
+                    })()
+                  )}
                 </div>
               </div>
 
@@ -948,12 +1453,12 @@ export default function Community() {
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '220px', overflowY: 'auto' }}>
-                  {groups.filter(g => g.created_by !== null).length === 0 ? (
+                  {groups.filter(g => g.created_by !== null && g.is_public !== true).length === 0 ? (
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 6px', fontStyle: 'italic' }}>
                       No custom groups yet.
                     </span>
                   ) : (
-                    groups.filter(g => g.created_by !== null).map(group => (
+                    groups.filter(g => g.created_by !== null && g.is_public !== true).map(group => (
                       <button
                         key={group.id}
                         onClick={() => {
@@ -1077,8 +1582,9 @@ export default function Community() {
           }}>
             {/* Header info */}
             {(() => {
-              const activeGroup = groups.find(g => g.id === activeGroupId) || { name: 'Loading...', created_by: null, features: 'all-can-chat' };
-              const isPrivate = activeGroup.created_by !== null;
+              const activeGroup = groups.find(g => g.id === activeGroupId) || searchResults.find(g => g.id === activeGroupId) || { name: 'Loading...', created_by: null, features: 'all-can-chat' };
+              const isPrivate = activeGroup.created_by !== null && !activeGroup.is_public;
+              const isPreview = activeGroup.created_by !== null && activeGroup.my_role === null;
               const isAdmin = activeGroup.my_role === 'admin';
               
               return (
@@ -1088,7 +1594,12 @@ export default function Community() {
                       {isPrivate ? `👥 ${activeGroup.name}` : `# ${activeGroup.name}`}
                       {isPrivate && (
                         <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-secondary)', padding: '2px 6px', borderRadius: '4px', fontWeight: '500' }}>
-                          Private
+                          Private Group
+                        </span>
+                      )}
+                      {!isPrivate && activeGroup.is_public && (
+                        <span style={{ fontSize: '10px', background: 'rgba(0, 255, 136, 0.1)', color: '#00ff88', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>
+                          Public Channel
                         </span>
                       )}
                       {activeGroup.features === 'admin-only-chat' && (
@@ -1096,9 +1607,14 @@ export default function Community() {
                           Announcement Only
                         </span>
                       )}
+                      {isPreview && (
+                        <span style={{ fontSize: '10px', background: 'rgba(255, 179, 0, 0.1)', color: '#ffb300', padding: '2px 6px', borderRadius: '4px', fontWeight: '800', border: '1px dashed rgba(255, 179, 0, 0.3)' }}>
+                          Previewing
+                        </span>
+                      )}
                     </h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '11px', margin: 0 }}>
-                      {isPrivate ? `Created by ${activeGroup.creator_name}` : 'Share and debate investing configurations in real-time'}
+                      {isPrivate ? `Created by ${activeGroup.creator_name || 'User'}` : `Public channel @${activeGroup.room_id || 'system'} - Share and debate investing configurations in real-time`}
                     </p>
                   </div>
                   
@@ -1118,6 +1634,24 @@ export default function Community() {
                       }}
                     >
                       {isManageGroupOpen ? 'Close Settings' : 'Manage Group'}
+                    </button>
+                  )}
+                  {isPreview && (
+                    <button
+                      onClick={() => handleJoinPublicRoom(activeGroup.id)}
+                      style={{
+                        background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                        border: 'none',
+                        borderRadius: '8px',
+                        color: '#0a0e27',
+                        padding: '8px 16px',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        transition: '0.2s'
+                      }}
+                    >
+                      Join Room
                     </button>
                   )}
                 </div>
@@ -1268,11 +1802,49 @@ export default function Community() {
 
             {/* Chat Input or Warning Panel */}
             {(() => {
-              const activeGroup = groups.find(g => g.id === activeGroupId) || { created_by: null, features: 'all-can-chat' };
+              const activeGroup = groups.find(g => g.id === activeGroupId) || searchResults.find(g => g.id === activeGroupId) || { created_by: null, features: 'all-can-chat' };
               const isAnnouncementOnly = activeGroup.features === 'admin-only-chat';
-              const isAdmin = activeGroup.my_role === 'admin';
-              const isPrivate = activeGroup.created_by !== null;
-              const canChat = !isPrivate || !isAnnouncementOnly || isAdmin;
+              const isCreatorOrAdmin = activeGroup.created_by === user?.id || activeGroup.my_role === 'admin';
+              const isPreview = activeGroup.created_by !== null && activeGroup.my_role === null;
+              const canChat = !isPreview && (!isAnnouncementOnly || isCreatorOrAdmin);
+
+              if (isPreview) {
+                return (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    background: 'rgba(0, 255, 136, 0.05)',
+                    border: '1px solid rgba(0, 255, 136, 0.15)',
+                    borderRadius: '8px',
+                    padding: '12px 16px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    fontWeight: '700'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Globe size={16} style={{ color: '#00ff88' }} />
+                      <span>You are previewing this room. Join to join the conversation.</span>
+                    </div>
+                    <button
+                      onClick={() => handleJoinPublicRoom(activeGroup.id)}
+                      style={{
+                        background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#0a0e27',
+                        padding: '8px 16px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                      }}
+                    >
+                      Join Room
+                    </button>
+                  </div>
+                );
+              }
 
               if (!canChat) {
                 return (
@@ -1289,7 +1861,7 @@ export default function Community() {
                     fontSize: '12px',
                     fontWeight: '700'
                   }}>
-                    🔒 Only group admins can send messages in this announcement channel.
+                    🔒 Only the room creator or channel admins can post announcements here.
                   </div>
                 );
               }
@@ -1300,7 +1872,7 @@ export default function Community() {
                     type="text"
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
-                    placeholder={isAnnouncementOnly ? "Post an announcement..." : `Send a message in this group...`}
+                    placeholder={isAnnouncementOnly ? "Post an announcement..." : `Send a message in # ${activeGroup.name}...`}
                     style={{
                       flex: 1,
                       background: 'rgba(255,255,255,0.03)',
@@ -1464,6 +2036,359 @@ export default function Community() {
                   }}
                 >
                   Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Create Public Room Modal Overlay */}
+      {isCreatePublicRoomOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 14, 39, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #11152a 0%, #171c3b 100%)',
+            border: '1px solid rgba(0, 255, 136, 0.2)',
+            borderRadius: '16px',
+            padding: '28px',
+            width: '400px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '950', margin: '0 0 6px 0', color: '#ffffff' }}>Create Public Channel</h3>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>Establish a new public channel searchable by any user.</p>
+            </div>
+            
+            <form onSubmit={handleCreatePublicRoom} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Room Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Crypto Signals"
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Room ID / Handle</label>
+                <input
+                  type="text"
+                  placeholder="e.g. cryptosignals (alphanumeric & underscore only)"
+                  value={newRoomId}
+                  onChange={(e) => setNewRoomId(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Channel Permissions</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewRoomFeatures('all-can-chat')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: newRoomFeatures === 'all-can-chat' ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255,255,255,0.02)',
+                      border: newRoomFeatures === 'all-can-chat' ? '1px solid #00ff88' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      color: newRoomFeatures === 'all-can-chat' ? '#00ff88' : '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    All Can Chat
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewRoomFeatures('admin-only-chat')}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: newRoomFeatures === 'admin-only-chat' ? 'rgba(255, 68, 68, 0.1)' : 'rgba(255,255,255,0.02)',
+                      border: newRoomFeatures === 'admin-only-chat' ? '1px solid #ff4444' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      color: newRoomFeatures === 'admin-only-chat' ? '#ff4444' : '#ffffff',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Only Creator Posts
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatePublicRoomOpen(false)}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingRoom}
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #00ff88 0%, #00bcd4 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#0a0e27',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    opacity: creatingRoom ? 0.6 : 1
+                  }}
+                >
+                  Create Channel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Host Contest Request Modal Overlay */}
+      {isHostContestOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(10, 14, 39, 0.8)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #11152a 0%, #171c3b 100%)',
+            border: '1px solid rgba(255, 179, 0, 0.3)',
+            borderRadius: '16px',
+            padding: '28px',
+            width: '500px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '950', margin: '0 0 6px 0', color: '#ffb300', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Trophy size={18} />
+                Request to Host a Contest
+              </h3>
+              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', margin: 0 }}>
+                To host a contest, submit the details and credentials for security verification by the NonStock main admin.
+              </p>
+            </div>
+            
+            <form onSubmit={handleHostContest} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Contest Title</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Option Strategy Face-Off"
+                  value={newContestTitle}
+                  onChange={(e) => setNewContestTitle(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Description & Rules</label>
+                <textarea
+                  placeholder="Describe the contest goals, restrictions, or special guidelines..."
+                  value={newContestDesc}
+                  onChange={(e) => setNewContestDesc(e.target.value)}
+                  rows={3}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    outline: 'none',
+                    resize: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Start Date</label>
+                  <input
+                    type="date"
+                    value={newContestStart}
+                    onChange={(e) => setNewContestStart(e.target.value)}
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>End Date</label>
+                  <input
+                    type="date"
+                    value={newContestEnd}
+                    onChange={(e) => setNewContestEnd(e.target.value)}
+                    style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '8px',
+                      padding: '10px 12px',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      outline: 'none'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Prize Pool Details</label>
+                <input
+                  type="text"
+                  placeholder="e.g. ₹50,000 cash prize or premium community membership"
+                  value={newContestPrize}
+                  onChange={(e) => setNewContestPrize(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ShieldCheck size={12} style={{ color: '#ffb300' }} />
+                  Verification Proofs & Background Check
+                </label>
+                <textarea
+                  placeholder="Provide details proving this contest is legitimate (e.g., links to your social profiles, past successful contests hosted, sponsor verification, contact info)..."
+                  value={newContestProofs}
+                  onChange={(e) => setNewContestProofs(e.target.value)}
+                  rows={4}
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    padding: '10px 12px',
+                    color: '#ffffff',
+                    fontSize: '12px',
+                    outline: 'none',
+                    resize: 'none'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsHostContestOpen(false)}
+                  style={{
+                    flex: 1,
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '8px',
+                    color: '#ffffff',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingContest}
+                  style={{
+                    flex: 1,
+                    background: 'linear-gradient(135deg, #ffb300 0%, #ff8f00 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#0a0e27',
+                    padding: '10px',
+                    fontSize: '12px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    opacity: submittingContest ? 0.6 : 1
+                  }}
+                >
+                  Submit Request
                 </button>
               </div>
             </form>

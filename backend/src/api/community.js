@@ -71,9 +71,15 @@ router.get('/courses', async (req, res) => {
 });
 
 // 5. Fetch contests
-router.get('/contests', async (req, res) => {
+router.get('/contests', authenticate, async (req, res) => {
   try {
-    const result = await query(`SELECT * FROM contests ORDER BY id ASC`);
+    const result = await query(`
+      SELECT c.*, COALESCE(u.name, 'System') as host_name
+      FROM contests c
+      LEFT JOIN users u ON c.hosted_by = u.id
+      WHERE c.status = 'approved' OR c.hosted_by = $1
+      ORDER BY c.id ASC
+    `, [req.user.id]);
     res.json(result.rows);
   } catch (err) {
     console.error('Fetch contests error:', err);
@@ -81,14 +87,164 @@ router.get('/contests', async (req, res) => {
   }
 });
 
+// 5.5. Host / create a new contest request (Pending Approval)
+router.post('/contests', authenticate, async (req, res) => {
+  try {
+    const { title, description, prizePool, startDate, endDate, proofs } = req.body;
+    if (!title || !description || !prizePool || !startDate || !endDate || !proofs) {
+      return res.status(400).json({ error: 'All fields are required, including proofs/background' });
+    }
+
+    const contestId = 'ct_' + crypto.randomBytes(8).toString('hex');
+    await query(
+      `INSERT INTO contests (id, title, description, prize_pool, start_date, end_date, participants, hosted_by, status, proofs)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, $7, 'pending', $8)`,
+      [contestId, title, description, prizePool, startDate, endDate, req.user.id, proofs]
+    );
+
+    res.status(201).json({ success: true, message: 'Contest request submitted successfully and is pending admin approval.' });
+  } catch (err) {
+    console.error('Create contest request error:', err);
+    res.status(500).json({ error: 'Failed to submit contest request' });
+  }
+});
+
+// 5.6. Fetch pending contest requests (Admin Only)
+router.get('/contests/pending', authenticate, async (req, res) => {
+  try {
+    const adminCheck = await query(`SELECT is_admin FROM users WHERE id = $1`, [req.user.id]);
+    const isAdmin = adminCheck.rows[0]?.is_admin || req.user.email.toLowerCase().startsWith('admin@');
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Access denied: admin permission required' });
+    }
+
+    const result = await query(`
+      SELECT c.*, u.name as host_name, u.email as host_email
+      FROM contests c
+      JOIN users u ON c.hosted_by = u.id
+      WHERE c.status = 'pending'
+      ORDER BY c.start_date ASC
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Fetch pending contests error:', err);
+    res.status(500).json({ error: 'Failed to retrieve pending contests' });
+  }
+});
+
+// 5.7. Approve contest request (Admin Only)
+router.post('/contests/:id/approve', authenticate, async (req, res) => {
+  try {
+    const adminCheck = await query(`SELECT is_admin FROM users WHERE id = $1`, [req.user.id]);
+    const isAdmin = adminCheck.rows[0]?.is_admin || req.user.email.toLowerCase().startsWith('admin@');
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Access denied: admin permission required' });
+    }
+
+    const result = await query(
+      `UPDATE contests SET status = 'approved' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Contest not found' });
+    }
+
+    res.json({ success: true, message: 'Contest approved successfully', contest: result.rows[0] });
+  } catch (err) {
+    console.error('Approve contest error:', err);
+    res.status(500).json({ error: 'Failed to approve contest' });
+  }
+});
+
+// 5.8. Reject contest request (Admin Only)
+router.post('/contests/:id/reject', authenticate, async (req, res) => {
+  try {
+    const adminCheck = await query(`SELECT is_admin FROM users WHERE id = $1`, [req.user.id]);
+    const isAdmin = adminCheck.rows[0]?.is_admin || req.user.email.toLowerCase().startsWith('admin@');
+    if (!isAdmin) {
+      return res.status(403).json({ error: 'Access denied: admin permission required' });
+    }
+
+    const result = await query(
+      `UPDATE contests SET status = 'rejected' WHERE id = $1 RETURNING *`,
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Contest not found' });
+    }
+
+    res.json({ success: true, message: 'Contest request rejected successfully', contest: result.rows[0] });
+  } catch (err) {
+    console.error('Reject contest error:', err);
+    res.status(500).json({ error: 'Failed to reject contest' });
+  }
+});
+
 // 6. Join a contest
 router.post('/contests/:id/join', authenticate, async (req, res) => {
   try {
+    // Only join approved contests
+    const check = await query(`SELECT status FROM contests WHERE id = $1`, [req.params.id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Contest not found' });
+    }
+    if (check.rows[0].status !== 'approved') {
+      return res.status(400).json({ error: 'Cannot join a contest that is not approved' });
+    }
+
     await query(`UPDATE contests SET participants = participants + 1 WHERE id = $1`, [req.params.id]);
     res.json({ success: true });
   } catch (err) {
     console.error('Join contest error:', err);
     res.status(500).json({ error: 'Failed to join contest' });
+  }
+});
+
+// 6.5. Search public groups/rooms
+router.get('/groups/search', authenticate, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.json([]);
+    }
+    const result = await query(`
+      SELECT g.*, 
+             gm.role as my_role,
+             COALESCE(u.name, 'System') as creator_name
+      FROM discussion_groups g
+      LEFT JOIN group_members gm ON g.id = gm.group_id AND gm.user_id = $1
+      LEFT JOIN users u ON g.created_by = u.id
+      WHERE g.is_public = true AND (g.room_id ILIKE $2 OR g.name ILIKE $2)
+      ORDER BY g.created_at ASC
+    `, [req.user.id, `%${q}%`]);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Search groups error:', err);
+    res.status(500).json({ error: 'Failed to search groups' });
+  }
+});
+
+// 6.6. Join a public room
+router.post('/groups/:groupId/join', authenticate, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    const groupInfo = await query(`SELECT is_public FROM discussion_groups WHERE id = $1`, [groupId]);
+    if (groupInfo.rows.length === 0) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    if (!groupInfo.rows[0].is_public) {
+      return res.status(400).json({ error: 'Cannot join private group directly' });
+    }
+    await query(
+      `INSERT INTO group_members (id, group_id, user_id, role) 
+       VALUES ($1, $2, $3, 'member')
+       ON CONFLICT (group_id, user_id) DO NOTHING`,
+      [crypto.randomUUID(), groupId, req.user.id]
+    );
+    res.json({ success: true, message: 'Successfully joined public room' });
+  } catch (err) {
+    console.error('Join group error:', err);
+    res.status(500).json({ error: 'Failed to join group' });
   }
 });
 
@@ -98,13 +254,13 @@ router.get('/chat/:groupId', authenticate, async (req, res) => {
     const { groupId } = req.params;
 
     // Check group info
-    const groupInfo = await query(`SELECT created_by FROM discussion_groups WHERE id = $1`, [groupId]);
+    const groupInfo = await query(`SELECT created_by, is_public FROM discussion_groups WHERE id = $1`, [groupId]);
     if (groupInfo.rows.length === 0) {
       return res.status(404).json({ error: 'Group not found' });
     }
 
     // If private, verify current user is a member
-    if (groupInfo.rows[0].created_by !== null) {
+    if (!groupInfo.rows[0].is_public && groupInfo.rows[0].created_by !== null) {
       const memberCheck = await query(
         `SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2`,
         [groupId, req.user.id]
@@ -178,30 +334,35 @@ router.post('/chat/:groupId', authenticate, async (req, res) => {
     }
 
     // Check group info
-    const groupInfo = await query(`SELECT created_by, features FROM discussion_groups WHERE id = $1`, [groupId]);
+    const groupInfo = await query(`SELECT created_by, features, is_public FROM discussion_groups WHERE id = $1`, [groupId]);
     if (groupInfo.rows.length === 0) {
       return res.status(404).json({ error: 'Group not found' });
     }
 
+    const isCreator = groupInfo.rows[0].created_by === req.user.id;
+
     // Check group membership / roles
     let role = null;
-    if (groupInfo.rows[0].created_by !== null) {
-      const memberCheck = await query(
-        `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
-        [groupId, req.user.id]
-      );
-      if (memberCheck.rows.length === 0) {
+    const memberCheck = await query(
+      `SELECT role FROM group_members WHERE group_id = $1 AND user_id = $2`,
+      [groupId, req.user.id]
+    );
+    if (memberCheck.rows.length > 0) {
+      role = memberCheck.rows[0].role;
+    }
+
+    // If private, verify current user is a member
+    if (!groupInfo.rows[0].is_public && groupInfo.rows[0].created_by !== null) {
+      if (!role && !isCreator) {
         return res.status(403).json({ error: 'Access denied: you are not a member of this private group' });
       }
-      role = memberCheck.rows[0].role;
-    } else {
-      role = 'member'; // treat everyone as a member in public room
     }
 
     // Enforce admin-only posting rules
     if (groupInfo.rows[0].features === 'admin-only-chat') {
-      if (groupInfo.rows[0].created_by !== null && role !== 'admin') {
-        return res.status(403).json({ error: 'Only group admins can post messages in this announcement-only group' });
+      const isAdmin = role === 'admin' || isCreator;
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Only group creators or admins can post messages in this channel.' });
       }
     }
 
@@ -249,13 +410,35 @@ router.get('/groups', authenticate, async (req, res) => {
   }
 });
 
-// 10. Create new discussion group
+// 10. Create new discussion group/public room
 router.post('/groups', authenticate, async (req, res) => {
   try {
-    const { name, features } = req.body;
+    const { name, features, isPublic, roomId } = req.body;
     if (!name) {
       return res.status(400).json({ error: 'Group name is required' });
     }
+
+    let finalIsPublic = isPublic === true;
+    let finalRoomId = roomId || null;
+
+    if (finalIsPublic) {
+      if (!finalRoomId) {
+        return res.status(400).json({ error: 'Room ID is required for public rooms' });
+      }
+      if (!/^[a-zA-Z0-9_]+$/.test(finalRoomId)) {
+        return res.status(400).json({ error: 'Room ID must contain only alphanumeric characters and underscores' });
+      }
+
+      // Check uniqueness of roomId or name
+      const uniqueCheck = await query(
+        `SELECT 1 FROM discussion_groups WHERE room_id = $1 OR name = $2`,
+        [finalRoomId, name]
+      );
+      if (uniqueCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'A room with this Room ID or Room Name already exists' });
+      }
+    }
+
     const allowedFeatures = ['all-can-chat', 'admin-only-chat'];
     const finalFeatures = allowedFeatures.includes(features) ? features : 'all-can-chat';
 
@@ -263,8 +446,8 @@ router.post('/groups', authenticate, async (req, res) => {
     
     // Insert group
     await query(
-      `INSERT INTO discussion_groups (id, name, created_by, features) VALUES ($1, $2, $3, $4)`,
-      [groupId, name, req.user.id, finalFeatures]
+      `INSERT INTO discussion_groups (id, name, created_by, features, is_public, room_id) VALUES ($1, $2, $3, $4, $5, $6)`,
+      [groupId, name, req.user.id, finalFeatures, finalIsPublic, finalRoomId]
     );
 
     // Add creator as admin

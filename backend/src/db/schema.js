@@ -39,6 +39,7 @@ async function createTables() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pan_id VARCHAR(50) DEFAULT 'ABCDE*****F'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS brokerage_plan VARCHAR(100) DEFAULT '₹0 Equity Delivery / ₹20 F&O Intraday'`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connected_broker VARCHAR(100)`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE`);
 
   // Migrate existing column type to TIMESTAMPTZ
   try {
@@ -228,9 +229,16 @@ async function createTables() {
       prize_pool VARCHAR(255) NOT NULL,
       start_date VARCHAR(100) NOT NULL,
       end_date VARCHAR(100) NOT NULL,
-      participants INTEGER DEFAULT 0
+      participants INTEGER DEFAULT 0,
+      hosted_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+      status VARCHAR(50) DEFAULT 'approved',
+      proofs TEXT
     )
   `);
+
+  await query(`ALTER TABLE contests ADD COLUMN IF NOT EXISTS hosted_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL`);
+  await query(`ALTER TABLE contests ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'approved'`);
+  await query(`ALTER TABLE contests ADD COLUMN IF NOT EXISTS proofs TEXT`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS discussion_groups (
@@ -238,9 +246,14 @@ async function createTables() {
       name VARCHAR(255) NOT NULL,
       created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
       features VARCHAR(50) DEFAULT 'all-can-chat',
+      is_public BOOLEAN DEFAULT FALSE,
+      room_id VARCHAR(255) UNIQUE,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  await query(`ALTER TABLE discussion_groups ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE`);
+  await query(`ALTER TABLE discussion_groups ADD COLUMN IF NOT EXISTS room_id VARCHAR(255) UNIQUE`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS group_members (
@@ -265,18 +278,22 @@ async function createTables() {
     )
   `);
 
+  // Migrate existing discussion groups
+  await query(`UPDATE discussion_groups SET is_public = true, room_id = id WHERE created_by IS NULL AND room_id IS NULL`);
+  await query(`UPDATE discussion_groups SET room_id = id WHERE room_id IS NULL`);
+
   // Seed default discussion groups if empty
   const groupCount = await query('SELECT COUNT(*) FROM discussion_groups');
   if (parseInt(groupCount.rows[0].count) === 0) {
     console.log('Seeding default public discussion groups...');
     const defaultGroups = [
-      ['nifty', 'Nifty & BankNifty Tips', null, 'all-can-chat'],
-      ['options', 'F&O Strategies', null, 'all-can-chat'],
-      ['basics', 'Basics for Beginners', null, 'all-can-chat'],
-      ['crypto', 'Crypto Wizards', null, 'all-can-chat']
+      ['nifty', 'Nifty & BankNifty Tips', null, 'all-can-chat', true, 'nifty'],
+      ['options', 'F&O Strategies', null, 'all-can-chat', true, 'options'],
+      ['basics', 'Basics for Beginners', null, 'all-can-chat', true, 'basics'],
+      ['crypto', 'Crypto Wizards', null, 'all-can-chat', true, 'crypto']
     ];
     for (const g of defaultGroups) {
-      await query('INSERT INTO discussion_groups (id, name, created_by, features) VALUES ($1,$2,$3,$4)', g);
+      await query('INSERT INTO discussion_groups (id, name, created_by, features, is_public, room_id) VALUES ($1,$2,$3,$4,$5,$6)', g);
     }
   }
 

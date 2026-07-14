@@ -244,11 +244,12 @@ async function register(req, res) {
     const hashed = await bcrypt.hash(password, 10);
     const userId = generateUUID();
     const userName = name || email.split('@')[0];
+    const isAdmin = email.toLowerCase().startsWith('admin@');
 
     // Set is_email_verified = false to require email verification
     await query(
-      `INSERT INTO users (id, email, password, name, is_email_verified) VALUES ($1, $2, $3, $4, false)`,
-      [userId, email, hashed, userName]
+      `INSERT INTO users (id, email, password, name, is_email_verified, is_admin) VALUES ($1, $2, $3, $4, false, $5)`,
+      [userId, email, hashed, userName, isAdmin]
     );
 
     // Generate OTP and update user
@@ -293,7 +294,7 @@ async function verifyEmail(req, res) {
     await query(`UPDATE users SET is_email_verified = true, email_verify_token = NULL, email_verify_expiry = NULL WHERE id = $1`, [user.rows[0].id]);
 
     const token = jwt.sign({ id: user.rows[0].id, email }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ message: 'Email verified', token, user: { id: user.rows[0].id, email, name: user.rows[0].name } });
+    res.json({ message: 'Email verified', token, user: { id: user.rows[0].id, email, name: user.rows[0].name, is_admin: user.rows[0].is_admin } });
   } catch (error) {
     res.status(500).json({ error: 'Verification failed' });
   }
@@ -338,7 +339,7 @@ async function login(req, res) {
     );
 
     const jwtToken = jwt.sign({ id: user.id, email, sessionId }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ message: 'Login successful', token: jwtToken, user: { id: user.id, email, name: user.name } });
+    res.json({ message: 'Login successful', token: jwtToken, user: { id: user.id, email, name: user.name, is_admin: user.is_admin } });
   } catch (error) {
     res.status(500).json({ error: 'Login failed' });
   }
@@ -390,7 +391,7 @@ async function verifyTwoFactorLogin(req, res) {
     );
 
     const jwtToken = jwt.sign({ id: user.id, email: user.email, sessionId }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ message: 'Login successful', token: jwtToken, user: { id: user.id, email: user.email, name: user.name } });
+    res.json({ message: 'Login successful', token: jwtToken, user: { id: user.id, email: user.email, name: user.name, is_admin: user.is_admin } });
   } catch (error) {
     console.error('❌ 2FA login verification failed:', error);
     res.status(500).json({ error: '2FA login verification failed' });
