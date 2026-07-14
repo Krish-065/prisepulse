@@ -313,7 +313,7 @@ export default function PaperTrading() {
       
       if (res.data && res.data.length > 0) {
         const formatted = res.data.map(d => ({
-          time: Math.floor(new Date(d.date).getTime() / 1000),
+          time: Math.floor((d.time ? d.time : (d.date ? new Date(d.date).getTime() : Date.now())) / 1000),
           open: parseFloat(d.open),
           high: parseFloat(d.high),
           low: parseFloat(d.low),
