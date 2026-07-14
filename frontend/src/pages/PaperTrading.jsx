@@ -366,6 +366,9 @@ export default function PaperTrading() {
     fetchLeaderboard();
     fetchPendingOrders();
     fetchBalanceHistory();
+
+    const historyIntervalId = window.setInterval(fetchChartData, 60000);
+    return () => window.clearInterval(historyIntervalId);
   }, [selectedSymbol, chartInterval]);
 
   // Main Chart Creation & Update
@@ -645,29 +648,10 @@ export default function PaperTrading() {
           // Update chart last candle if present
           if (candlestickSeriesRef.current && lastCandleRef.current) {
             const candle = lastCandleRef.current;
-            const nowSec = Math.floor(Date.now() / 1000);
-            const stepSec = chartInterval === '1m' ? 60 : chartInterval === '5m' ? 300 : chartInterval === '15m' ? 900 : chartInterval === '60m' ? 3600 : 86400;
-
-            let activeCandle = candle;
-            if (nowSec >= candle.time + stepSec) {
-              const newTime = candle.time + stepSec;
-              const newCandle = {
-                time: newTime,
-                open: realPrice,
-                high: realPrice,
-                low: realPrice,
-                close: realPrice,
-                volume: 0
-              };
-              lastCandleRef.current = newCandle;
-              activeCandle = newCandle;
-            } else {
-              activeCandle.close = realPrice;
-              if (realPrice > activeCandle.high) activeCandle.high = realPrice;
-              if (realPrice < activeCandle.low) activeCandle.low = realPrice;
-            }
-
-            candlestickSeriesRef.current.update(activeCandle);
+            candle.close = realPrice;
+            if (realPrice > candle.high) candle.high = realPrice;
+            if (realPrice < candle.low) candle.low = realPrice;
+            candlestickSeriesRef.current.update(candle);
           }
 
           checkPendingOrders(realPrice);
