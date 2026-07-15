@@ -725,7 +725,15 @@ export default function Profile() {
           <p>{user?.email || 'investor@nonstock.com'}</p>
           <div className="badges">
             <Badge type="primary"><Check size={12} /> KYC Verified</Badge>
-            <Badge type="secondary"><ShieldCheck size={12} /> Pro Account</Badge>
+            {user?.is_pro ? (
+              <Badge type="secondary" style={{ background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.2), rgba(255, 224, 130, 0.08))', color: '#ffb300', border: '1px solid rgba(255, 179, 0, 0.4)', boxShadow: '0 0 10px rgba(255, 179, 0, 0.15)' }}>
+                <Award size={12} /> PRO MEMBER ({user?.pro_plan === 'lifetime' ? 'Lifetime' : user?.pro_plan || 'Pro'})
+              </Badge>
+            ) : (
+              <Badge type="secondary" style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#9b9eac', border: '1px solid rgba(255, 255, 255, 0.1)', cursor: 'pointer' }} onClick={() => window.location.href = '/upgrade-pro'}>
+                <Lock size={12} /> Get Pro Member
+              </Badge>
+            )}
             {user?.is_verified && (
               <Badge type="primary" style={{ background: 'rgba(0, 255, 136, 0.1)', color: '#00ff88', border: '1px solid rgba(0, 255, 136, 0.3)' }}>
                 <CheckCircle size={12} /> {user.verification_title || 'Verified Creator'}

@@ -4,8 +4,10 @@ import Sidebar from './Sidebar';
 import CandlestickBg from './CandlestickBg';
 import { Menu, Star, Briefcase, Coins, LineChart, Award, Search, Newspaper, Activity } from 'lucide-react';
 import { apiClient } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Layout({ children }) {
+  const { user } = useAuth();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [indices, setIndices] = useState({
@@ -40,6 +42,18 @@ export default function Layout({ children }) {
       document.head.appendChild(style);
     }
   }, []);
+
+  // Handle premium gold theme body styling
+  useEffect(() => {
+    if (user?.is_pro) {
+      document.body.classList.add('pro-mode-active');
+    } else {
+      document.body.classList.remove('pro-mode-active');
+    }
+    return () => {
+      document.body.classList.remove('pro-mode-active');
+    };
+  }, [user]);
 
   // Calculate market status based on Indian standard local time rules
   const updateMarketStatus = () => {

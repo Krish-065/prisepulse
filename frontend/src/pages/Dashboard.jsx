@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../services/api';
 import SearchWithSuggestions from '../components/SearchWithSuggestions';
-import { TrendingUp, TrendingDown, Newspaper, Search, Activity, Briefcase } from 'lucide-react';
+import { TrendingUp, TrendingDown, Newspaper, Search, Activity, Briefcase, Award, Sparkles } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const IconContainer = ({ children, color }) => (
   <span style={{
@@ -22,6 +23,7 @@ const IconContainer = ({ children, color }) => (
 );
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [topGainers, setTopGainers] = useState([]);
   const [topLosers, setTopLosers] = useState([]);
   const [crypto, setCrypto] = useState([]);
@@ -84,9 +86,30 @@ export default function Dashboard() {
   return (
     <div>
       <div className="welcome-section">
-        <div>
-          <h1>Dashboard</h1>
-          <p>{currentTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | {currentTime.toLocaleTimeString()} IST</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', width: '100%' }}>
+          <div>
+            <h1 style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: 0 }}>
+              Dashboard
+              {user?.is_pro && (
+                <span className="pro-badge-glow" style={{
+                  fontSize: '11px',
+                  fontWeight: 900,
+                  color: '#ffb300',
+                  background: 'linear-gradient(135deg, rgba(255,179,0,0.2), rgba(255,224,130,0.05))',
+                  border: '1px solid rgba(255,179,0,0.4)',
+                  padding: '4px 10px',
+                  borderRadius: '20px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 0 10px rgba(255, 179, 0, 0.2)'
+                }}>
+                  <Award size={12} /> PRO
+                </span>
+              )}
+            </h1>
+            <p style={{ margin: '6px 0 0 0' }}>{currentTime.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} | {currentTime.toLocaleTimeString()} IST</p>
+          </div>
         </div>
       </div>
       
@@ -95,6 +118,51 @@ export default function Dashboard() {
         placeholder="Search any stock (e.g. Reliance, TCS, Infosys)..." 
         className="global-search" 
       />
+
+      {user && !user.is_pro && (
+        <div 
+          onClick={() => window.location.href = '/upgrade-pro'}
+          style={{
+            background: 'linear-gradient(135deg, rgba(255, 179, 0, 0.08), rgba(255, 224, 130, 0.02))',
+            border: '1px solid rgba(255, 179, 0, 0.25)',
+            borderRadius: '16px',
+            padding: '16px 24px',
+            marginBottom: '32px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.borderColor = '#ffb300'; e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 179, 0, 0.12), rgba(255, 224, 130, 0.04))'; }}
+          onMouseOut={(e) => { e.currentTarget.style.borderColor = 'rgba(255, 179, 0, 0.25)'; e.currentTarget.style.background = 'linear-gradient(135deg, rgba(255, 179, 0, 0.08), rgba(255, 224, 130, 0.02))'; }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255, 179, 0, 0.15)', color: '#ffb300' }}>
+              <Sparkles size={20} />
+            </span>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: '#ffffff' }}>Unlock All Premium Features with NonStock Pro</div>
+              <div style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.5)', marginTop: '2px' }}>Gain access to real-time Option Greeks, Automated Trading Bots & instant SMS/WhatsApp alerts.</div>
+            </div>
+          </div>
+          <button style={{
+            background: 'linear-gradient(135deg, #ffe082, #ffb300)',
+            border: 'none',
+            borderRadius: '8px',
+            color: '#0b0803',
+            padding: '8px 16px',
+            fontSize: '12px',
+            fontWeight: 800,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap'
+          }}>
+            Upgrade Now
+          </button>
+        </div>
+      )}
 
       {/* "What are you looking for today?" Intent Grid */}
       <div style={{ marginBottom: '40px' }}>

@@ -631,3 +631,121 @@ th {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Premium Pro Mode Theme Styles */
+body.pro-mode-active {
+  background-color: #0b0803 !important;
+  color: #fcfaf5 !important;
+}
+
+.pro-mode-active .welcome-section h1 {
+  background: linear-gradient(135deg, #ffe082, #ffb300, #ffa000) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+  text-shadow: 0 0 20px rgba(255, 179, 0, 0.25);
+}
+
+.pro-mode-active aside {
+  background: rgba(14, 11, 4, 0.98) !important;
+  border-right: 1px solid rgba(255, 179, 0, 0.2) !important;
+}
+
+.pro-mode-active aside div, 
+.pro-mode-active aside nav, 
+.pro-mode-active aside button {
+  border-color: rgba(255, 179, 0, 0.15) !important;
+}
+
+.pro-mode-active .section-card,
+.pro-mode-active [style*="background: var(--bg-card-glass)"],
+.pro-mode-active [style*="background: rgba(18, 22, 47, 0.7)"],
+.pro-mode-active [style*="background: rgba(10, 14, 39,"] {
+  background: rgba(20, 16, 7, 0.6) !important;
+  border: 1px solid rgba(255, 179, 0, 0.15) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 224, 130, 0.05) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+.pro-mode-active .active-filter {
+  background: rgba(255, 179, 0, 0.15) !important;
+  color: #ffb300 !important;
+  border-color: rgba(255, 179, 0, 0.4) !important;
+  box-shadow: 0 0 10px rgba(255, 179, 0, 0.2) !important;
+}
+
+/* Golden Pro Badges & Borders */
+.pro-badge-glow {
+  background: linear-gradient(135deg, #ffe082, #ffb300);
+  color: #0b0803 !important;
+  font-weight: 800;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 0 8px rgba(255, 179, 0, 0.5);
+  animation: proPulse 2s infinite alternate;
+}
+
+@keyframes proPulse {
+  0% { box-shadow: 0 0 4px rgba(255, 179, 0, 0.4); }
+  100% { box-shadow: 0 0 12px rgba(255, 179, 0, 0.8); }
+}
+
+/* Lock overlays styling */
+.pro-lock-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(11, 8, 3, 0.75);
+  backdrop-filter: blur(5px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px dashed rgba(255, 179, 0, 0.3);
+}
+
+.pro-lock-title {
+  color: #ffb300;
+  font-weight: 800;
+  font-size: 16px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pro-lock-desc {
+  color: #d1c9b8;
+  font-size: 12px;
+  margin-bottom: 16px;
+  max-width: 280px;
+}
+
+.pro-unlock-btn {
+  background: linear-gradient(135deg, #ffe082, #ffb300);
+  color: #0b0803;
+  font-weight: 700;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  box-shadow: 0 4px 15px rgba(255, 179, 0, 0.3);
+  transition: all 0.2s;
+}
+
+.pro-unlock-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 179, 0, 0.5);
+}

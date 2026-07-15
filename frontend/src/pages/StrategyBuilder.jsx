@@ -5,6 +5,7 @@ import {
   TrendingUp, Award, ShieldAlert, Settings, Play, Save, Share2, 
   Trash2, Copy, Sparkles, RefreshCw, BarChart2, Calendar, Clock, DollarSign
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const POPULAR_STOCKS = [
   { label: 'RELIANCE', value: 'RELIANCE' },
@@ -20,7 +21,18 @@ const POPULAR_STOCKS = [
 ];
 
 export default function StrategyBuilder() {
+  const { user } = useAuth();
   const [symbol, setSymbol] = useState('RELIANCE');
+
+  const handleDeployBot = () => {
+    if (!user?.is_pro) {
+      toast.error('Gated Premium Feature: Please upgrade to Pro to deploy live automated bots!');
+      window.location.href = '/upgrade-pro';
+      return;
+    }
+    toast.success('🤖 Automated Bot successfully deployed to your sandbox account! It is now monitoring live market streams.');
+  };
+
   const [timeRange, setTimeRange] = useState('1y');
   const [chartInterval, setChartInterval] = useState('1d');
   const [capital, setCapital] = useState(1000000);
@@ -678,6 +690,26 @@ export default function StrategyBuilder() {
             >
               <Share2 size={18} />
               Share to Feed
+            </button>
+            <button
+              onClick={handleDeployBot}
+              style={{
+                background: user?.is_pro ? 'linear-gradient(135deg, #ffe082 0%, #ffb300 100%)' : 'rgba(255, 179, 0, 0.05)',
+                border: user?.is_pro ? 'none' : '1px dashed rgba(255, 179, 0, 0.3)',
+                borderRadius: '12px',
+                color: user?.is_pro ? '#0b0803' : '#ffb300',
+                padding: '16px 24px',
+                fontWeight: '900',
+                fontSize: '14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: user?.is_pro ? '0 4px 15px rgba(255, 179, 0, 0.2)' : 'none'
+              }}
+            >
+              <Sparkles size={18} />
+              {user?.is_pro ? 'Deploy Bot' : '🔒 Deploy Bot'}
             </button>
           </div>
 

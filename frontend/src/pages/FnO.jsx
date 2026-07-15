@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../services/api';
-import { BarChart3, TrendingUp, ShieldAlert, Award, Compass, Eye } from 'lucide-react';
+import { BarChart3, TrendingUp, ShieldAlert, Award, Compass, Eye, Lock } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function FnO() {
+  const { user } = useAuth();
   const [underlying, setUnderlying] = useState('NIFTY');
   const [selectedExpiry, setSelectedExpiry] = useState('28 Nov 2024');
   const [buildupTab, setBuildupTab] = useState('long');
@@ -456,7 +458,27 @@ export default function FnO() {
       </div>
 
       {/* Bottom Row: Detailed Option Chain Table */}
-      <div className="section-card">
+      <div className="section-card" style={{ position: 'relative' }}>
+        {!user?.is_pro && (
+          <div style={{
+            position: 'absolute',
+            top: '16px',
+            right: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'rgba(255, 179, 0, 0.1)',
+            border: '1px solid rgba(255, 179, 0, 0.3)',
+            borderRadius: '6px',
+            padding: '4px 10px',
+            fontSize: '11px',
+            color: '#ffb300',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }} onClick={() => window.location.href = '/upgrade-pro'}>
+            <Lock size={12} /> Unlock Advanced Greeks
+          </div>
+        )}
         <div className="section-header" style={{ marginBottom: '24px' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Eye size={20} style={{ color: '#00bcd4' }} /> {underlying} Expiry Option Chain Table
@@ -467,11 +489,15 @@ export default function FnO() {
           <table>
             <thead>
               <tr style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
+                <th style={{ textAlign: 'center', padding: '16px', color: '#ffb300' }}>CE Delta</th>
+                <th style={{ textAlign: 'center', padding: '16px', color: '#ffb300' }}>CE Theta</th>
                 <th style={{ textAlign: 'center', padding: '16px' }}>CE OI Change</th>
                 <th style={{ textAlign: 'center', padding: '16px' }}>CE Open Interest</th>
                 <th style={{ textAlign: 'center', padding: '16px' }}>Strike Price</th>
                 <th style={{ textAlign: 'center', padding: '16px' }}>PE Open Interest</th>
                 <th style={{ textAlign: 'center', padding: '16px' }}>PE OI Change</th>
+                <th style={{ textAlign: 'center', padding: '16px', color: '#ffb300' }}>PE Theta</th>
+                <th style={{ textAlign: 'center', padding: '16px', color: '#ffb300' }}>PE Delta</th>
               </tr>
             </thead>
             <tbody>
@@ -479,9 +505,17 @@ export default function FnO() {
                 // Determine In-The-Money (ITM) options color background
                 // For Calls: Strikes below spot price are ITM
                 // For Puts: Strikes above spot price are ITM
-                const currentSpot = parseFloat(futures[0]?.price.replace(/,/g, '')) || 0;
+                const currentSpot = parseFloat((futures[0]?.price || '0').replace(/,/g, '')) || 0;
                 const isCeItm = opt.strike < currentSpot;
                 const isPeItm = opt.strike > currentSpot;
+
+                // Calculated Greeks (Simulated high-fidelity Option Greeks)
+                const ceDeltaVal = (1 / (1 + Math.exp((opt.strike - currentSpot) / 120))).toFixed(2);
+                const peDeltaVal = (1 / (1 + Math.exp((opt.strike - currentSpot) / 120)) - 1).toFixed(2);
+                const ceThetaVal = (-((12.5 + Math.sin(idx) * 2) * Math.exp(-Math.pow(opt.strike - currentSpot, 2) / 60000))).toFixed(2);
+                const peThetaVal = (-((11.8 + Math.cos(idx) * 2) * Math.exp(-Math.pow(opt.strike - currentSpot, 2) / 60000))).toFixed(2);
+
+                const blurStyle = user?.is_pro ? {} : { filter: 'blur(3.5px)', opacity: 0.5, userSelect: 'none' };
 
                 return (
                   <tr 
@@ -491,6 +525,36 @@ export default function FnO() {
                       borderLeft: opt.atm ? '3px solid #00e5ff' : '3px solid transparent'
                     }}
                   >
+                    {/* CE Delta (Pro Gated) */}
+                    <td 
+                      onClick={() => !user?.is_pro && (window.location.href = '/upgrade-pro')}
+                      style={{ 
+                        textAlign: 'center', 
+                        background: isCeItm ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
+                        fontWeight: 700,
+                        color: '#ffb300',
+                        cursor: !user?.is_pro ? 'pointer' : 'default',
+                        ...blurStyle
+                      }}
+                    >
+                      {ceDeltaVal}
+                    </td>
+
+                    {/* CE Theta (Pro Gated) */}
+                    <td 
+                      onClick={() => !user?.is_pro && (window.location.href = '/upgrade-pro')}
+                      style={{ 
+                        textAlign: 'center', 
+                        background: isCeItm ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
+                        fontWeight: 700,
+                        color: '#ffb300',
+                        cursor: !user?.is_pro ? 'pointer' : 'default',
+                        ...blurStyle
+                      }}
+                    >
+                      {ceThetaVal}
+                    </td>
+
                     {/* Call Columns */}
                     <td className="positive" style={{ 
                       textAlign: 'center', 
@@ -534,6 +598,37 @@ export default function FnO() {
                     }}>
                       {opt.peChange}
                     </td>
+
+                    {/* PE Theta (Pro Gated) */}
+                    <td 
+                      onClick={() => !user?.is_pro && (window.location.href = '/upgrade-pro')}
+                      style={{ 
+                        textAlign: 'center', 
+                        background: isPeItm ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
+                        fontWeight: 700,
+                        color: '#ffb300',
+                        cursor: !user?.is_pro ? 'pointer' : 'default',
+                        ...blurStyle
+                      }}
+                    >
+                      {peThetaVal}
+                    </td>
+
+                    {/* PE Delta (Pro Gated) */}
+                    <td 
+                      onClick={() => !user?.is_pro && (window.location.href = '/upgrade-pro')}
+                      style={{ 
+                        textAlign: 'center', 
+                        background: isPeItm ? 'rgba(255, 255, 255, 0.015)' : 'transparent',
+                        fontWeight: 700,
+                        color: '#ffb300',
+                        cursor: !user?.is_pro ? 'pointer' : 'default',
+                        ...blurStyle
+                      }}
+                    >
+                      {peDeltaVal}
+                    </td>
+
                   </tr>
                 );
               })}

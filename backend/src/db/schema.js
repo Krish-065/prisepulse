@@ -449,6 +449,15 @@ async function createTables() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_proof TEXT`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verification_status VARCHAR(50) DEFAULT 'none'`);
 
+  // 6. Pro membership columns
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_pro BOOLEAN DEFAULT FALSE`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_subscribed_at TIMESTAMP`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_expires_at TIMESTAMP`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pro_plan VARCHAR(50)`);
+
+  // 7. Initialize admin user as Pro member automatically
+  await query(`UPDATE users SET is_pro = true, pro_plan = 'lifetime' WHERE email = 'krishshah8201@gmail.com'`);
+
   console.log('✅ All tables created');
 }
 

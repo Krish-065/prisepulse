@@ -4,8 +4,10 @@ import toast from 'react-hot-toast';
 import { 
   Bell, Trash2, PlusCircle, RefreshCw, Smartphone, Mail, MessageSquare, CheckCircle, Clock
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Alerts() {
+  const { user } = useAuth();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +43,13 @@ export default function Alerts() {
       toast.error('Please fill in the symbol and comparison value');
       return;
     }
+
+    if ((channel === 'sms' || channel === 'whatsapp') && !user?.is_pro) {
+      toast.error('SMS & WhatsApp notifications are premium Pro features. Please upgrade your plan!');
+      window.location.href = '/upgrade-pro';
+      return;
+    }
+
     setCreating(true);
     try {
       await apiClient.post('/alerts', {
@@ -211,8 +220,8 @@ export default function Alerts() {
               >
                 <option value="in-app">🔔 In-App Notifications</option>
                 <option value="email">📧 Email Notification</option>
-                <option value="sms">📱 SMS Alerts</option>
-                <option value="whatsapp">💬 WhatsApp Notification</option>
+                <option value="sms">📱 SMS Alerts (PRO)</option>
+                <option value="whatsapp">💬 WhatsApp Alerts (PRO)</option>
               </select>
             </div>
 

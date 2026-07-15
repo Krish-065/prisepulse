@@ -1297,7 +1297,7 @@ export default function Community() {
                                   {post.is_premium ? 'PREMIUM CHANNEL' : 'CHANNEL'}
                                 </span>
                               </span>
-                              <span style={{ display: 'block', fontSize: '9.5px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '9.5px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                                 {post.channel_followers} Followers • Posted by {post.author_name}
                                 {post.author_is_verified && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', color: '#00ff88', fontWeight: 'bold' }}>

@@ -6,6 +6,7 @@ import {
   TrendingUp, TrendingDown, RefreshCw, BarChart2, ShieldAlert,
   Plus, Trash2
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const SUGGESTED_PROMPTS = [
   "Should I buy Reliance?",
@@ -66,6 +67,7 @@ function parseBoldText(text) {
 }
 
 export default function AIMentor() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
@@ -150,6 +152,22 @@ export default function AIMentor() {
   const handleSendMessage = async (textToSend) => {
     const text = textToSend || inputText;
     if (!text.trim()) return;
+
+    // Check message quota for non-Pro users
+    const userMsgCount = messages.filter(m => m.sender === 'user').length;
+    if (userMsgCount >= 5 && !user?.is_pro) {
+      toast.error('Tutorial limit reached! Please upgrade to Pro for unlimited AI Mentor conversations.');
+      setMessages(prev => [
+        ...prev,
+        { sender: 'user', text },
+        {
+          sender: 'ai',
+          text: '### 🔒 Pro Membership Required\n\nYou have completed your limit of 5 free sandbox messages with the AI Investing Mentor. Upgrade to **NonStock Pro** to enjoy unlimited conversational guidance, options scanner metrics, and custom SMS/WhatsApp notifications.\n\n[Upgrade to Pro Membership](/upgrade-pro)'
+        }
+      ]);
+      if (!textToSend) setInputText('');
+      return;
+    }
 
     if (!textToSend) setInputText('');
     setSending(true);

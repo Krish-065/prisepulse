@@ -84,7 +84,7 @@ app.post('/api/auth/change-password', authenticate, authRoutes.changePassword);
 app.get('/api/user/profile', authenticate, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance FROM users WHERE id = $1`, 
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at FROM users WHERE id = $1`, 
       [req.user.id]
     );
     if (result.rows.length === 0) {
@@ -136,13 +136,42 @@ app.put('/api/user/profile', authenticate, async (req, res) => {
     );
 
     const result = await query(
-      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance FROM users WHERE id = $1`, 
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at FROM users WHERE id = $1`, 
       [req.user.id]
     );
     res.json(result.rows[0]);
   } catch (error) {
     console.error('❌ Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Upgrade user to Pro membership status
+app.post('/api/user/upgrade-pro', authenticate, async (req, res) => {
+  try {
+    const { plan, referenceId } = req.body;
+    if (!plan || !referenceId) {
+      return res.status(400).json({ error: 'Plan details and payment reference ID are required' });
+    }
+    
+    let months = 1;
+    if (plan === 'annually') months = 12;
+    else if (plan === 'three_year') months = 36;
+    
+    await query(
+      `UPDATE users 
+       SET is_pro = true, 
+           pro_subscribed_at = NOW(), 
+           pro_expires_at = NOW() + ($1 * INTERVAL '1 month'), 
+           pro_plan = $2 
+       WHERE id = $3`,
+      [months, plan, req.user.id]
+    );
+
+    res.json({ success: true, message: 'Welcome to NonStock Pro! Membership activated successfully.' });
+  } catch (error) {
+    console.error('❌ Upgrade Pro error:', error);
+    res.status(500).json({ error: 'Failed to process Pro upgrade' });
   }
 });
 
