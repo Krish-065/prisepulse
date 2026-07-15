@@ -415,6 +415,23 @@ router.post('/ask', authenticate, async (req, res) => {
       });
     };
 
+    const userRes = await query('SELECT is_pro FROM users WHERE id = $1', [req.user.id]);
+    const isPro = userRes.rows[0]?.is_pro || false;
+
+    if (!isPro) {
+      const msgCount = await query(
+        `SELECT COUNT(*) FROM ai_messages WHERE conversation_id = $1 AND sender = 'user'`,
+        [activeConversationId]
+      );
+      if (parseInt(msgCount.rows[0].count) >= 5) {
+        return res.status(403).json({
+          error: 'Free limit reached',
+          isLimitReached: true,
+          response: 'NonStock Pro membership required to unlock unlimited AI mentor conversations and advanced Greeks insights. Upgrade today!'
+        });
+      }
+    }
+
     if (!GEMINI_API_KEY) {
       console.log('[AI Mentor] No Gemini key — sandbox mode');
       const sb = buildSandboxResponse(technicals, detectedSymbol, message);
@@ -422,7 +439,25 @@ router.post('/ask', authenticate, async (req, res) => {
     }
 
     try {
-      const systemInstructionText = `You are the "NonStock AI Mentor", a premium educational investing chatbot for beginner investors in India.
+      let systemInstructionText = '';
+      if (isPro) {
+        systemInstructionText = `You are the premium "NonStock Pro AI Mentor", an elite institutional-grade technical analyst, quantitative strategist, and derivatives specialist.
+Your goal is to provide advanced technical analysis, details on option pricing models, indicator calculation and divergences, and help users design quantitative trading setups.
+
+Response Format Guidelines:
+- Use standard markdown headers starting with "###" for sections and "##" for major topics.
+- Use bullet points starting with "-" for lists.
+- Use bold text (surrounded by "**") to highlight key terms.
+- Avoid using code blocks (e.g., \`\`\`), tables, or HTML in your response as the custom parser in the frontend is optimized for headers, bold text, and lists.
+- At the end of your response, always append: "**Disclaimer: NOT financial advice. Provided exclusively for NonStock Pro members for educational and quantitative analysis purposes.**"
+
+Behavior Guidelines:
+- Offer professional-tier market analysis, incorporating institutional concepts like volatility, mean reversion, and multi-timeframe breakouts.
+- If the user asks about specific stocks or indicators, check if live market data context is provided. If it is, incorporate it into your explanation of the stock's trend, RSI, support/resistance, and volume.
+- Keep your answers educational. Do NOT give direct BUY, SELL, or HOLD recommendations. Always frame insights as technical assessments and educational analysis.
+- Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses.`;
+      } else {
+        systemInstructionText = `You are the "NonStock AI Mentor", a premium educational investing chatbot for beginner investors in India.
 Your goal is to explain financial concepts clearly, guide users through technical analysis indicators, and help them understand stock trends.
 
 Response Format Guidelines:
@@ -437,6 +472,7 @@ Behavior Guidelines:
 - If the user asks about specific stocks or indicators, check if live market data context is provided. If it is, incorporate it into your explanation of the stock's trend, RSI, support/resistance, and volume.
 - Keep your answers educational. Do NOT give direct BUY, SELL, or HOLD recommendations. Always frame insights as technical assessments and educational analysis.
 - Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses.`;
+      }
 
       // Load full history from DB for Gemini
       const dbHistory = await query(

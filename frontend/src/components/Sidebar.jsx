@@ -23,7 +23,8 @@ import {
   Sparkles,
   MessageSquare,
   Users,
-  Bell
+  Bell,
+  Info
 } from 'lucide-react';
 
 export default function Sidebar({ isMobile, isOpen, onClose }) {
@@ -41,6 +42,7 @@ export default function Sidebar({ isMobile, isOpen, onClose }) {
     { path: '/fno', label: 'Futures & Options', icon: <Activity size={16} /> },
     { path: '/sector-rotation', label: 'Sector Rotation', icon: <Compass size={16} /> },
     { path: '/tools', label: 'Tools', icon: <Calculator size={16} /> },
+    { path: '/contact-us', label: 'Contact & About Us', icon: <Info size={16} /> },
     { path: '/profile', label: 'My Profile', icon: <User size={16} /> },
   ];
 

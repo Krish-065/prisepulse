@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from '../components/Logo';
-import { TrendingUp, BarChart3, Search, FolderClosed, Activity, Calculator } from 'lucide-react';
+import { TrendingUp, BarChart3, Search, FolderClosed, Activity, Calculator, Sparkles, MessageSquare, Bell } from 'lucide-react';
 import { apiClient } from '../services/api';
 
 export default function Landing() {
@@ -73,12 +73,14 @@ export default function Landing() {
             <h2 className="section-title">Everything you need in one platform</h2>
             <div className="features-grid">
               {[
-                { icon: <TrendingUp size={36} style={{ color: '#00ff88' }} />, title: 'Live Market Data', desc: 'Real-time NSE/BSE indices and global markets' },
-                { icon: <BarChart3 size={36} style={{ color: '#00bcd4' }} />, title: 'Advanced Charts', desc: 'Candlestick charts with technical indicators' },
-                { icon: <Search size={36} style={{ color: '#00ff88' }} />, title: 'Stock Screener', desc: 'Filter stocks by 1D/1W/1M change and key metrics' },
-                { icon: <FolderClosed size={36} style={{ color: '#00bcd4' }} />, title: 'Portfolio Tracker', desc: 'Track your investments in real-time' },
-                { icon: <Activity size={36} style={{ color: '#00ff88' }} />, title: 'Futures & Options', desc: 'Analyze option chain open interest and Put-Call Ratio' },
-                { icon: <Calculator size={36} style={{ color: '#00bcd4' }} />, title: 'Financial Calculators', desc: 'SIP, EMI, Brokerage, and more' }
+                { icon: <TrendingUp size={36} style={{ color: '#00ff88' }} />, title: 'Live Market Data', desc: 'Real-time NSE/BSE indices, global cryptos, and commodities' },
+                { icon: <BarChart3 size={36} style={{ color: '#00bcd4' }} />, title: 'Advanced Charts', desc: 'Interactive candlestick charts with multiple indicator layouts' },
+                { icon: <Search size={36} style={{ color: '#00ff88' }} />, title: 'Stock Screener', desc: 'Filter stocks dynamically by performance, metrics and sectors' },
+                { icon: <FolderClosed size={36} style={{ color: '#00bcd4' }} />, title: 'Paper Trading Simulator', desc: 'Practice placing orders without any real capital risk' },
+                { icon: <Activity size={36} style={{ color: '#ffb300' }} />, title: 'Option Chain Greeks (PRO)', desc: 'Analyze real-time Open Interest build-up and option Greeks (Delta/Theta)' },
+                { icon: <Sparkles size={36} style={{ color: '#ffb300' }} />, title: 'Strategy Lab & Bots (PRO)', desc: 'Design strategies and deploy sandbox automated execution bots' },
+                { icon: <MessageSquare size={36} style={{ color: '#ffb300' }} />, title: 'Pro AI Mentor (PRO)', desc: 'Institutional quantitative tutor with advanced derivative expertise' },
+                { icon: <Bell size={36} style={{ color: '#ffb300' }} />, title: 'Multi-Channel Alert Hub (PRO)', desc: 'Instant strategy notifications directly to your Email, WhatsApp, and SMS' }
               ].map((f, i) => (
                 <div key={i} className="feature-card">
                   <div className="feature-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>{f.icon}</div>

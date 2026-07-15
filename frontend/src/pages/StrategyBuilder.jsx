@@ -199,6 +199,13 @@ export default function StrategyBuilder() {
   };
 
   const loadPreset = (preset) => {
+    const isProPreset = ['ema_golden_cross', 'adx_breakout'].includes(preset);
+    if (isProPreset && !user?.is_pro) {
+      toast.error('Gated Pro Feature: Upgrade to NonStock Pro to access advanced strategy presets!');
+      window.location.href = '/upgrade-pro';
+      return;
+    }
+
     if (preset === 'rsi_reversion') {
       setBuyConditions([{ indicator: 'RSI', operator: 'lessThan', targetType: 'value', targetValue: 30 }]);
       setSellConditions([{ indicator: 'RSI', operator: 'greaterThan', targetType: 'value', targetValue: 70 }]);
@@ -214,8 +221,22 @@ export default function StrategyBuilder() {
       setSellConditions([{ indicator: 'MACD', operator: 'crossesBelow', targetType: 'indicator', targetIndicator: 'SignalLine' }]);
       setStopLossPct(1.5);
       setTakeProfitPct(4.5);
+    } else if (preset === 'ema_golden_cross') {
+      setBuyConditions([{ indicator: 'EMA20', operator: 'crossesAbove', targetType: 'indicator', targetIndicator: 'EMA50' }]);
+      setSellConditions([{ indicator: 'EMA20', operator: 'crossesBelow', targetType: 'indicator', targetIndicator: 'EMA50' }]);
+      setStopLossPct(4.0);
+      setTakeProfitPct(12.0);
+    } else if (preset === 'adx_breakout') {
+      setBuyConditions([
+        { indicator: 'ADX', operator: 'greaterThan', targetType: 'value', targetValue: 25 },
+        { indicator: 'Price', operator: 'crossesAbove', targetType: 'indicator', targetIndicator: 'SMA20' }
+      ]);
+      setBuyLogicGate('AND');
+      setSellConditions([{ indicator: 'Price', operator: 'crossesBelow', targetType: 'indicator', targetIndicator: 'SMA20' }]);
+      setStopLossPct(2.0);
+      setTakeProfitPct(8.0);
     }
-    toast.success('Preset loaded!');
+    toast.success('Preset loaded successfully!');
   };
 
   const handleAddCondition = (type) => {
@@ -281,6 +302,38 @@ export default function StrategyBuilder() {
             style={{ padding: '8px 14px', background: 'rgba(0, 255, 136, 0.05)', border: '1px solid rgba(0, 255, 136, 0.15)', borderRadius: '8px', color: '#00ff88', fontSize: '12px', fontWeight: '700', cursor: 'pointer' }}
           >
             MACD Cross Preset
+          </button>
+          <button 
+            onClick={() => loadPreset('ema_golden_cross')}
+            style={{ 
+              padding: '8px 14px', 
+              background: 'rgba(255, 179, 0, 0.05)', 
+              border: '1px solid rgba(255, 179, 0, 0.25)', 
+              borderRadius: '8px', 
+              color: '#ffb300', 
+              fontSize: '12px', 
+              fontWeight: '700', 
+              cursor: 'pointer',
+              boxShadow: '0 0 10px rgba(255, 179, 0, 0.05)'
+            }}
+          >
+            ⭐ Golden Cross (PRO)
+          </button>
+          <button 
+            onClick={() => loadPreset('adx_breakout')}
+            style={{ 
+              padding: '8px 14px', 
+              background: 'rgba(255, 179, 0, 0.05)', 
+              border: '1px solid rgba(255, 179, 0, 0.25)', 
+              borderRadius: '8px', 
+              color: '#ffb300', 
+              fontSize: '12px', 
+              fontWeight: '700', 
+              cursor: 'pointer',
+              boxShadow: '0 0 10px rgba(255, 179, 0, 0.05)'
+            }}
+          >
+            ⭐ ADX Breakout (PRO)
           </button>
         </div>
       </div>

@@ -245,11 +245,13 @@ async function register(req, res) {
     const userId = generateUUID();
     const userName = name || email.split('@')[0];
     const isAdmin = email.toLowerCase().startsWith('admin@');
+    const isPro = email.toLowerCase() === 'krishshah8201@gmail.com';
+    const proPlan = isPro ? 'lifetime' : null;
 
     // Set is_email_verified = false to require email verification
     await query(
-      `INSERT INTO users (id, email, password, name, is_email_verified, is_admin) VALUES ($1, $2, $3, $4, false, $5)`,
-      [userId, email, hashed, userName, isAdmin]
+      `INSERT INTO users (id, email, password, name, is_email_verified, is_admin, is_pro, pro_plan) VALUES ($1, $2, $3, $4, false, $5, $6, $7)`,
+      [userId, email, hashed, userName, isAdmin, isPro, proPlan]
     );
 
     // Generate OTP and update user

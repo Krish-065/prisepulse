@@ -266,48 +266,19 @@ export default function UpgradePro() {
           </div>
 
           <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '24px' }}>
-            {/* Styled custom vector QR Code representation */}
-            <div style={{
-              width: '180px',
-              height: '180px',
-              background: '#ffffff',
-              padding: '12px',
-              borderRadius: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              boxShadow: '0 0 20px rgba(255,255,255,0.08)'
-            }}>
-              {/* QR Pattern Representation */}
-              <svg width="100%" height="100%" viewBox="0 0 100 100" style={{ shapeRendering: 'crispEdges' }}>
-                {/* 3 Large Corner Position Anchors */}
-                <rect x="0" y="0" width="30" height="30" fill="#000000" />
-                <rect x="5" y="5" width="20" height="20" fill="#ffffff" />
-                <rect x="10" y="10" width="10" height="10" fill="#000000" />
-
-                <rect x="70" y="0" width="30" height="30" fill="#000000" />
-                <rect x="75" y="5" width="20" height="20" fill="#ffffff" />
-                <rect x="80" y="10" width="10" height="10" fill="#000000" />
-
-                <rect x="0" y="70" width="30" height="30" fill="#000000" />
-                <rect x="5" y="75" width="20" height="20" fill="#ffffff" />
-                <rect x="10" y="80" width="10" height="10" fill="#000000" />
-
-                {/* Random QR details */}
-                <rect x="40" y="5" width="10" height="10" fill="#000000" />
-                <rect x="55" y="15" width="10" height="15" fill="#000000" />
-                <rect x="40" y="25" width="20" height="5" fill="#000000" />
-                <rect x="45" y="40" width="10" height="10" fill="#000000" />
-                <rect x="65" y="45" width="15" height="10" fill="#000000" />
-
-                <rect x="40" y="60" width="20" height="20" fill="#000000" />
-                <rect x="45" y="65" width="10" height="10" fill="#ffffff" />
-
-                <rect x="70" y="70" width="10" height="15" fill="#000000" />
-                <rect x="85" y="75" width="15" height="10" fill="#000000" />
-                <rect x="75" y="90" width="20" height="10" fill="#000000" />
-              </svg>
-            </div>
+            <img 
+              src="/qr_code.png" 
+              alt="UPI QR Code" 
+              style={{
+                width: '180px',
+                height: '180px',
+                objectFit: 'contain',
+                background: '#ffffff',
+                padding: '12px',
+                borderRadius: '16px',
+                boxShadow: '0 0 20px rgba(255,255,255,0.08)'
+              }} 
+            />
 
             <div style={{ flex: 1, minWidth: '240px' }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>Scan QR to Pay via UPI</div>

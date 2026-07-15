@@ -36,6 +36,7 @@ import AIMentor from './pages/AIMentor';
 import Community from './pages/Community';
 import Alerts from './pages/Alerts';
 import UpgradePro from './pages/UpgradePro';
+import ContactUs from './pages/ContactUs';
 
 function App() {
   return (
@@ -75,6 +76,7 @@ function App() {
             <Route path="/alerts" element={<PrivateRoute><Layout><Alerts /></Layout></PrivateRoute>} />
             <Route path="/community" element={<PrivateRoute><Layout><Community /></Layout></PrivateRoute>} />
             <Route path="/upgrade-pro" element={<PrivateRoute><Layout><UpgradePro /></Layout></PrivateRoute>} />
+            <Route path="/contact-us" element={<PrivateRoute><Layout><ContactUs /></Layout></PrivateRoute>} />
           </Routes>
         </AuthProvider>
       </ThemeProvider>
