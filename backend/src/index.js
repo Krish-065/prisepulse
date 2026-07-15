@@ -10,6 +10,8 @@ const { router: marketRoutes, fetchYahooQuote } = require('./api/marketData');
 const { authenticate } = require('./middleware/auth');
 const { loginLimiter } = require('./middleware/rateLimit');
 const { query } = require('./db/index');
+const jwt = require('jsonwebtoken');
+const { sendEmail } = require('./utils/email');
 
 const app = express();
 const httpServer = createServer(app);
@@ -84,13 +86,22 @@ app.post('/api/auth/change-password', authenticate, authRoutes.changePassword);
 app.get('/api/user/profile', authenticate, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at FROM users WHERE id = $1`, 
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at, pro_status, pro_pending_plan, pro_pending_ref FROM users WHERE id = $1`, 
       [req.user.id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(result.rows[0]);
+    const user = result.rows[0];
+    if (user.email && user.email.toLowerCase() === 'krishshah8201@gmail.com') {
+      user.is_pro = true;
+      user.pro_plan = 'lifetime';
+      await query(
+        "UPDATE users SET is_pro = true, pro_plan = 'lifetime' WHERE id = $1",
+        [user.id]
+      );
+    }
+    res.json(user);
   } catch (error) {
     console.error('❌ Get profile error:', error);
     res.status(500).json({ error: 'Failed to retrieve profile' });
@@ -136,10 +147,22 @@ app.put('/api/user/profile', authenticate, async (req, res) => {
     );
 
     const result = await query(
-      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at FROM users WHERE id = $1`, 
+      `SELECT id, email, name, theme, language, two_factor_enabled, base_currency, refresh_rate, landing_page, broker_code, demat_id, dp_name, pan_id, brokerage_plan, connected_broker, is_admin, is_verified, verification_title, verification_status, virtual_balance, is_pro, pro_plan, pro_expires_at, pro_status, pro_pending_plan, pro_pending_ref FROM users WHERE id = $1`, 
       [req.user.id]
     );
-    res.json(result.rows[0]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = result.rows[0];
+    if (user.email && user.email.toLowerCase() === 'krishshah8201@gmail.com') {
+      user.is_pro = true;
+      user.pro_plan = 'lifetime';
+      await query(
+        "UPDATE users SET is_pro = true, pro_plan = 'lifetime' WHERE id = $1",
+        [user.id]
+      );
+    }
+    res.json(user);
   } catch (error) {
     console.error('❌ Update profile error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -154,24 +177,335 @@ app.post('/api/user/upgrade-pro', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Plan details and payment reference ID are required' });
     }
     
-    let months = 1;
-    if (plan === 'annually') months = 12;
-    else if (plan === 'three_year') months = 36;
-    
+    // 1. Record pending upgrade request in DB
     await query(
       `UPDATE users 
-       SET is_pro = true, 
-           pro_subscribed_at = NOW(), 
-           pro_expires_at = NOW() + ($1 * INTERVAL '1 month'), 
-           pro_plan = $2 
+       SET pro_status = 'pending', 
+           pro_pending_plan = $1, 
+           pro_pending_ref = $2 
        WHERE id = $3`,
-      [months, plan, req.user.id]
+      [plan, referenceId, req.user.id]
     );
 
-    res.json({ success: true, message: 'Welcome to NonStock Pro! Membership activated successfully.' });
+    // 2. Fetch user's details for email body
+    const userRes = await query('SELECT name, email FROM users WHERE id = $1', [req.user.id]);
+    const user = userRes.rows[0];
+
+    // 3. Generate secure approve/reject action tokens
+    const approveToken = jwt.sign(
+      { userId: req.user.id, plan, referenceId, action: 'approve' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    const rejectToken = jwt.sign(
+      { userId: req.user.id, plan, referenceId, action: 'reject' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Get dynamic backend URL (handling reverse proxy correctly)
+    let backendUrl = process.env.BACKEND_URL;
+    if (!backendUrl) {
+      const host = req.get('host');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      backendUrl = `${protocol}://${host}`;
+    }
+
+    const approveLink = `${backendUrl}/api/admin/verify-upgrade?action=approve&token=${approveToken}`;
+    const rejectLink = `${backendUrl}/api/admin/verify-upgrade?action=reject&token=${rejectToken}`;
+
+    // Map plan IDs to human-readable names and prices
+    const planNames = {
+      monthly: { name: 'Monthly Plan', price: '₹449' },
+      annually: { name: 'Annual Premium', price: '₹2299' },
+      three_year: { name: '3-Year Legacy', price: '₹5549' }
+    };
+    const planDetail = planNames[plan] || { name: plan, price: 'N/A' };
+
+    // 4. Send email to admin (krishshah8201@gmail.com)
+    const adminEmail = 'krishshah8201@gmail.com';
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0b0803; border: 1px solid #ffb300; border-radius: 12px; color: #ffffff;">
+        <div style="text-align: center; border-bottom: 2px solid rgba(255, 179, 0, 0.2); padding-bottom: 20px; margin-bottom: 20px;">
+          <h2 style="color: #ffb300; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 0.5px;">NonStock Pro Upgrade Request</h2>
+          <p style="color: #d1c9b8; font-size: 13px; margin: 5px 0 0 0;">Pending payment verification</p>
+        </div>
+
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <h4 style="margin: 0 0 12px 0; color: #ffe082; font-size: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 8px;">User & Plan Details</h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <tr>
+              <td style="padding: 6px 0; color: #9b9eac; font-weight: 600; width: 40%;">User Name:</td>
+              <td style="padding: 6px 0; color: #ffffff;">${user.name}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #9b9eac; font-weight: 600;">User Email:</td>
+              <td style="padding: 6px 0; color: #ffffff;">${user.email}</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #9b9eac; font-weight: 600;">Selected Plan:</td>
+              <td style="padding: 6px 0; color: #ffb300; font-weight: 700;">${planDetail.name} (${planDetail.price})</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 0; color: #9b9eac; font-weight: 600;">UPI UTR / Reference ID:</td>
+              <td style="padding: 6px 0; color: #00ff88; font-weight: 700; font-family: monospace; font-size: 15px; letter-spacing: 0.5px;">${referenceId}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="font-size: 14px; color: #d1c9b8; line-height: 1.6; margin-bottom: 24px;">
+          Please cross-reference this 12-digit UTR <strong>${referenceId}</strong> with your PhonePe business ledger to verify if the payment of <strong>${planDetail.price}</strong> has been received. Once confirmed, select one of the actions below:
+        </p>
+
+        <div style="margin-top: 20px; text-align: center;">
+          <a href="${approveLink}" style="display: inline-block; margin-right: 15px; text-decoration: none; padding: 12px 25px; background: linear-gradient(135deg, #00ff88, #00b058); color: #0b0803; font-weight: bold; border-radius: 8px; font-size: 14px; box-shadow: 0 4px 10px rgba(0, 255, 136, 0.25);">
+            Approve & Activate Pro
+          </a>
+          <a href="${rejectLink}" style="display: inline-block; text-decoration: none; padding: 12px 25px; background: linear-gradient(135deg, #ff3366, #b00020); color: #ffffff; font-weight: bold; border-radius: 8px; font-size: 14px; box-shadow: 0 4px 10px rgba(255, 51, 102, 0.25);">
+            Reject Request
+          </a>
+        </div>
+
+        <p style="font-size: 11px; color: #9b9eac; margin-top: 30px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 15px;">
+          This is an automated payment verification system email. Token expires in 7 days.
+        </p>
+      </div>
+    `;
+
+    await sendEmail({
+      to: adminEmail,
+      subject: `NonStock Pro Subscription Request - UTR: ${referenceId}`,
+      html: emailHtml
+    });
+
+    res.json({ 
+      success: true, 
+      pending: true, 
+      message: 'Payment details submitted for verification. Admin will verify and activate your Pro membership shortly.' 
+    });
   } catch (error) {
     console.error('❌ Upgrade Pro error:', error);
     res.status(500).json({ error: 'Failed to process Pro upgrade' });
+  }
+});
+
+// Admin callback route to approve or reject a Pro membership upgrade
+app.get('/api/admin/verify-upgrade', async (req, res) => {
+  try {
+    const { token, action } = req.query;
+    if (!token || !action) {
+      return res.status(400).send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff;">
+          <h2 style="color: #ff3366; margin-bottom: 15px;">Invalid Request</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">Missing action or verification token parameters.</p>
+        </div>
+      `);
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(400).send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff;">
+          <h2 style="color: #ff3366; margin-bottom: 15px;">Verification Token Expired</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">The approval/rejection link has expired (7 days limit) or has an invalid signature.</p>
+        </div>
+      `);
+    }
+
+    const { userId, plan, referenceId, action: tokenAction } = decoded;
+
+    // Verify token action matches query action for defense-in-depth security
+    if (tokenAction !== action) {
+      return res.status(400).send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff;">
+          <h2 style="color: #ff3366; margin-bottom: 15px;">Security Mismatch</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">The token action details do not match the request query action.</p>
+        </div>
+      `);
+    }
+
+    const userRes = await query('SELECT id, name, email, pro_status FROM users WHERE id = $1', [userId]);
+    if (userRes.rows.length === 0) {
+      return res.status(404).send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff;">
+          <h2 style="color: #ff3366; margin-bottom: 15px;">User Not Found</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">The user associated with this upgrade request no longer exists.</p>
+        </div>
+      `);
+    }
+
+    const user = userRes.rows[0];
+
+    // Check if the request was already processed
+    if (user.pro_status === 'active' && action === 'approve') {
+      return res.send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ffb300; border-radius: 12px; background: #0b0803; color: #ffffff;">
+          <h2 style="color: #ffb300; margin-bottom: 15px;">Already Activated</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">User <strong>${user.name}</strong> (${user.email}) is already an active Pro member.</p>
+        </div>
+      `);
+    }
+
+    const planNames = {
+      monthly: { name: 'Monthly Plan', price: '₹449' },
+      annually: { name: 'Annual Premium', price: '₹2299' },
+      three_year: { name: '3-Year Legacy', price: '₹5549' }
+    };
+    const planDetail = planNames[plan] || { name: plan, price: 'N/A' };
+
+    if (action === 'approve') {
+      let months = 1;
+      if (plan === 'annually') months = 12;
+      else if (plan === 'three_year') months = 36;
+
+      // Update user in database to Pro
+      await query(
+        `UPDATE users 
+         SET is_pro = true, 
+             pro_status = 'active', 
+             pro_plan = $1, 
+             pro_subscribed_at = NOW(), 
+             pro_expires_at = NOW() + ($2 * INTERVAL '1 month'), 
+             pro_pending_plan = NULL, 
+             pro_pending_ref = NULL 
+         WHERE id = $3`,
+        [plan, months, userId]
+      );
+
+      // Send confirmation email to the user
+      const userHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0b0803; border: 1px solid #ffb300; border-radius: 12px; color: #ffffff;">
+          <div style="text-align: center; border-bottom: 2px solid rgba(255, 179, 0, 0.2); padding-bottom: 20px; margin-bottom: 20px;">
+            <h2 style="color: #ffb300; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 0.5px;">Welcome to NonStock Pro!</h2>
+            <p style="color: #d1c9b8; font-size: 13px; margin: 5px 0 0 0;">Subscription Activated</p>
+          </div>
+
+          <p style="font-size: 15px; color: #ffffff; line-height: 1.6;">
+            Dear ${user.name},
+          </p>
+
+          <p style="font-size: 14px; color: #d1c9b8; line-height: 1.6;">
+            Great news! Your payment verification is complete, and your subscription has been successfully approved by our administrative team.
+          </p>
+
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 6px 0; color: #9b9eac; font-weight: 600; width: 40%;">Membership Tier:</td>
+                <td style="padding: 6px 0; color: #ffb300; font-weight: 700;">NonStock Pro</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9b9eac; font-weight: 600;">Plan Duration:</td>
+                <td style="padding: 6px 0; color: #ffffff;">${planDetail.name}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #9b9eac; font-weight: 600;">Status:</td>
+                <td style="padding: 6px 0; color: #00ff88; font-weight: 700;">Active</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="font-size: 14px; color: #d1c9b8; line-height: 1.6; margin-bottom: 24px;">
+            You can now log in to the dashboard to access all premium features (Advanced Greeks, automated trading bot presettings, and institutional-grade AI Coaching).
+          </p>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard" style="display: inline-block; text-decoration: none; padding: 12px 30px; background: linear-gradient(135deg, #ffe082, #ffb300); color: #0b0803; font-weight: 800; border-radius: 25px; font-size: 14px; box-shadow: 0 4px 15px rgba(255, 179, 0, 0.35);">
+              Go to Pro Dashboard
+            </a>
+          </div>
+
+          <p style="font-size: 11px; color: #9b9eac; margin-top: 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 15px;">
+            If you have any questions or require assistance, please contact us at krishshah8201@gmail.com.
+          </p>
+        </div>
+      `;
+
+      await sendEmail({
+        to: user.email,
+        subject: `NonStock Pro Subscription Activated!`,
+        html: userHtml
+      });
+
+      return res.send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #00ff88; border-radius: 12px; background: #0b0803; color: #ffffff; box-shadow: 0 0 30px rgba(0, 255, 136, 0.15);">
+          <div style="width: 50px; height: 50px; border-radius: 50%; background: #00ff88; display: flex; align-items: center; justify-content: center; color: #0b0803; font-size: 24px; font-weight: 900; margin: 0 auto 20px auto;">✓</div>
+          <h2 style="color: #00ff88; margin-bottom: 15px;">Subscription Approved</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.6;">
+            User <strong>${user.name}</strong> (${user.email}) has been successfully upgraded to the Pro tier (<strong>${planDetail.name}</strong>). A confirmation email has been sent to them.
+          </p>
+        </div>
+      `);
+    } else {
+      // Action is 'reject'
+      // Update database status
+      await query(
+        `UPDATE users 
+         SET pro_status = 'rejected', 
+             pro_pending_plan = NULL, 
+             pro_pending_ref = NULL 
+         WHERE id = $1`,
+        [userId]
+      );
+
+      // Send rejection notification email to user
+      const userHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0b0803; border: 1px solid #ff3366; border-radius: 12px; color: #ffffff;">
+          <div style="text-align: center; border-bottom: 2px solid rgba(255, 51, 102, 0.2); padding-bottom: 20px; margin-bottom: 20px;">
+            <h2 style="color: #ff3366; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 0.5px;">Subscription Payment Verification Declined</h2>
+            <p style="color: #d1c9b8; font-size: 13px; margin: 5px 0 0 0;">Transaction Verification Failed</p>
+          </div>
+
+          <p style="font-size: 15px; color: #ffffff; line-height: 1.6;">
+            Dear ${user.name},
+          </p>
+
+          <p style="font-size: 14px; color: #d1c9b8; line-height: 1.6;">
+            We were unable to verify your recent Pro upgrade request due to an issue with the UPI UTR / Transaction Reference ID provided: <strong>${referenceId}</strong>.
+          </p>
+
+          <p style="font-size: 14px; color: #d1c9b8; line-height: 1.6;">
+            Please ensure you have transferred the exact amount of <strong>${planDetail.price}</strong> and enter the correct 12-digit UTR number from your payment app receipts.
+          </p>
+
+          <div style="text-align: center; margin-top: 30px;">
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/upgrade-pro" style="display: inline-block; text-decoration: none; padding: 12px 30px; background: linear-gradient(135deg, #ff3366, #ff7b9a); color: #ffffff; font-weight: 800; border-radius: 25px; font-size: 14px; box-shadow: 0 4px 15px rgba(255, 51, 102, 0.35);">
+              Resubmit Payment Details
+            </a>
+          </div>
+
+          <p style="font-size: 11px; color: #9b9eac; margin-top: 40px; text-align: center; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 15px;">
+            If this was an error or you have a valid payment receipt, please contact support directly at krishshah8201@gmail.com.
+          </p>
+        </div>
+      `;
+
+      await sendEmail({
+        to: user.email,
+        subject: `Payment Verification Declined - NonStock Pro`,
+        html: userHtml
+      });
+
+      return res.send(`
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff; box-shadow: 0 0 30px rgba(255, 51, 102, 0.15);">
+          <div style="width: 50px; height: 50px; border-radius: 50%; background: #ff3366; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 24px; font-weight: 900; margin: 0 auto 20px auto;">✗</div>
+          <h2 style="color: #ff3366; margin-bottom: 15px;">Subscription Rejected</h2>
+          <p style="color: #d1c9b8; font-size: 14px; line-height: 1.6;">
+            Upgrade request for User <strong>${user.name}</strong> (${user.email}) has been rejected. The user has been notified via email.
+          </p>
+        </div>
+      `);
+    }
+  } catch (error) {
+    console.error('❌ Admin verification callback error:', error);
+    res.status(500).send(`
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 50px auto; padding: 30px; text-align: center; border: 1px solid #ff3366; border-radius: 12px; background: #0b0803; color: #ffffff;">
+        <h2 style="color: #ff3366; margin-bottom: 15px;">Verification Process Failed</h2>
+        <p style="color: #d1c9b8; font-size: 14px; line-height: 1.5;">An internal system error occurred during verification processing.</p>
+      </div>
+    `);
   }
 });
 

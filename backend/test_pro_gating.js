@@ -21,7 +21,8 @@ setTimeout(async () => {
 }, 2000);
 
 async function runTest() {
-  console.log('🚀 Starting NonStock Pro Membership integration test...');
+  try {
+    console.log('🚀 Starting NonStock Pro Membership integration test...');
 
   // 1. Create a mock standard user
   const userId = 'user_pro_' + crypto.randomBytes(4).toString('hex');
@@ -59,50 +60,88 @@ async function runTest() {
     throw new Error('User should NOT be a Pro member initially');
   }
 
-  // 4. Upgrade user to Pro (Annually plan)
-  console.log('\n💳 Triggering Pro Upgrade checkout flow...');
-  const upgradeRes = await fetch(`http://localhost:${PORT}/api/user/upgrade-pro`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      plan: 'annually',
-      referenceId: 'TXN_' + crypto.randomBytes(6).toString('hex').toUpperCase()
-    })
-  });
-  
-  const upgradeData = await upgradeRes.json();
-  console.log('📥 Upgrade response:', upgradeData);
-  if (!upgradeData.success) {
-    throw new Error('Upgrade request failed: ' + upgradeData.error);
-  }
-
-  // 5. Verify upgraded state in profile
-  console.log('\n🔍 Verifying upgraded Pro status...');
-  const finalProfileRes = await fetch(`http://localhost:${PORT}/api/user/profile`, {
-    headers: {
-      'Authorization': `Bearer ${token}`
+    // 4. Upgrade user to Pro (Annually plan)
+    console.log('\n💳 Triggering Pro Upgrade checkout flow...');
+    const referenceId = 'TXN_' + crypto.randomBytes(6).toString('hex').toUpperCase();
+    const upgradeRes = await fetch(`http://localhost:${PORT}/api/user/upgrade-pro`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        plan: 'annually',
+        referenceId: referenceId
+      })
+    });
+    
+    const upgradeData = await upgradeRes.json();
+    console.log('📥 Upgrade response:', upgradeData);
+    if (!upgradeData.success || !upgradeData.pending) {
+      throw new Error('Upgrade request failed or did not set pending: ' + JSON.stringify(upgradeData));
     }
-  });
-  const finalProfile = await finalProfileRes.json();
-  console.log(`👤 Updated profile: is_pro = ${finalProfile.is_pro}, plan = ${finalProfile.pro_plan}`);
-  console.log(`📅 Subscribed at: ${finalProfile.pro_subscribed_at}`);
-  console.log(`📅 Expires at: ${finalProfile.pro_expires_at}`);
 
-  if (!finalProfile.is_pro) {
-    throw new Error('User is_pro should be true after upgrade');
+    // 5. Verify pending state in profile
+    console.log('\n🔍 Verifying pending Pro status...');
+    const pendingProfileRes = await fetch(`http://localhost:${PORT}/api/user/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const pendingProfile = await pendingProfileRes.json();
+    console.log(`👤 Updated profile: is_pro = ${pendingProfile.is_pro}, pro_status = ${pendingProfile.pro_status}, pending_ref = ${pendingProfile.pro_pending_ref}`);
+    if (pendingProfile.is_pro) {
+      throw new Error('User is_pro should not be true while payment is pending');
+    }
+    if (pendingProfile.pro_status !== 'pending') {
+      throw new Error('User pro_status should be "pending"');
+    }
+
+    // 6. Simulate admin approval
+    console.log('\n👑 Simulating admin approval action callback...');
+    const approveToken = jwt.sign(
+      { userId: userId, plan: 'annually', referenceId: referenceId, action: 'approve' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+    const verifyRes = await fetch(`http://localhost:${PORT}/api/admin/verify-upgrade?action=approve&token=${approveToken}`);
+    const verifyHtml = await verifyRes.text();
+    console.log('📥 Admin Callback Response (partial):', verifyHtml.slice(0, 300));
+    if (!verifyHtml.includes('Subscription Approved')) {
+      throw new Error('Admin verification approval HTML response mismatch');
+    }
+
+    // 7. Verify upgraded state in profile
+    console.log('\n🔍 Verifying activated Pro status...');
+    const finalProfileRes = await fetch(`http://localhost:${PORT}/api/user/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const finalProfile = await finalProfileRes.json();
+    console.log(`👤 Final profile: is_pro = ${finalProfile.is_pro}, pro_status = ${finalProfile.pro_status}, plan = ${finalProfile.pro_plan}`);
+    console.log(`📅 Subscribed at: ${finalProfile.pro_subscribed_at}`);
+    console.log(`📅 Expires at: ${finalProfile.pro_expires_at}`);
+
+    if (!finalProfile.is_pro) {
+      throw new Error('User is_pro should be true after admin approval');
+    }
+    if (finalProfile.pro_status !== 'active') {
+      throw new Error('User pro_status should be "active" after admin approval');
+    }
+    if (finalProfile.pro_plan !== 'annually') {
+      throw new Error('User pro_plan should be "annually"');
+    }
+
+    // Cleanup database records
+    await query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+    await query(`DELETE FROM users WHERE id = $1`, [userId]);
+    console.log('\n🧹 Test database records cleaned up.');
+
+    console.log('🎉 ALL PRO MEMBERSHIP UPGRADE TESTS COMPLETED SUCCESSFULLY!');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Test failed with error:', error);
+    process.exit(1);
   }
-  if (finalProfile.pro_plan !== 'annually') {
-    throw new Error('User pro_plan should be "annually"');
-  }
-
-  // Cleanup database records
-  await query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
-  await query(`DELETE FROM users WHERE id = $1`, [userId]);
-  console.log('\n🧹 Test database records cleaned up.');
-
-  console.log('🎉 ALL PRO MEMBERSHIP UPGRADE TESTS COMPLETED SUCCESSFULLY!');
-  process.exit(0);
 }

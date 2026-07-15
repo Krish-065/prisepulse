@@ -88,7 +88,11 @@ export default function UpgradePro() {
         plan: selectedPlan,
         referenceId: referenceId.trim()
       });
-      if (res.data.success) {
+      if (res.data.success && res.data.pending) {
+        await fetchUser(false);
+        setStep('pending');
+        toast.success('Payment submitted for verification!');
+      } else if (res.data.success) {
         await fetchUser(false);
         setStep('success');
         toast.success('Congratulations! Welcome to NonStock Pro.');
@@ -102,11 +106,166 @@ export default function UpgradePro() {
     }
   };
 
+  const isAlreadyPro = user?.is_pro || (user?.email && user.email.toLowerCase() === 'krishshah8201@gmail.com');
+
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '20px 0' }}>
       
+      {/* Already Pro Screen */}
+      {isAlreadyPro && (
+        <div style={{ maxWidth: '600px', margin: '60px auto', textAlign: 'center' }} className="section-card">
+          <div style={{ 
+            width: '64px', 
+            height: '64px', 
+            borderRadius: '50%', 
+            background: 'linear-gradient(135deg, #ffe082, #ffb300)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            color: '#0b0803',
+            margin: '0 auto 24px auto',
+            boxShadow: '0 0 20px rgba(255, 179, 0, 0.4)'
+          }}>
+            <ShieldCheck size={36} />
+          </div>
+          <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.5px' }}>
+            You Are a NonStock Pro Member!
+          </h3>
+          <p style={{ color: '#d1c9b8', fontSize: '14px', marginTop: '12px', lineHeight: 1.5 }}>
+            Thank you for supporting retail finance democratization. Your account is upgraded to the Pro tier.
+          </p>
+
+          <div style={{
+            background: 'rgba(255, 179, 0, 0.05)',
+            border: '1px solid rgba(255, 179, 0, 0.2)',
+            borderRadius: '12px',
+            padding: '16px',
+            margin: '24px auto',
+            maxWidth: '400px',
+            textAlign: 'left'
+          }}>
+            <div style={{ fontSize: '13px', color: '#ffb300', fontWeight: 700, marginBottom: '6px' }}>Membership Information:</div>
+            <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+              <strong>Tier:</strong> NonStock Pro
+            </div>
+            <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+              <strong>Plan Type:</strong> {user?.pro_plan ? user.pro_plan.toUpperCase() : 'LIFETIME'}
+            </div>
+            {user?.pro_expires_at && user.pro_plan !== 'lifetime' && (
+              <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+                <strong>Expires At:</strong> {new Date(user.pro_expires_at).toLocaleDateString()}
+              </div>
+            )}
+          </div>
+          
+          <button 
+            onClick={() => window.location.href = '/dashboard'}
+            style={{
+              marginTop: '16px',
+              padding: '12px 30px',
+              borderRadius: '24px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #ffe082, #ffb300)',
+              color: '#0b0803',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 4px 15px rgba(255, 179, 0, 0.3)'
+            }}
+          >
+            Go to Pro Dashboard
+          </button>
+        </div>
+      )}
+
+      {/* Verification Pending Screen */}
+      {(step === 'pending' || user?.pro_status === 'pending') && !isAlreadyPro && (
+        <div style={{ maxWidth: '600px', margin: '60px auto', textAlign: 'center' }} className="section-card">
+          <div style={{ 
+            width: '64px', 
+            height: '64px', 
+            borderRadius: '50%', 
+            background: 'rgba(255, 179, 0, 0.1)', 
+            border: '2px dashed #ffb300',
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            color: '#ffb300',
+            margin: '0 auto 24px auto',
+            boxShadow: '0 0 20px rgba(255, 179, 0, 0.15)'
+          }}>
+            <Loader2 className="animate-spin" size={32} />
+          </div>
+          <h3 style={{ fontSize: '24px', fontWeight: 900, color: '#ffffff', letterSpacing: '-0.5px' }}>
+            Payment Under Verification
+          </h3>
+          <p style={{ color: '#d1c9b8', fontSize: '14px', marginTop: '12px', lineHeight: 1.5 }}>
+            Thank you! We have received your payment reference ID. Our admin team is cross-verifying the transaction details with our PhonePe ledger.
+          </p>
+
+          <div style={{
+            background: 'rgba(255, 179, 0, 0.03)',
+            border: '1px solid rgba(255, 179, 0, 0.12)',
+            borderRadius: '12px',
+            padding: '16px',
+            margin: '24px auto',
+            maxWidth: '440px',
+            textAlign: 'left'
+          }}>
+            <div style={{ fontSize: '13px', color: '#ffb300', fontWeight: 700, marginBottom: '6px' }}>Verification Details:</div>
+            <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+              <strong>Requested Plan:</strong> {user?.pro_pending_plan || selectedPlan}
+            </div>
+            <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+              <strong>Reference UTR:</strong> <span style={{ fontFamily: 'monospace', color: '#00ff88', fontWeight: 700 }}>{user?.pro_pending_ref || referenceId}</span>
+            </div>
+            <div style={{ fontSize: '13px', color: '#e5dec9', margin: '4px 0' }}>
+              <strong>Status:</strong> <span style={{ color: '#ffb300', fontWeight: 700 }}>Awaiting Admin Approval</span>
+            </div>
+          </div>
+
+          <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '16px' }}>
+            Verification usually takes between 10 minutes to a few hours. You will receive an automated activation email once approved.
+          </p>
+          
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '32px' }}>
+            <button 
+              onClick={async () => {
+                await fetchUser(false);
+                toast.success('Subscription status updated.');
+              }}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '24px',
+                border: '1px solid rgba(255,179,0,0.3)',
+                background: 'transparent',
+                color: '#ffb300',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Refresh Status
+            </button>
+            <button 
+              onClick={() => window.location.href = '/dashboard'}
+              style={{
+                padding: '12px 24px',
+                borderRadius: '24px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #ffe082, #ffb300)',
+                color: '#0b0803',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 15px rgba(255, 179, 0, 0.3)'
+              }}
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Step 1: Select Plan */}
-      {step === 'select' && (
+      {step === 'select' && !isAlreadyPro && user?.pro_status !== 'pending' && (
         <>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <div style={{

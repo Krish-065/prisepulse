@@ -31,10 +31,13 @@ export function AuthProvider({ children }) {
       
       const payload = decodeJWT(token);
       if (payload && payload.exp * 1000 > Date.now()) {
+        const isPro = payload.email && payload.email.toLowerCase() === 'krishshah8201@gmail.com';
         setUser({
           id: payload.id,
           email: payload.email,
-          name: payload.name || payload.email.split('@')[0]
+          name: payload.name || payload.email.split('@')[0],
+          is_pro: isPro,
+          pro_plan: isPro ? 'lifetime' : null
         });
         // Set loading to false so the user gets access to the dashboard immediately
         setLoading(false);
