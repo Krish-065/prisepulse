@@ -477,6 +477,14 @@ async function createTables() {
     )
   `);
 
+  // 9. Google Sign-in migration
+  try {
+    await query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`);
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(255) UNIQUE`);
+  } catch (err) {
+    console.warn('Migration warning (google sign-in fields):', err.message);
+  }
+
   console.log('✅ All tables created');
 }
 

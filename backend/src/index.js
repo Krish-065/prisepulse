@@ -53,6 +53,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/auth/register', authRoutes.register);
 app.post('/api/auth/verify-email', authRoutes.verifyEmail);
 app.post('/api/auth/login', loginLimiter, authRoutes.login);
+app.post('/api/auth/google', authRoutes.googleLogin);
 app.post('/api/auth/2fa/login-verify', authRoutes.verifyTwoFactorLogin);
 app.post('/api/auth/forgot-password', authRoutes.forgotPassword);
 app.post('/api/auth/reset-password', authRoutes.resetPassword);

@@ -140,6 +140,21 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const googleLogin = async (credential) => {
+    try {
+      const res = await apiClient.post('/auth/google', { credential });
+      const { token, user } = res.data;
+      localStorage.setItem('token', token);
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setUser(user);
+      toast.success('Login successful');
+      return { success: true };
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Google login failed');
+      return { success: false };
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     delete apiClient.defaults.headers.common['Authorization'];
@@ -172,7 +187,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, verify2FALogin, logout, updateProfile, changePassword, fetchUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, verify2FALogin, logout, updateProfile, changePassword, fetchUser, googleLogin }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const speakeasy = require('speakeasy');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -582,6 +583,88 @@ async function changePassword(req, res) {
   }
 }
 
+// GOOGLE SIGN-IN / SIGN-UP
+async function googleLogin(req, res) {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ error: 'Google Credential is required' });
+    }
+
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, sub: googleId } = payload;
+    const ip = req.ip;
+
+    // Check if user exists by google_id or email
+    let userRes = await query(`SELECT * FROM users WHERE google_id = $1`, [googleId]);
+    let user;
+
+    if (userRes.rows.length > 0) {
+      user = userRes.rows[0];
+    } else {
+      // Check if user exists by email
+      userRes = await query(`SELECT * FROM users WHERE email = $1`, [email]);
+      if (userRes.rows.length > 0) {
+        // Link google account
+        user = userRes.rows[0];
+        await query(`UPDATE users SET google_id = $1 WHERE id = $2`, [googleId, user.id]);
+        user.google_id = googleId;
+      } else {
+        // Register new user via Google
+        const userId = generateUUID();
+        const userName = name || email.split('@')[0];
+        const isAdmin = email.toLowerCase().startsWith('admin@');
+        const isPro = email.toLowerCase() === 'krishshah8201@gmail.com';
+        const proPlan = isPro ? 'lifetime' : null;
+
+        await query(
+          `INSERT INTO users (id, email, password, name, is_email_verified, is_admin, is_pro, pro_plan, google_id) 
+           VALUES ($1, $2, NULL, $3, true, $4, $5, $6, $7)`,
+          [userId, email, userName, isAdmin, isPro, proPlan, googleId]
+        );
+
+        const newUserRes = await query(`SELECT * FROM users WHERE id = $1`, [userId]);
+        user = newUserRes.rows[0];
+      }
+    }
+
+    // Create session (exactly like traditional login)
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const sessionId = generateUUID();
+    await query(
+      `INSERT INTO sessions (id, user_id, token, ip_address, user_agent, expires_at) 
+       VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '7 days')`,
+      [sessionId, user.id, sessionToken, ip, req.headers['user-agent']]
+    );
+
+    const isPro = user.email.toLowerCase() === 'krishshah8201@gmail.com' ? true : user.is_pro;
+    const proPlan = user.email.toLowerCase() === 'krishshah8201@gmail.com' ? 'lifetime' : user.pro_plan;
+    const jwtToken = jwt.sign({ id: user.id, email: user.email, sessionId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      message: 'Google login successful',
+      token: jwtToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        is_admin: user.is_admin,
+        is_pro: isPro,
+        pro_plan: proPlan
+      }
+    });
+  } catch (error) {
+    console.error('❌ Google auth error:', error);
+    res.status(401).json({ error: 'Google authentication failed' });
+  }
+}
+
 module.exports = {
   register,
   verifyEmail,
@@ -595,4 +678,5 @@ module.exports = {
   verifyAndEnableTwoFactor,
   disableTwoFactor,
   changePassword,
+  googleLogin,
 };

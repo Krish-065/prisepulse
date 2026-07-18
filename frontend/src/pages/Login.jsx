@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CandlestickBg from '../components/CandlestickBg';
 import Logo from '../components/Logo';
 import toast from 'react-hot-toast';
+import { GoogleLogin } from '@react-oauth/google';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -13,8 +14,21 @@ export default function Login() {
   const [tempToken, setTempToken] = useState('');
   const [twoFactorCode, setTwoFactorCode] = useState('');
 
-  const { login, verify2FALogin } = useAuth();
+  const { login, verify2FALogin, googleLogin } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSuccess = async (credentialResponse) => {
+    setLoading(true);
+    const result = await googleLogin(credentialResponse.credential);
+    setLoading(false);
+    if (result.success) {
+      navigate('/dashboard');
+    }
+  };
+
+  const handleGoogleError = () => {
+    toast.error('Google Sign-In failed');
+  };
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
@@ -65,7 +79,24 @@ export default function Login() {
               {loading ? 'Logging in...' : 'Login'}
             </button>
           </form>
-          <p style={{ marginTop: '20px', color: '#9b9eac' }}>Don't have an account? <Link to="/register" style={{ color: '#00ff88', textDecoration: 'none', fontWeight: '600' }}>Register</Link></p>
+
+          <div style={{ margin: '18px 0', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.08)' }}></div>
+            <span style={{ margin: '0 10px', color: '#9b9eac', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px' }}>or</span>
+            <div style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.08)' }}></div>
+          </div>
+          
+          <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+            <GoogleLogin
+              onSuccess={handleGoogleSuccess}
+              onError={handleGoogleError}
+              theme="filled_dark"
+              shape="pill"
+              text="signin_with"
+            />
+          </div>
+
+          <p style={{ marginTop: '16px', color: '#9b9eac' }}>Don't have an account? <Link to="/register" style={{ color: '#00ff88', textDecoration: 'none', fontWeight: '600' }}>Register</Link></p>
           <p style={{ marginTop: '10px' }}><Link to="/forgot-password" style={{ color: '#00bcd4', textDecoration: 'none', fontSize: '13px' }}>Forgot Password?</Link></p>
         </div>
       ) : (
