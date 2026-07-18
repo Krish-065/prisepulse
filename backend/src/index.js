@@ -44,6 +44,11 @@ app.use(express.json());
 
 createTables().catch(console.error);
 
+// Health check endpoint for Render self-ping (prevents cold starts)
+app.get('/api/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 // Auth routes
 app.post('/api/auth/register', authRoutes.register);
 app.post('/api/auth/verify-email', authRoutes.verifyEmail);
