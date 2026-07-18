@@ -79,11 +79,85 @@ function getMLEnsemble(symbol) {
 }
 
 // ─── Sandbox Response Builder (always returns 200, never crashes) ─────────────
-function buildSandboxResponse(technicals, detectedSymbol, queryText = '') {
+// ─── Sandbox Response Builder (always returns 200, never crashes) ─────────────
+function buildSandboxResponse(technicals, detectedSymbol, queryText = '', history = []) {
   const upper = (queryText || '').toUpperCase();
   let responseText = '';
 
-  if (upper.includes('RSI') || upper.includes('RELATIVE STRENGTH INDEX')) {
+  // 1. Extract memory context from history to learn from user asked questions
+  let memoryContext = '';
+  const prevUserQueries = (history || [])
+    .filter(h => h.sender === 'user' && h.text !== queryText)
+    .map(h => h.text.toUpperCase());
+
+  const prevSymbols = [];
+  const prevConcepts = [];
+  
+  const commonTickers = ['BTC', 'ETH', 'RELIANCE', 'SBIN', 'TCS', 'INFY', 'HDFCBANK', 'ICICIBANK', 'NIFTY', 'GOLD', 'AAPL', 'TSLA'];
+  const commonIndicators = ['RSI', 'MACD', 'SUPPORT', 'RESISTANCE', 'VOLUME', 'EMA', 'SMA', 'PE RATIO'];
+
+  prevUserQueries.forEach(q => {
+    commonTickers.forEach(t => { if (q.includes(t) && !prevSymbols.includes(t)) prevSymbols.push(t); });
+    commonIndicators.forEach(c => { if (q.includes(c) && !prevConcepts.includes(c)) prevConcepts.push(c); });
+  });
+
+  if (prevSymbols.length > 0 || prevConcepts.length > 0) {
+    const memoryParts = [];
+    if (prevSymbols.length > 0) memoryParts.push(`your interest in **${prevSymbols.join(', ')}**`);
+    if (prevConcepts.length > 0) memoryParts.push(`our previous discussion on **${prevConcepts.join(', ')}**`);
+    memoryContext = `\n\n### 🧠 Memory Sync & Learnings
+*Note: Factoring in ${memoryParts.join(' and ')} from your previous queries. I will monitor these sectors to build your comprehensive trading strategy.*`;
+  }
+
+  // 2. Classify query for conditional/geopolitical/macroeconomic analysis
+  const isConditional = upper.includes('IF') || upper.includes('WHICH') || upper.includes('WOULD') || upper.includes('AFFECT') || upper.includes('FUTURE OF') || upper.includes('HAPPEN') || upper.includes('WAR') || upper.includes('TRUMP');
+  const isGeopolitical = upper.includes('WAR') || upper.includes('TRUMP') || upper.includes('CONFLICT') || upper.includes('GEOPOLITIC') || upper.includes('INDIA') || upper.includes('ELECTION') || upper.includes('TARIFF');
+  const isMacro = upper.includes('INFLATION') || upper.includes('INTEREST RATE') || upper.includes('FED') || upper.includes('RBI') || upper.includes('RECES') || upper.includes('BUDGET') || upper.includes('GDP');
+
+  if (isGeopolitical) {
+    let asset = 'Gold';
+    if (upper.includes('BTC') || upper.includes('BITCOIN') || upper.includes('CRYPTO')) asset = 'Bitcoin';
+    else if (upper.includes('NIFTY') || upper.includes('STOCK') || upper.includes('RELIANCE')) asset = 'Equities';
+    else if (upper.includes('OIL') || upper.includes('CRUDE')) asset = 'Crude Oil';
+
+    responseText = `### 🌐 Macro Geopolitical Outlook: ${asset} Analysis
+As a macroeconomic analyst and veteran trader, I evaluate geopolitical escalations—such as political shifts, tariffs, or military conflicts involving major global players like Donald Trump or nations like India—through safe-haven capital flows, inflation pressure, and liquidity cycles.
+
+### 🛡️ Safe-Haven vs Risk-On Dynamics
+- **Gold & Precious Metals**: In times of high geopolitical stress or trade wars, capital seeks security. **Gold** historically benefits as a premier hedge because it lacks counterparty risk and currency inflation risk.
+- **Equities Markets (Nifty 50 / US Indices)**: Markets dislike uncertainty. A geopolitical crisis typically leads to short-term panic sales, supply chain bottlenecks, and higher input costs.
+- **US Dollar & Treasuries**: The USD usually strengthens during initial shock periods as a global liquidity standard, which temporarily puts pressure on emerging market currencies (like the Indian Rupee).
+
+### 🚦 Tactical Trader Playbook
+- **Volatility & Position Sizing**: When volatility spikes, bid-ask spreads widen. Always reduce your position size (lot size) to keep your total risk below **1% to 2%** of capital.
+- **Technical Key Zones**: Do not chase momentum rallies. Watch weekly SMA/EMA retests for entry points once panic headlines consolidate.`;
+  }
+  else if (isMacro) {
+    responseText = `### 🏦 Macroeconomic Outlook: Inflation & Policy Shift
+Analyzing central bank rate decisions (US Fed, RBI) and inflation metrics (CPI) is essential for positioning. High interest rates or recession worries shift the trading environment significantly:
+
+### ⚙️ Macro Transmission Channels
+- **Interest Rates**: Rate hikes raise the discount rate for corporate cash flows. This directly compresses P/E multiples of high-growth sectors (such as Tech or Startups).
+- **Inflation Risks**: Persistent inflation increases operating costs. Focus on value companies with strong pricing power that can easily pass costs to consumers.
+- **Liquidity Cycles**: Focus on central bank balance sheets. When liquidity shrinks, speculative bubble assets tend to correct first.
+
+### 🚦 Trader Setup & Allocation
+- **Defensive Pivot**: Move capital towards short-term bonds, high-yield dividend value stocks, or commodities.
+- **Divergence Play**: Watch for central bank policy differences to trade major Forex pairs (like USD/INR or EUR/USD).`;
+  }
+  else if (isConditional) {
+    responseText = `### 🔮 Conditional Scenario Modeling & Trading Outlook
+Predicting exact market moves in conditional scenarios is impossible. Instead, professional traders model multiple scenarios and execute trades based on structural confirmations:
+
+### 🎭 Scenario A: The Bull Case (Priced-in Optimism)
+- If the conditional event resolves positively, capital moves back to risk-on assets. Look for key resistance breakouts supported by high volume.
+- **Technical Confirmation**: RSI holding in the 55-65 zone and MACD crossing above the signal line.
+
+### 📉 Scenario B: The Bear Case (Risk Realization)
+- If the event causes market distress, expect rapid liquidation. Safe havens (Gold, US Dollar, defensive stocks) will outperform.
+- **Risk Mitigation**: Place hard stop losses at structural support levels. Never let a conditional trade turn into a long-term investment.`;
+  }
+  else if (upper.includes('RSI') || upper.includes('RELATIVE STRENGTH INDEX')) {
     responseText = `### 📊 What is the Relative Strength Index (RSI)?
 The **Relative Strength Index (RSI)** is a popular momentum oscillator used in technical analysis. It measures the speed and change of price movements on a scale from **0 to 100**.
 
@@ -93,9 +167,7 @@ The **Relative Strength Index (RSI)** is a popular momentum oscillator used in t
 - **Neutral (30 to 70)**: Suggests consolidation or trend continuation without extreme momentum.
 
 ### 🎓 How to use RSI
-Traders use RSI to identify potential entry and exit points, detect bullish/bearish divergences (where price makes a new high/low but RSI does not), and confirm trend strength.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+Traders use RSI to identify potential entry and exit points, detect bullish/bearish divergences (where price makes a new high/low but RSI does not), and confirm trend strength.`;
   } 
   else if (upper.includes('SUPPORT') || upper.includes('RESISTANCE')) {
     responseText = `### 🛡️ Support & Resistance Explained
@@ -112,9 +184,7 @@ Traders use RSI to identify potential entry and exit points, detect bullish/bear
 - When price approaches resistance, sellers are more likely to sell and buyers are less likely to buy, capping the upside.
 
 ### 🔄 Role Reversal
-A key concept is that once a resistance level is broken, it often becomes a support level for future price drops, and vice versa.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+A key concept is that once a resistance level is broken, it often becomes a support level for future price drops, and vice versa.`;
   }
   else if (upper.includes('MACD') || upper.includes('MOVING AVERAGE CONVERGENCE')) {
     responseText = `### 📊 Understanding MACD (Moving Average Convergence Divergence)
@@ -127,9 +197,7 @@ The **MACD** is a trend-following momentum indicator that shows the relationship
 
 ### 🚦 Key Signals
 - **Signal Line Crossover**: Bullish when MACD crosses above the Signal Line; Bearish when it crosses below.
-- **Zero Line Crossover**: MACD above zero indicates bullish momentum; below zero indicates bearish momentum.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+- **Zero Line Crossover**: MACD above zero indicates bullish momentum; below zero indicates bearish momentum.`;
   }
   else if (upper.includes('VOLUME')) {
     responseText = `### 📈 The Importance of Trading Volume
@@ -138,9 +206,7 @@ The **MACD** is a trend-following momentum indicator that shows the relationship
 ### 🔍 Key Volume Interpretations
 - **Trend Confirmation**: High volume on price rallies confirms strong buyer conviction. Low volume suggests lack of interest and warning of a potential trend reversal.
 - **Breakouts**: When a price breaks out of a consolidation pattern or support/resistance on high volume, it signals a strong, sustainable move.
-- **Climax Volume**: Extremely high volume spike after a prolonged trend can signal the exhaustion of buyers or sellers (reversal warning).
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+- **Climax Volume**: Extremely high volume spike after a prolonged trend can signal the exhaustion of buyers or sellers (reversal warning).`;
   }
   else if (upper.includes('OPTION') || upper.includes('CALL') || upper.includes('PUT') || upper.includes('DERIVATIVE')) {
     responseText = `### 🎭 Introduction to Options & Derivatives
@@ -155,9 +221,7 @@ The **MACD** is a trend-following momentum indicator that shows the relationship
 - You buy puts when you expect the stock price to fall.
 
 ### ⚠️ Key Risks (Time Decay)
-Unlike stocks, options have an expiration date. **Theta (Time Decay)** eats away at the option value every day, meaning option buyers can lose their entire premium if the stock does not move in their favor quickly enough.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+Unlike stocks, options have an expiration date. **Theta (Time Decay)** eats away at the option value every day, meaning option buyers can lose their entire premium if the stock does not move in their favor quickly enough.`;
   }
   else if (upper.includes('RISK') || upper.includes('STOP LOSS') || upper.includes('LEVERAGE') || upper.includes('CAPITAL')) {
     responseText = `### 🛡️ Risk Management & Stop Losses
@@ -173,9 +237,7 @@ Capital preservation is the single most important rule in trading. Without prope
 
 ### ⚡ The Double-Edged Sword of Leverage
 - **Leverage** allows you to trade larger positions with less money.
-- While leverage multiplies your gains, it also **multiplies your losses** at the same rate, increasing liquidation risk.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+- While leverage multiplies your gains, it also **multiplies your losses** at the same rate, increasing liquidation risk.`;
   }
   else if (upper.includes('EMA') || upper.includes('SMA') || upper.includes('MOVING AVERAGE') || upper.includes('CROSSOVER')) {
     responseText = `### 📈 Understanding Moving Averages (SMA & EMA)
@@ -187,9 +249,7 @@ Capital preservation is the single most important rule in trading. Without prope
 
 ### 🚦 Golden Cross & Death Cross
 - **Golden Cross (Bullish)**: When a short-term moving average (e.g. 50-day EMA) crosses **above** a long-term moving average (e.g. 200-day EMA).
-- **Death Cross (Bearish)**: When the 50-day EMA crosses **below** the 200-day EMA, signalling potential downward trend.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+- **Death Cross (Bearish)**: When the 50-day EMA crosses **below** the 200-day EMA, signalling potential downward trend.`;
   }
   else if (upper.includes('PE RATIO') || upper.includes('FUNDAMENTAL') || upper.includes('EARNINGS') || upper.includes('REVENUE')) {
     responseText = `### 🔍 Introduction to Fundamental Analysis
@@ -198,9 +258,7 @@ Capital preservation is the single most important rule in trading. Without prope
 ### 📊 Key Ratios to Know
 - **Price-to-Earnings (P/E) Ratio**: Compares stock price to earnings per share. High P/E might mean the stock is overvalued or has high growth expectations.
 - **Debt-to-Equity (D/E) Ratio**: Measures financial leverage. A high ratio indicates higher risk from debt interest obligations.
-- **Return on Equity (ROE)**: Measures how effectively management is using shareholders' capital to generate profits.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+- **Return on Equity (ROE)**: Measures how effectively management is using shareholders' capital to generate profits.`;
   }
   else if (upper.includes('CRYPTO') || upper.includes('BITCOIN') || upper.includes('ETHEREUM') || upper.includes('BLOCKCHAIN')) {
     responseText = `### 🪙 Cryptocurrency & Digital Assets
@@ -211,9 +269,7 @@ Capital preservation is the single most important rule in trading. Without prope
 - **Ethereum (ETH)**: A programmable blockchain that supports smart contracts and decentralized applications (dApps).
 
 ### ⚡ Volatility and Risk
-Cryptocurrencies trade 24/7 globally and are subject to extreme price volatility, regulatory changes, and technical risks. Always proceed with extreme caution.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+Cryptocurrencies trade 24/7 globally and are subject to extreme price volatility, regulatory changes, and technical risks. Always proceed with extreme caution.`;
   }
   else if (detectedSymbol && technicals) {
     const trend = technicals.trend?.toLowerCase() ?? 'consolidating';
@@ -236,9 +292,7 @@ The **Relative Strength Index (RSI-14)** is at **${rsi}**, placing it in the **$
 - **Resistance Ceiling**: ${resistance} — where selling pressure has historically capped upside movements.
 
 ### 📈 Volume Analysis
-Current daily volume is **${volume}** shares. Volume confirms the conviction behind the price move.
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+Current daily volume is **${volume}** shares. Volume confirms the conviction behind the price move.`;
   }
   else {
     responseText = `### 👋 Welcome to NonStock AI Mentor!
@@ -247,13 +301,17 @@ I am your interactive companion for financial learning and stock analysis. You c
 - **Stock technical analysis**: Mention any stock symbol (like TCS, RELIANCE, NIFTY) to retrieve live technical indicators.
 - **Trading strategies**: Learn about indicators, crossovers, and risk management.
 
-Try asking: *"What is the RSI indicator?"* or *"Analyze Reliance"* to get started!
-
-**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**`;
+Try asking: *"What is the RSI indicator?"* or *"Analyze Reliance"* to get started!`;
   }
 
+  let finalResponse = responseText.trim();
+  if (memoryContext) {
+    finalResponse += memoryContext;
+  }
+  finalResponse += `\n\n**Disclaimer: NOT financial advice. This analysis is for educational and quantitative analysis purposes.**`;
+
   return {
-    response: responseText.trim(),
+    response: finalResponse,
     technicals,
     mlEnsemble: getMLEnsemble(detectedSymbol || 'NIFTY')
   };
@@ -349,6 +407,12 @@ router.post('/ask', authenticate, async (req, res) => {
       [userMsgId, activeConversationId, 'user', message]
     );
 
+    // Fetch conversation history early for context and sandbox memory
+    const dbHistory = await query(
+      'SELECT sender, text FROM ai_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
+      [activeConversationId]
+    );
+
     // Detect symbol & fetch live Yahoo Finance technicals
     const detectedSymbol = extractSymbol(message);
     let techContext = '';
@@ -434,15 +498,15 @@ router.post('/ask', authenticate, async (req, res) => {
 
     if (!GEMINI_API_KEY) {
       console.log('[AI Mentor] No Gemini key — sandbox mode');
-      const sb = buildSandboxResponse(technicals, detectedSymbol, message);
+      const sb = buildSandboxResponse(technicals, detectedSymbol, message, dbHistory.rows);
       return await finalizeAndSave(sb.response, sb.technicals, sb.mlEnsemble);
     }
 
     try {
       let systemInstructionText = '';
       if (isPro) {
-        systemInstructionText = `You are the premium "NonStock Pro AI Mentor", an elite institutional-grade technical analyst, quantitative strategist, and derivatives specialist.
-Your goal is to provide advanced technical analysis, details on option pricing models, indicator calculation and divergences, and help users design quantitative trading setups.
+        systemInstructionText = `You are the premium "NonStock Pro AI Mentor", a world-class macroeconomic analyst, elite technical analyst, and expert quantitative trader.
+Your goal is to provide advanced technical analysis, option pricing insights, indicator calculations, and help users design risk-managed trading setups.
 
 Response Format Guidelines:
 - Use standard markdown headers starting with "###" for sections and "##" for major topics.
@@ -452,12 +516,14 @@ Response Format Guidelines:
 - At the end of your response, always append: "**Disclaimer: NOT financial advice. Provided exclusively for NonStock Pro members for educational and quantitative analysis purposes.**"
 
 Behavior Guidelines:
+- Adopt the persona of a world-known economic analyst and expert trader. Think critically about macroeconomic factors, monetary policy, and market sentiment.
+- When answering conditional questions (e.g., "what if X happens to the future of Y"), frame your analysis through safe-haven assets, capital reallocation, and volatility frameworks.
 - Offer professional-tier market analysis, incorporating institutional concepts like volatility, mean reversion, and multi-timeframe breakouts.
 - If the user asks about specific stocks or indicators, check if live market data context is provided. If it is, incorporate it into your explanation of the stock's trend, RSI, support/resistance, and volume.
 - Keep your answers educational. Do NOT give direct BUY, SELL, or HOLD recommendations. Always frame insights as technical assessments and educational analysis.
-- Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses.`;
+- Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses and connect concepts.`;
       } else {
-        systemInstructionText = `You are the "NonStock AI Mentor", a premium educational investing chatbot for beginner investors in India.
+        systemInstructionText = `You are the "NonStock AI Mentor", a world-class macroeconomic analyst, premium technical analyst, and experienced trader helping beginner investors.
 Your goal is to explain financial concepts clearly, guide users through technical analysis indicators, and help them understand stock trends.
 
 Response Format Guidelines:
@@ -468,17 +534,13 @@ Response Format Guidelines:
 - At the end of your response, always append: "**Disclaimer: NOT financial advice. This analysis is for educational purposes only.**"
 
 Behavior Guidelines:
+- Adopt the persona of a world-known economic analyst and expert trader. Think critically about macroeconomic factors, monetary policy, and market sentiment.
 - Explain financial concepts with clear, simple language and Indian examples if helpful (like tea shops, local businesses, Nifty 50, Reliance).
+- When answering conditional questions (e.g., "what if X happens to the future of Y"), frame your analysis through safe-haven assets, capital reallocation, and volatility frameworks.
 - If the user asks about specific stocks or indicators, check if live market data context is provided. If it is, incorporate it into your explanation of the stock's trend, RSI, support/resistance, and volume.
 - Keep your answers educational. Do NOT give direct BUY, SELL, or HOLD recommendations. Always frame insights as technical assessments and educational analysis.
-- Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses.`;
+- Maintain context of the conversation. Learn from previous questions and answers in the chat history to provide intelligent follow-up responses and connect concepts.`;
       }
-
-      // Load full history from DB for Gemini
-      const dbHistory = await query(
-        'SELECT sender, text FROM ai_messages WHERE conversation_id = $1 ORDER BY created_at ASC',
-        [activeConversationId]
-      );
 
       const contents = [];
       if (dbHistory.rows.length > 0) {
@@ -531,7 +593,7 @@ Behavior Guidelines:
       if (!geminiRes.ok) {
         const body = await geminiRes.text();
         console.warn(`[AI Mentor] Gemini ${geminiRes.status} — sandbox fallback. ${body.substring(0, 150)}`);
-        const sb = buildSandboxResponse(technicals, detectedSymbol, message);
+        const sb = buildSandboxResponse(technicals, detectedSymbol, message, dbHistory.rows);
         return await finalizeAndSave(sb.response, sb.technicals, sb.mlEnsemble);
       }
 
@@ -539,7 +601,7 @@ Behavior Guidelines:
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
         console.warn('[AI Mentor] Gemini empty response — sandbox fallback');
-        const sb = buildSandboxResponse(technicals, detectedSymbol, message);
+        const sb = buildSandboxResponse(technicals, detectedSymbol, message, dbHistory.rows);
         return await finalizeAndSave(sb.response, sb.technicals, sb.mlEnsemble);
       }
 
@@ -548,7 +610,7 @@ Behavior Guidelines:
 
     } catch (geminiErr) {
       console.warn('[AI Mentor] Gemini exception — sandbox fallback:', geminiErr.message);
-      const sb = buildSandboxResponse(technicals, detectedSymbol, message);
+      const sb = buildSandboxResponse(technicals, detectedSymbol, message, dbHistory.rows);
       return await finalizeAndSave(sb.response, sb.technicals, sb.mlEnsemble);
     }
 
